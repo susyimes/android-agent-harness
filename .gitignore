@@ -1,0 +1,13 @@
+.gradle/
+.gradle-user-home/
+.idea/
+**/build/
+captures/
+local.properties
+secrets.properties
+.env
+*.jks
+*.keystore
+*.p12
+*.pem
+

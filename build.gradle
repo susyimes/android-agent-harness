@@ -1,0 +1,84 @@
+plugins {
+    id 'com.android.application' version '8.10.1' apply false
+    id 'org.jetbrains.kotlin.android' version '2.2.21' apply false
+    id 'org.jetbrains.kotlin.jvm' version '2.2.21' apply false
+}
+
+tasks.register('auditProvenance') {
+    group = 'verification'
+    description = 'Rejects private configuration, embedded credentials, product namespaces, and binary product assets.'
+
+    doLast {
+        def repositoryFiles = fileTree(rootDir) {
+            exclude '.git/**'
+            exclude '.gradle/**'
+            exclude '.gradle-user-home/**'
+            exclude '**/build/**'
+        }.files.findAll { file -> file.isFile() }
+
+        def forbiddenBaseNames = [
+            '.env',
+            'credentials.json',
+            'local.properties',
+            'secrets.properties'
+        ] as Set
+        def forbiddenSuffixes = ['.jks', '.keystore', '.p12', '.pem']
+        def forbiddenNames = repositoryFiles.findAll { file ->
+            def name = file.name.toLowerCase(Locale.ROOT)
+            forbiddenBaseNames.contains(name) ||
+                forbiddenSuffixes.any { suffix -> name.endsWith(suffix) } ||
+                name.startsWith('id_rsa')
+        }
+
+        def sourceAndBuildFiles = fileTree(rootDir) {
+            include 'build.gradle'
+            include 'settings.gradle'
+            include 'gradle.properties'
+            include '**/*.gradle'
+            include 'harness-core/src/**/*.kt'
+            include 'harness-core/src/**/*.xml'
+            include 'sample/src/**/*.kt'
+            include 'sample/src/**/*.xml'
+            exclude '**/build/**'
+        }.files.findAll { file -> file.isFile() }
+
+        def productNamespaces = ['com' + '.mirror', 'com' + '.truebox']
+        def embeddedCredential = ~/(?i)(api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["'][^"']+["']/
+        def contentViolations = []
+        sourceAndBuildFiles.each { file ->
+            def text = file.getText('UTF-8')
+            productNamespaces.each { marker ->
+                if (text.toLowerCase(Locale.ROOT).contains(marker)) {
+                    contentViolations << "${file}: product namespace '${marker}'"
+                }
+            }
+            if (embeddedCredential.matcher(text).find()) {
+                contentViolations << "${file}: embedded credential-like assignment"
+            }
+        }
+
+        def binarySampleAssets = fileTree(file('sample/src/main/res')) {
+            include '**/*'
+            exclude '**/*.xml'
+        }.files.findAll { file -> file.isFile() }
+
+        if (!forbiddenNames.isEmpty() || !contentViolations.isEmpty() || !binarySampleAssets.isEmpty()) {
+            def findings = []
+            findings.addAll(forbiddenNames.collect { file -> "forbidden file: ${file}" })
+            findings.addAll(contentViolations)
+            findings.addAll(binarySampleAssets.collect { file -> "binary sample asset: ${file}" })
+            throw new GradleException("Provenance/privacy audit failed:\n - ${findings.join('\n - ')}")
+        }
+
+        logger.lifecycle("Provenance/privacy audit passed (${repositoryFiles.size()} repository files inspected).")
+    }
+}
+
+tasks.register('checkM0') {
+    group = 'verification'
+    description = 'Runs the M0 contract tests, provenance audit, and Android sample debug build.'
+    dependsOn 'auditProvenance'
+    dependsOn ':harness-core:test'
+    dependsOn ':sample:assembleDebug'
+}
+
