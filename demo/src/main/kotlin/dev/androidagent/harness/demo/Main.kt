@@ -5,7 +5,6 @@ import dev.androidagent.harness.AgentContextItem
 import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentHarnessRequest
 import dev.androidagent.harness.AgentHarnessRunner
-import dev.androidagent.harness.AgentHarnessTraceEvent
 import dev.androidagent.harness.AgentProvider
 import dev.androidagent.harness.AgentProviderRequest
 import dev.androidagent.harness.AgentProviderResponse
@@ -21,7 +20,28 @@ import dev.androidagent.harness.SequentialAgentIdGenerator
 import dev.androidagent.harness.StaticAgentContextProvider
 import java.util.Locale
 
+/**
+ * Demo entrypoint with four subcommands:
+ *
+ * - `scenarios` runs five deterministic controlled-context-plane scenarios.
+ * - `live` runs one turn against a real OpenAI-compatible endpoint (env-configured).
+ * - `eval` runs the governed-evolution baseline-vs-candidate comparison.
+ * - `phone` runs the fake payment flow on the device loop with a high-risk pause.
+ *
+ * Any other invocation (including no arguments) keeps the original behavior:
+ * all arguments are joined into the input of the scripted uppercase demo.
+ */
 fun main(args: Array<String>) {
+    when (args.firstOrNull()) {
+        "scenarios" -> runScenarios()
+        "live" -> runLive(args.drop(1))
+        "eval" -> runEvalDemo()
+        "phone" -> runPhoneDemo()
+        else -> runScriptedDemo(args)
+    }
+}
+
+private fun runScriptedDemo(args: Array<String>) {
     val input = args.joinToString(" ").ifBlank { "android" }
     val runner = AgentHarnessRunner(
         provider = ScriptedDemoProvider(),
@@ -48,23 +68,7 @@ fun main(args: Array<String>) {
         AgentHarnessRequest(sessionId = "demo-session", userInput = input)
     )
 
-    println("OUTPUT=${result.output}")
-    println("PROVIDER_STEPS=${result.providerSteps}")
-    println("TRACE=${result.trace.joinToString(" -> ") { event -> event.label() }}")
-    println(
-        "TRANSCRIPT=" + result.session.messages.joinToString(" | ") { message ->
-            "${message.role}:${message.content}"
-        }
-    )
-}
-
-private fun AgentHarnessTraceEvent.label(): String {
-    return when (this) {
-        is AgentHarnessTraceEvent.ContextLoaded -> "ContextLoaded"
-        is AgentHarnessTraceEvent.ProviderInvoked -> "ProviderInvoked($step)"
-        is AgentHarnessTraceEvent.ToolExecuted -> "ToolExecuted($toolName)"
-        is AgentHarnessTraceEvent.Completed -> "Completed($step)"
-    }
+    printTurnSummary(result)
 }
 
 private class ScriptedDemoProvider : AgentProvider {

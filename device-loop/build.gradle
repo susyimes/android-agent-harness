@@ -1,5 +1,4 @@
 plugins {
-    id 'application'
     id 'org.jetbrains.kotlin.jvm'
 }
 
@@ -14,14 +13,7 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     }
 }
 
-application {
-    mainClass = 'dev.androidagent.harness.demo.MainKt'
-}
-
 dependencies {
     implementation project(':harness-core')
-    implementation project(':provider-openai')
-    implementation project(':harness-eval')
-    implementation project(':device-loop')
     testImplementation 'junit:junit:4.13.2'
 }

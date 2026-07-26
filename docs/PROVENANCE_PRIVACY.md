@@ -1,6 +1,6 @@
 # Provenance and privacy inventory
 
-Inventory refreshed: 2026-07-18 (Asia/Shanghai)
+Inventory refreshed: 2026-07-26 (Asia/Shanghai)
 
 ## Reference scope
 
@@ -30,7 +30,10 @@ The following were neither opened nor copied:
 | Category | Minimal contents | Privacy/provenance result |
 | --- | --- | --- |
 | Core source | Generic adapters, context/tool coordinators, run orchestrator, composition root, in-memory store, policy, and trace models | No reference namespace or implementation copied |
-| JVM demo | Scripted provider, static public context, profile-scoped uppercase tool, deterministic trace | Executable proof with no network, credentials, user data, or product dependency |
+| JVM demo | Scripted provider, static public context, profile-scoped uppercase tool, deterministic trace, plus scenario/eval/phone showcases and the env-configured live mode | Executable proof with no embedded credentials, user data, or product dependency; the live mode reads credentials from the environment at run time only |
+| OpenAI-compatible provider | Hand-written JSON codec, JDK HTTP transport, protocol mapping | Authored afresh against the public chat-completions protocol; no product endpoint, header, model default, or credential value |
+| Evaluation harness | Generic markdown workspace, overlay semantics, case comparison, promotion verdict | Authored afresh; no product workspace format, file names, or persona/memory content |
+| Device loop | Fake device model, risk policy, observe/act/finish tools, pause protocol | Authored afresh; no accessibility service, screen data, or product action vocabulary |
 | Android sample | Programmatic input/run/result UI, public placeholder text, scripted provider, uppercase tool | No copied layout/resource, permissions, network, files, database, telemetry, branding, or binary assets |
 | Configuration | Public Gradle plugin/SDK versions and JVM settings | No endpoint, credential field, signing config, or local machine path |
 | Test data | Fixed ids, timestamps, and strings such as `android` | Synthetic only; no user or device data |

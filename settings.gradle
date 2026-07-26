@@ -16,5 +16,8 @@ dependencyResolutionManagement {
 
 rootProject.name = 'android-agent-harness'
 include ':harness-core'
+include ':provider-openai'
+include ':harness-eval'
+include ':device-loop'
 include ':demo'
 include ':sample'

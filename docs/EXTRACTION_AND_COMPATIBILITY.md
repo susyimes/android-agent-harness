@@ -28,6 +28,9 @@ This map was refreshed on 2026-07-18 against the then-current private `mirror-an
 | `AgentTool` / `AgentToolRegistry` / `AgentToolProfile` | `AgentTool`, `AgentContextAwareTool`, `AgentToolRegistry`, and `AgentToolProfile` | Adapt individual capabilities and make the profile-scoped registry the runtime authority boundary. |
 | `AgentSessionStore` | `MirrorChatRepository`, `ChatSession`, and `ChatMessage` | Load/save immutable session snapshots. Durable migration, retention, deletion, and atomic I/O belong to an application adapter. |
 | JVM `demo` / Android `sample` | Debug/chat/harness entry surfaces | Prove the portable flow and show only input, run, result, trace, and transcript. No product resources, navigation, permissions, or branding are retained. |
+| `provider-openai` module | The chat-client/provider transport boundary | Adapt the provider contract to an OpenAI-compatible endpoint with environment-only credentials. Product endpoints, headers, provider defaults, and OAuth flows are not reproduced. |
+| `harness-eval` module | The house baseline/candidate evaluation responsibility | Evaluate candidate overlays of interpretable markdown assets against a baseline on fixed cases before promotion. The product workspace format, memory files, and promotion UI are not reproduced. |
+| `device-loop` module | The accessibility closed-loop responsibility (observe → act → finish with high-risk confirmation) | Keep observation semantic, actions single-step, and dangerous actions paused until explicit confirmation — over a fake device. No accessibility service, screen capture, or real device access is included. |
 
 ## Why these four runtime layers are separate
 
@@ -53,7 +56,9 @@ Keeping these responsibilities separate allows an Android application to replace
 - Tool results are text-only; images, opaque evidence refs, and large-result envelopes require an explicit extension.
 - Tool profiles are caller-declared generic allowlists, not the product's CHAT/HARNESS/PROACTIVE policy table.
 - The sample has no application singleton, service, receiver, accessibility API, file access, permission, telemetry, or network path.
-- The target `AgentHarnessRunner` is the portable composition root; it does not reproduce the reference House baseline/candidate evaluation runner.
+- The target `AgentHarnessRunner` is the portable composition root; the baseline/candidate evaluation responsibility lives in the separate `harness-eval` module over a generic markdown workspace, not the product workspace format.
+- `device-loop` operates a deterministic fake device; it is a contract demonstration, not an accessibility-service integration.
+- `provider-openai` speaks the public OpenAI-compatible protocol only; no product provider configuration is reproduced.
 
 ## Safe adapter sequence
 
