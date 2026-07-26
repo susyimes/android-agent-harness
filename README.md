@@ -1,6 +1,12 @@
 # Android Agent Harness
 
 [![CI](https://github.com/susyimes/android-agent-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/susyimes/android-agent-harness/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/susyimes/android-agent-harness)](https://github.com/susyimes/android-agent-harness/releases)
+
+<p align="center">
+  <img src="docs/assets/demo.svg" alt="Animated demo: quickstart output, controlled-context scenarios, and the high-risk pause protocol" width="860">
+</p>
 
 Android Agent Harness is a minimal, provider-neutral agent runtime extracted from the architectural seams of `mirror-android`. It keeps the reusable path and leaves product code behind:
 

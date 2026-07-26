@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 560" font-family="ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, 'Liberation Mono', monospace" font-size="12">
+  <defs>
+    <clipPath id="frame"><rect x="0" y="0" width="860" height="560" rx="10"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect x="0" y="0" width="860" height="560" fill="#0d1117"/>
+    <rect x="0" y="0" width="860" height="40" fill="#161b22"/>
+    <circle cx="24" cy="20" r="6" fill="#ff5f56"/>
+    <circle cx="46" cy="20" r="6" fill="#ffbd2e"/>
+    <circle cx="68" cy="20" r="6" fill="#27c93f"/>
+    <text x="430" y="24" text-anchor="middle" fill="#8b949e">android-agent-harness — demo</text>
+
+    <!-- Block 1: quickstart -->
+    <text x="24" y="74" opacity="0">
+      <tspan fill="#7ee787">$ </tspan><tspan fill="#e6edf3">./gradlew :demo:run</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.029;0.032;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="98" opacity="0">
+      <tspan fill="#79c0ff">OUTPUT=</tspan><tspan fill="#c9d1d9">Harness result: ANDROID</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.070;0.073;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="122" opacity="0">
+      <tspan fill="#79c0ff">PROVIDER_STEPS=</tspan><tspan fill="#c9d1d9">2</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.094;0.097;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="146" opacity="0">
+      <tspan fill="#79c0ff">TRACE=</tspan><tspan fill="#c9d1d9">ContextLoaded -&gt; ProviderInvoked(1) -&gt; ToolExecuted(uppercase) -&gt; ProviderInvoked(2) -&gt; Completed(2)</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.118;0.121;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="170" opacity="0">
+      <tspan fill="#79c0ff">TRANSCRIPT=</tspan><tspan fill="#c9d1d9">USER:android | TOOL:ANDROID | ASSISTANT:Harness result: ANDROID</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.141;0.144;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+
+    <!-- Block 2: scenarios -->
+    <text x="24" y="218" opacity="0">
+      <tspan fill="#7ee787">$ </tspan><tspan fill="#e6edf3">./gradlew :demo:run --args="scenarios"</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.265;0.268;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="242" fill="#8b949e" opacity="0">--- Scenario 1: Trust boundary ---
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.306;0.309;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="266" opacity="0">
+      <tspan fill="#c9d1d9">TRACE: ContextLoaded itemIds=[policy-brief, user-note] </tspan><tspan fill="#f0883e">droppedItemIds=[web-snippet]</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.335;0.338;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="290" opacity="0">
+      <tspan fill="#79c0ff">OUTCOME: </tspan><tspan fill="#c9d1d9">untrusted content never reaches the provider, no matter how high its priority.</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.365;0.368;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="314" fill="#8b949e" opacity="0">--- Scenario 5: Bounded run ---
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.406;0.409;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="338" opacity="0">
+      <tspan fill="#79c0ff">OUTCOME: </tspan><tspan fill="#c9d1d9">caught AgentHarnessLimitException: 'endless-loop' did not finish within 3 steps.</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.435;0.438;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+
+    <!-- Block 3: phone (high-risk pause) -->
+    <text x="24" y="386" opacity="0">
+      <tspan fill="#7ee787">$ </tspan><tspan fill="#e6edf3">./gradlew :demo:run --args="phone"</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.559;0.562;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="410" opacity="0">
+      <tspan fill="#c9d1d9">TOOL(device_act): </tspan><tspan fill="#f0883e">PAUSED_HIGH_RISK: 'Pay 12.50' requires explicit user confirmation.</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.600;0.603;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="434" opacity="0">
+      <tspan fill="#d2a8ff">USER_APPROVAL=</tspan><tspan fill="#c9d1d9">simulated operator approved the high-risk tap</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.641;0.644;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="458" opacity="0">
+      <tspan fill="#c9d1d9">TOOL(device_act): </tspan><tspan fill="#7ee787">OK: tap pay_button -&gt; screen=receipt</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.682;0.685;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="482" opacity="0">
+      <tspan fill="#79c0ff">ACTION_LOG=</tspan><tspan fill="#c9d1d9">tap:pay_button</tspan><tspan fill="#8b949e">   (exactly one tap, only after approval)</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.724;0.727;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <text x="24" y="522" opacity="0">
+      <tspan fill="#7ee787">$ </tspan><tspan fill="#8b949e">the whole loop is policy: trust, budgets, tool profiles, step limits, confirmation</tspan>
+      <animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.788;0.791;1" dur="17s" repeatCount="indefinite"/>
+    </text>
+    <rect x="0.5" y="0.5" width="859" height="559" rx="10" fill="none" stroke="#30363d"/>
+  </g>
+</svg>
