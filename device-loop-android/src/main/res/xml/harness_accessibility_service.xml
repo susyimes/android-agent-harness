@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+    accessibilityEventTypes is deliberately NOT typeAllMask: the service uses
+    events for exactly one thing, deciding when the screen has settled, and the
+    four types below are what that needs. typeAllMask would additionally deliver
+    every text change on the device (including what the user types in unrelated
+    apps) into this process for no benefit, and would run the callback orders of
+    magnitude more often.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled|typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/harness_accessibility_service_description"
+    android:notificationTimeout="100" />

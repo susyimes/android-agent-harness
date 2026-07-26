@@ -12,11 +12,11 @@ This repository is an independently authored extraction of architectural seams, 
 6. Tool results are appended to the session before the provider is invoked again.
 7. Final assistant text is saved, or a configured provider/tool-call limit ends the run.
 
-The core is Kotlin/JVM so every runtime boundary can be tested without Android state. The JVM demo is an executable proof. The Android sample is a thin UI consumer and adds no permission or network capability.
+The core is Kotlin/JVM so every runtime boundary can be tested without Android state. The JVM demo is an executable proof. The Android sample is an installable consumer of the same core: it adds exactly the capabilities its features need — the `INTERNET` permission for the user-configured endpoint, app-private preferences for user-entered settings, and the opt-in accessibility service from `device-loop-android` for phone mode — while `harness-core` itself stays free of all of them.
 
 ## Current alignment map
 
-This map was refreshed on 2026-07-18 against the then-current private `mirror-android` revision (pinned in a private audit log). It describes architectural responsibility, not package, API, source, binary, or serialized-data compatibility.
+This map was refreshed on 2026-07-18 against the then-current private `mirror-android` revision (pinned in a private audit log). It describes architectural responsibility, not package, API, source, binary, or serialized-data compatibility. The `device-loop-android` and upgraded `sample` rows were added on 2026-07-27 from the same responsibility map, without re-opening the reference.
 
 | Extracted boundary | Current `mirror-android` seam | Minimum retained responsibility |
 | --- | --- | --- |
@@ -27,10 +27,12 @@ This map was refreshed on 2026-07-18 against the then-current private `mirror-an
 | `AgentToolOrchestrator` | `agent.tool.AgentToolOrchestrator` | Keep the provider-visible catalog and executable capability profile consistent; validate bounded ordered calls and return inspectable results. Phone loops, formula tools, envelopes, images, and progress streaming are omitted. |
 | `AgentTool` / `AgentToolRegistry` / `AgentToolProfile` | `AgentTool`, `AgentContextAwareTool`, `AgentToolRegistry`, and `AgentToolProfile` | Adapt individual capabilities and make the profile-scoped registry the runtime authority boundary. |
 | `AgentSessionStore` | `MirrorChatRepository`, `ChatSession`, and `ChatMessage` | Load/save immutable session snapshots. Durable migration, retention, deletion, and atomic I/O belong to an application adapter. |
-| JVM `demo` / Android `sample` | Debug/chat/harness entry surfaces | Prove the portable flow and show only input, run, result, trace, and transcript. No product resources, navigation, permissions, or branding are retained. |
+| JVM `demo` | Debug/chat/harness entry surfaces | Prove the portable flow and show only input, run, result, trace, and transcript. No product resources, navigation, permissions, or branding are retained. |
+| Android `sample` (installable chat + phone mode) | The credential-configured live chat surface over the harness | Let the user configure endpoint, model, and credential at run time (app-private preferences, nothing bundled), run live or offline scripted turns through the same composition root, and opt into the device loop with a dialog approval gate and an app-declared risk policy. No product resources, navigation, branding, accounts, or provider defaults are reproduced. |
 | `provider-openai` module | The chat-client/provider transport boundary | Adapt the provider contract to an OpenAI-compatible endpoint with environment-only credentials. Product endpoints, headers, provider defaults, and OAuth flows are not reproduced. |
 | `harness-eval` module | The house baseline/candidate evaluation responsibility | Evaluate candidate overlays of interpretable markdown assets against a baseline on fixed cases before promotion. The product workspace format, memory files, and promotion UI are not reproduced. |
-| `device-loop` module | The accessibility closed-loop responsibility (observe → act → finish with high-risk confirmation) | Keep observation semantic, actions single-step, and dangerous actions paused until explicit confirmation — over a fake device. No accessibility service, screen capture, or real device access is included. |
+| `device-loop` module | The accessibility closed-loop responsibility (observe → act → finish with high-risk confirmation) | Keep observation semantic, actions single-step, and dangerous actions paused until explicit confirmation — over a fake device. The module itself contains no accessibility service, screen capture, or real device access. |
+| `device-loop-android` module | The accessibility closed-loop integration seam (service enablement, tree reading, action dispatch) | Bridge the `device-loop` contract onto a real accessibility tree: a pull-only service that does nothing on events, a deterministic mapper from the foreground window to bounded semantic nodes with synthetic ids, and tap/set-text execution against the last snapshot. No product node identity, event-driven automation, gesture vocabulary, or screen capture is reproduced. |
 
 ## Why these four runtime layers are separate
 
@@ -55,10 +57,14 @@ Keeping these responsibilities separate allows an Android application to replace
 - The in-memory session store is not compatible with existing on-device files.
 - Tool results are text-only; images, opaque evidence refs, and large-result envelopes require an explicit extension.
 - Tool profiles are caller-declared generic allowlists, not the product's CHAT/HARNESS/PROACTIVE policy table.
-- The sample has no application singleton, service, receiver, accessibility API, file access, permission, telemetry, or network path.
+- The sample keeps no application singleton, receiver, telemetry, file store, or product resources; its only capabilities are the `INTERNET` permission for the user-configured endpoint, app-private preferences for user-entered settings, and the user-enabled accessibility service for phone mode.
 - The target `AgentHarnessRunner` is the portable composition root; the baseline/candidate evaluation responsibility lives in the separate `harness-eval` module over a generic markdown workspace, not the product workspace format.
-- `device-loop` operates a deterministic fake device; it is a contract demonstration, not an accessibility-service integration.
+- `device-loop` operates a deterministic fake device; the real accessibility-service integration is the separate `device-loop-android` module.
 - `provider-openai` speaks the public OpenAI-compatible protocol only; no product provider configuration is reproduced.
+- Device nodes carry synthetic per-snapshot ids (`n1`, `n2`, … in traversal order), not any product node-identity scheme; an id is only meaningful against the most recent snapshot and goes stale with it.
+- Observation is text-only: the accessibility node tree rendered as bounded semantic lines. There is no screen capture, screenshot, or vision input of any kind — pixels never reach a provider.
+- There is no gesture recording or replay vocabulary; the only synthesized gesture is a single tap at a node's center, used as a fallback when nothing in the clickable chain accepts an accessibility click.
+- Device turns are single-action steps only: phone mode runs with one `device_act` per provider step (`maxToolCallsPerStep = 1`), observing between actions, so every state change is attributable to one reviewed step.
 
 ## Safe adapter sequence
 

@@ -57,7 +57,10 @@ class OpenAiEndToEndTest {
                 requestTimeout = Duration.ofSeconds(10)
             )
             val runner = AgentHarnessRunner(
-                provider = OpenAiCompatibleProvider(config),
+                provider = OpenAiCompatibleProvider(
+                    config = config,
+                    transport = UrlConnectionHttpTransport(config.requestTimeout)
+                ),
                 tools = listOf(UppercaseTool()),
                 clock = FixedAgentClock(1_700_000_000_000L),
                 idGenerator = SequentialAgentIdGenerator("e2e")

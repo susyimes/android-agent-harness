@@ -135,6 +135,94 @@ class OpenAiCompatibleProviderTest {
     }
 
     @Test
+    fun sendsParallelToolCallsFalseWhenConfigured() {
+        val transport = RecordingTransport(finalResponse("done"))
+        val provider = OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model",
+                parallelToolCalls = false
+            ),
+            transport = transport
+        )
+
+        provider.respond(
+            AgentProviderRequest(
+                session = session(userMessage("hello")),
+                context = emptyList(),
+                tools = listOf(AgentToolSpec(name = "noop", description = "Does nothing.")),
+                providerStep = 1
+            )
+        )
+
+        val body = asObject(MinimalJson.parse(transport.bodies[0]))
+        assertEquals(false, body["parallel_tool_calls"])
+        assertTrue(transport.bodies[0].contains("\"parallel_tool_calls\":false"))
+    }
+
+    @Test
+    fun sendsParallelToolCallsTrueWhenConfigured() {
+        val transport = RecordingTransport(finalResponse("done"))
+        val provider = OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model",
+                parallelToolCalls = true
+            ),
+            transport = transport
+        )
+
+        provider.respond(
+            AgentProviderRequest(
+                session = session(userMessage("hello")),
+                context = emptyList(),
+                tools = listOf(AgentToolSpec(name = "noop", description = "Does nothing.")),
+                providerStep = 1
+            )
+        )
+
+        assertEquals(true, asObject(MinimalJson.parse(transport.bodies[0]))["parallel_tool_calls"])
+    }
+
+    @Test
+    fun omitsParallelToolCallsByDefaultAndWhenNoToolsAreSent() {
+        val defaultTransport = RecordingTransport(finalResponse("done"))
+        OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model"
+            ),
+            transport = defaultTransport
+        ).respond(
+            AgentProviderRequest(
+                session = session(userMessage("hello")),
+                context = emptyList(),
+                tools = listOf(AgentToolSpec(name = "noop", description = "Does nothing.")),
+                providerStep = 1
+            )
+        )
+        assertFalse(
+            asObject(MinimalJson.parse(defaultTransport.bodies[0]))
+                .containsKey("parallel_tool_calls")
+        )
+
+        val toollessTransport = RecordingTransport(finalResponse("done"))
+        OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model",
+                parallelToolCalls = false
+            ),
+            transport = toollessTransport
+        ).respond(simpleRequest())
+        assertFalse(
+            "Endpoints reject 'parallel_tool_calls' without a 'tools' array.",
+            asObject(MinimalJson.parse(toollessTransport.bodies[0]))
+                .containsKey("parallel_tool_calls")
+        )
+    }
+
+    @Test
     fun mapsToolCallsResponseAndCoercesArgumentValues() {
         val argumentsJson = MinimalJson.encode(
             linkedMapOf<String, Any?>(

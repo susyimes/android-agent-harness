@@ -3,6 +3,7 @@ package dev.androidagent.harness.deviceloop
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FakeDeviceTest {
@@ -95,6 +96,65 @@ class FakeDeviceTest {
         // A node from another screen is unknown on the current screen.
         assertThrows(IllegalArgumentException::class.java) { device.tap("back_button") }
         assertEquals(emptyList<String>(), device.actionLog())
+    }
+
+    @Test
+    fun backPopsTheScreensATapNavigatedInto() {
+        val device = newDevice()
+
+        device.tap("open_button")
+        assertEquals("settings", device.currentScreenId)
+
+        device.back()
+        assertEquals("home", device.currentScreenId)
+        assertEquals(listOf("tap:open_button", "back"), device.actionLog())
+    }
+
+    @Test
+    fun backAtTheRootFailsWithAStructuredActionError() {
+        val device = newDevice()
+
+        val error = assertThrows(DeviceActionException::class.java) { device.back() }
+
+        assertEquals(DeviceErrorType.ACTION_FAILED, error.errorType)
+        assertEquals(emptyList<String>(), device.actionLog())
+    }
+
+    @Test
+    fun waitForStableAlwaysSettlesAndIsNotLogged() {
+        val device = newDevice()
+
+        assertTrue(device.waitForStable(1_000L))
+        assertEquals(emptyList<String>(), device.actionLog())
+    }
+
+    @Test
+    fun foregroundPackageAnswersOnlyWhenConfigured() {
+        val screens = listOf(
+            DeviceScreen("home", "Home", listOf(DeviceNode("only_node", "label", "Only")))
+        )
+
+        assertThrows(UnsupportedOperationException::class.java) {
+            FakeDevice(screens = screens, startScreenId = "home").foregroundPackage()
+        }
+        assertEquals(
+            "shop.example.app",
+            FakeDevice(
+                screens = screens,
+                startScreenId = "home",
+                packageName = "shop.example.app"
+            ).foregroundPackage()
+        )
+    }
+
+    @Test
+    fun unsupportedActionsStayUnsupported() {
+        val device = newDevice()
+
+        assertThrows(UnsupportedOperationException::class.java) { device.home() }
+        assertThrows(UnsupportedOperationException::class.java) { device.swipe("up", 100, 50) }
+        assertThrows(UnsupportedOperationException::class.java) { device.scrollToText("x", "down", 3) }
+        assertThrows(UnsupportedOperationException::class.java) { device.launchApp("Shop") }
     }
 
     @Test

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="harness_accessibility_service_label">Agent Harness Device Loop</string>
+    <string name="harness_accessibility_service_description">Allows the agent harness to observe the current screen and perform taps and text entry while a supervised agent session is running. Enable only while you are actively supervising an agent.</string>
+
+    <!-- Approval overlay, shown over whatever app the agent is driving. -->
+    <string name="harness_overlay_title">Agent action needs your approval</string>
+    <string name="harness_overlay_action_tap">Tap: %1$s</string>
+    <string name="harness_overlay_action_set_text">Enter text into: %1$s</string>
+    <string name="harness_overlay_action_other">%1$s on: %2$s</string>
+    <string name="harness_overlay_value">Value: %1$s</string>
+    <string name="harness_overlay_view_id">View id: %1$s</string>
+    <string name="harness_overlay_countdown">Nothing happens until you choose. No answer in %1$d s is reported as undecided.</string>
+    <string name="harness_overlay_allow">Allow</string>
+    <string name="harness_overlay_deny">Deny</string>
+</resources>

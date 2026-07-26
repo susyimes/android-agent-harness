@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        launchApp() resolves display names and packages against the launchable
+        apps. Package visibility filtering (API 30+) would otherwise hide them,
+        and the alternative, QUERY_ALL_PACKAGES, is a policy-restricted
+        permission this library must not force on its host app: this <queries>
+        element grants exactly the visibility launchApp needs and nothing else.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application>
+        <!--
+            Exporting is safe here: android.permission.BIND_ACCESSIBILITY_SERVICE is a
+            signature-level permission held only by the system, so nothing else can bind.
+        -->
+        <service
+            android:name="dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService"
+            android:exported="true"
+            android:label="@string/harness_accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/harness_accessibility_service" />
+        </service>
+    </application>
+</manifest>

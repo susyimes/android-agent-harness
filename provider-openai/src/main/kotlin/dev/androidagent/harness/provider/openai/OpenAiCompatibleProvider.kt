@@ -22,10 +22,38 @@ class OpenAiProtocolException(message: String) : IllegalStateException(message)
  * synthetic assistant `tool_calls` message before each consecutive group of
  * tool results (with `"{}"` arguments, since the original arguments are not
  * persisted in the session).
+ *
+ * ## Parallel tool calls
+ *
+ * With [OpenAiCompatibleConfig.parallelToolCalls] set, requests that carry
+ * tools also carry `parallel_tool_calls`. Set it to `false` whenever the
+ * harness runs with `maxToolCallsPerStep = 1`, otherwise the model is free to
+ * answer with several calls at once and the bounded turn aborts.
+ *
+ * ## History policy
+ *
+ * With [OpenAiCompatibleConfig.historyCharBudget] set, the rendered message
+ * list is trimmed before it is sent. A device-loop turn appends a full screen
+ * rendering per step, so an untrimmed prompt grows quadratically over a turn
+ * and eventually exceeds the context window. Trimming rules:
+ *
+ * - The system message is always sent in full and is not charged to the budget.
+ * - The FIRST user message (the task statement) and the MOST RECENT tool result
+ *   (the current screen) are always sent in full; their characters are charged
+ *   first, so a budget smaller than those two is simply exceeded rather than
+ *   dropping them.
+ * - Remaining messages are walked newest to oldest and kept in full while they
+ *   fit. From the first message that does not fit, everything older is trimmed:
+ *   user and assistant messages are dropped, tool results are kept with their
+ *   content replaced by [OMITTED_TOOL_RESULT].
+ * - Tool results are never dropped outright, only shortened. That keeps the
+ *   protocol valid: the synthetic assistant `tool_calls` partner is rebuilt
+ *   from whatever tool messages survive, so every `tool` message still follows
+ *   an assistant message declaring its `tool_call_id`.
  */
 class OpenAiCompatibleProvider(
     private val config: OpenAiCompatibleConfig,
-    private val transport: HttpTransport = JdkHttpTransport(config.requestTimeout)
+    private val transport: HttpTransport = UrlConnectionHttpTransport(config.requestTimeout)
 ) : AgentProvider {
 
     override val id: String = "openai-compatible"
@@ -48,6 +76,10 @@ class OpenAiCompatibleProvider(
         )
         if (request.tools.isNotEmpty()) {
             body["tools"] = request.tools.map { spec -> renderToolSpec(spec) }
+            val parallelToolCalls = config.parallelToolCalls
+            if (parallelToolCalls != null) {
+                body["parallel_tool_calls"] = parallelToolCalls
+            }
         }
         return body
     }
@@ -59,7 +91,7 @@ class OpenAiCompatibleProvider(
                 "content" to renderSystemContent(request.context)
             )
         )
-        val messages = request.session.messages
+        val messages = applyHistoryPolicy(request.session.messages)
         var index = 0
         while (index < messages.size) {
             val message = messages[index]
@@ -96,6 +128,43 @@ class OpenAiCompatibleProvider(
             }
         }
         return rendered
+    }
+
+    /**
+     * Applies [OpenAiCompatibleConfig.historyCharBudget] to the stored session
+     * messages. Returns [messages] unchanged when no budget is configured.
+     */
+    private fun applyHistoryPolicy(messages: List<AgentMessage>): List<AgentMessage> {
+        val budget = config.historyCharBudget ?: return messages
+        val firstUserIndex = messages.indexOfFirst { message -> message.role == AgentRole.USER }
+        val lastToolIndex = messages.indexOfLast { message -> message.role == AgentRole.TOOL }
+        val pinned = setOf(firstUserIndex, lastToolIndex).filter { index -> index >= 0 }.toSet()
+
+        val kept = arrayOfNulls<AgentMessage>(messages.size)
+        var used = 0
+        pinned.forEach { index ->
+            kept[index] = messages[index]
+            used += messages[index].content.length
+        }
+
+        var exhausted = false
+        for (index in messages.indices.reversed()) {
+            if (index in pinned) {
+                continue
+            }
+            val message = messages[index]
+            if (!exhausted && used + message.content.length <= budget) {
+                used += message.content.length
+                kept[index] = message
+                continue
+            }
+            exhausted = true
+            if (message.role == AgentRole.TOOL) {
+                used += OMITTED_TOOL_RESULT.length
+                kept[index] = message.copy(content = OMITTED_TOOL_RESULT)
+            }
+        }
+        return kept.filterNotNull()
     }
 
     private fun renderSystemContent(context: List<AgentContextItem>): String {
@@ -218,5 +287,14 @@ class OpenAiCompatibleProvider(
 
     private fun coerceArgumentValue(value: Any?): String {
         return if (value is String) value else MinimalJson.encode(value)
+    }
+
+    companion object {
+        /**
+         * Content substituted for tool results that fall outside
+         * [OpenAiCompatibleConfig.historyCharBudget]. The message itself is
+         * kept so the assistant `tool_calls` pairing stays intact.
+         */
+        const val OMITTED_TOOL_RESULT: String = "[older tool result omitted]"
     }
 }

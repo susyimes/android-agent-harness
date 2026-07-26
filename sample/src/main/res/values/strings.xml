@@ -1,5 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
 <resources>
-    <string name="app_name">Agent Harness Sample</string>
-</resources>
+    <string name="app_name">Agent Harness</string>
 
+    <string name="btn_show_settings">Show settings</string>
+    <string name="btn_hide_settings">Hide settings</string>
+    <string name="btn_new_chat">New chat</string>
+    <string name="btn_save_settings">Save</string>
+    <string name="btn_clear_credential">Clear credential</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_allow">Allow</string>
+    <string name="btn_deny">Deny</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_open_accessibility_settings">Open accessibility settings</string>
+
+    <string name="hint_base_url">Endpoint base URL</string>
+    <string name="hint_model">Model</string>
+    <string name="hint_credential">API credential</string>
+    <string name="hint_message">Message for the agent</string>
+    <string name="credential_notice">The credential is stored only in this app\'s private preferences on this device and is sent only to the endpoint configured above.</string>
+
+    <string name="phone_mode_label">Phone mode: let the agent operate this device</string>
+    <string name="phone_mode_note">High-risk controls (pay, purchase, transfer, delete, uninstall, confirm order) always pause for the approval dialog. The model\'s own confirmed argument is ignored: only your tap on Allow can approve an action.</string>
+
+    <string name="status_ready">Ready</string>
+    <string name="status_running">Running turn…</string>
+    <string name="status_waiting_approval">Waiting for your approval…</string>
+
+    <string name="msg_welcome">Paste an API credential under Settings to chat with a live model, or just press Send to run the offline scripted demo.</string>
+    <string name="msg_new_chat">Started a new chat session.</string>
+    <string name="msg_settings_saved">Settings saved.</string>
+    <string name="msg_credential_cleared">Stored credential cleared.</string>
+    <string name="msg_no_credential_scripted">No credential stored — running the local scripted provider instead of the network.</string>
+    <string name="msg_phone_needs_credential">Phone mode needs a live model. Paste an API credential under Settings first.</string>
+    <string name="msg_service_not_connected">The accessibility service is not connected. Turn phone mode on again once it is enabled.</string>
+    <string name="msg_service_enabled_not_connected">The accessibility service is enabled but not connected yet. Wait a moment and toggle phone mode again.</string>
+
+    <string name="accessibility_dialog_title">Enable the accessibility service</string>
+    <string name="accessibility_dialog_message">Phone mode uses an accessibility service to read the current screen and perform taps and text input on your behalf. Nothing runs until you enable the Agent Harness service in the system accessibility settings and start a turn yourself. High-risk actions always pause for your approval.</string>
+
+    <string name="approval_title">Approve high-risk action?</string>
+    <string name="approval_action_tap">tap</string>
+    <string name="approval_action_set_text">type \"%1$s\" into</string>
+    <string name="approval_message">The agent wants to %1$s the control labeled \"%2$s\". Only this dialog can approve the action — the model cannot approve itself. Deny if you are not sure.</string>
+</resources>

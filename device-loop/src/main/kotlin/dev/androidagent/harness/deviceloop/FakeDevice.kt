@@ -1,54 +1,35 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness.deviceloop
 
-/** One semantic UI node on a fake device screen, mirroring an accessibility-tree entry. */
-data class DeviceNode(
-    val id: String,
-    val role: String,
-    val label: String,
-    val text: String? = null
-) {
-    init {
-        require(id.isNotBlank()) { "Node id must not be blank." }
-        require(role.isNotBlank()) { "Node role must not be blank." }
-        require(label.isNotBlank()) { "Node label must not be blank." }
-    }
-}
-
-/** One fake device screen with its nodes in declaration order. */
-data class DeviceScreen(
-    val id: String,
-    val title: String,
-    val nodes: List<DeviceNode>
-) {
-    init {
-        require(id.isNotBlank()) { "Screen id must not be blank." }
-        require(title.isNotBlank()) { "Screen title must not be blank." }
-        val duplicates = nodes.groupingBy { node -> node.id }
-            .eachCount()
-            .filterValues { count -> count > 1 }
-            .keys
-        require(duplicates.isEmpty()) {
-            "Screen '$id' has duplicate node ids: ${duplicates.sorted().joinToString()}."
-        }
-    }
-}
-
 /**
- * Deterministic in-memory device: a set of screens plus tap transitions.
+ * Deterministic in-memory [DeviceSurface]: a set of screens plus tap transitions.
  *
  * Pure JVM stand-in for a phone UI so the observe -> act -> observe loop can be
  * exercised without Android. Taps follow the configured (screenId, nodeId) -> screenId
  * transitions; entered text is kept per screen and node and applied to snapshots.
+ *
+ * CAPABILITIES. The fake models one app, not a device shell, so it implements
+ * exactly the actions it can honestly perform:
+ * - [back] pops the screens a tap navigated into, and fails with ACTION_FAILED
+ *   at the root, the way a real app exits instead of going "back" forever.
+ * - [waitForStable] returns true immediately: an in-memory screen is always
+ *   settled. It is deliberately not written to [actionLog], so the implicit
+ *   settle that [DeviceActTool] performs after every action stays invisible to
+ *   assertions about what the device was actually asked to do.
+ * - [foregroundPackage] answers only when [packageName] was configured.
+ * - home, swipe, scrollToText and launchApp stay unsupported, which is what
+ *   makes this fake useful for testing the UNSUPPORTED_ACTION path.
  */
 class FakeDevice(
     screens: List<DeviceScreen>,
     startScreenId: String,
-    transitions: Map<Pair<String, String>, String> = emptyMap()
-) {
+    transitions: Map<Pair<String, String>, String> = emptyMap(),
+    private val packageName: String? = null
+) : DeviceSurface {
     private val screensById: Map<String, DeviceScreen>
     private val transitions: Map<Pair<String, String>, String>
     private val enteredText = linkedMapOf<Pair<String, String>, String>()
+    private val history = ArrayDeque<String>()
     private val log = mutableListOf<String>()
 
     var currentScreenId: String
@@ -76,12 +57,13 @@ class FakeDevice(
                 "Transition target screen '$targetScreenId' is unknown."
             }
         }
+        require(packageName?.isNotBlank() != false) { "Package name must not be blank." }
         this.transitions = transitions.toMap()
         currentScreenId = startScreenId
     }
 
     /** Current screen with any entered text applied, without mutating the declared screens. */
-    fun snapshot(): DeviceScreen {
+    override fun snapshot(): DeviceScreen {
         val screen = screensById.getValue(currentScreenId)
         return screen.copy(
             nodes = screen.nodes.map { node ->
@@ -91,19 +73,43 @@ class FakeDevice(
         )
     }
 
-    fun tap(nodeId: String) {
+    override fun tap(nodeId: String) {
         requireKnownNode(nodeId)
         log += "tap:$nodeId"
         val nextScreenId = transitions[currentScreenId to nodeId]
         if (nextScreenId != null) {
+            history.addLast(currentScreenId)
             currentScreenId = nextScreenId
         }
     }
 
-    fun setText(nodeId: String, text: String) {
+    override fun setText(nodeId: String, text: String) {
         requireKnownNode(nodeId)
         enteredText[currentScreenId to nodeId] = text
         log += "set_text:$nodeId:$text"
+    }
+
+    override fun back() {
+        val previous = history.removeLastOrNull()
+            ?: throw DeviceActionException(
+                DeviceErrorType.ACTION_FAILED,
+                "There is no previous screen: '$currentScreenId' is where this app started."
+            )
+        log += "back"
+        currentScreenId = previous
+    }
+
+    /** An in-memory screen never animates, so it is always stable. */
+    override fun waitForStable(timeoutMs: Long): Boolean {
+        require(timeoutMs > 0L) { "waitForStable timeout must be positive." }
+        return true
+    }
+
+    override fun foregroundPackage(): String? {
+        return packageName
+            ?: throw UnsupportedOperationException(
+                "This fake device was constructed without a package name."
+            )
     }
 
     fun actionLog(): List<String> = log.toList()

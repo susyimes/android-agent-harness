@@ -16,11 +16,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Run audit, core tests, demo tests, and demo
-        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew auditProvenance :harness-core:test :demo:test :demo:run --console=plain
+      - name: Run audit, JVM module tests, and demo
+        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew auditProvenance :harness-core:test :provider-openai:test :harness-eval:test :device-loop:test :demo:test :demo:run --console=plain
 
   full-check:
-    name: Full check including Android sample
+    name: Full check including Android modules and APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,5 +29,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Run checkM0
-        run: ./gradlew checkM0 --console=plain
+      - name: Run checkM0 and Android library unit tests
+        run: ./gradlew checkM0 :device-loop-android:testDebugUnitTest --console=plain
+      - name: Upload sample debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-debug-apk
+          path: sample/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- JDK 17. That is all for the JVM modules.
-- The Android SDK (Platform 36) is needed only to build the `sample` module.
+- JDK 17. That is all for the JVM modules (`harness-core`, `provider-openai`, `harness-eval`, `device-loop`, `demo`).
+- The Android SDK (Platform 36) is needed only for the Android modules: the `device-loop-android` library (accessibility integration) and the `sample` app. Their unit tests are JVM-hosted but still need the SDK to configure the Android Gradle plugin.
 
 ## Build and test
 
@@ -16,16 +16,17 @@ JVM-only (no Android SDK):
 Full validation (what CI runs, requires the Android SDK):
 
 ```sh
-./gradlew checkM0
+./gradlew checkM0 :device-loop-android:testDebugUnitTest
 ```
 
-Please make sure `checkM0` is green before opening a pull request.
+`checkM0` includes `:sample:assembleDebug`, so this also proves the APK still builds. Please make sure both are green before opening a pull request.
 
 ## Provenance and privacy rules
 
 The `auditProvenance` task fails the build when it finds any of the following — these are hard rules for every file, including tests and documentation:
 
 - An identifier that looks like a credential (`apiKey`, `access_token`, `client_secret`, `password`, …) assigned a quoted string literal. Read credentials from the environment; in tests, name stub values differently (for example `keyValue`, `stubCredentialValue`).
+  - This bites Android preference keys in particular: a constant whose *name* contains a credential-shaped word fails the audit as soon as any quoted string is assigned to it — even when that string is merely a `SharedPreferences` key name, not a secret. Name such constants after the credential's role instead (the sample uses `PREF_CREDENTIAL` holding the key string `"openai_credential"`, and `credentialValue`/`storedCredential` for run-time values).
 - Secret-bearing filenames (`.env`, `secrets.properties`, keystores, private keys) anywhere in the tree.
 - Reference product namespaces or private local machine paths in sources or docs.
 - Binary assets under the Android sample's resources.
