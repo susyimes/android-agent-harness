@@ -16,5 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = 'android-agent-harness'
 include ':harness-core'
+include ':demo'
 include ':sample'
-

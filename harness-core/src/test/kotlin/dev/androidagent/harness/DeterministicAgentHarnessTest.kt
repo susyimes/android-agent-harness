@@ -43,7 +43,10 @@ class DeterministicAgentHarnessTest {
         assertEquals(result.session, store.load("session-1"))
         assertEquals(
             listOf(
-                AgentHarnessTraceEvent.ContextLoaded(listOf("a-context", "z-context")),
+                AgentHarnessTraceEvent.ContextLoaded(
+                    itemIds = listOf("a-context", "z-context"),
+                    totalContentChars = 9
+                ),
                 AgentHarnessTraceEvent.ProviderInvoked(1, "scripted-uppercase", listOf("uppercase")),
                 AgentHarnessTraceEvent.ToolExecuted(1, "uppercase-1", "uppercase", true, "ANDROID"),
                 AgentHarnessTraceEvent.ProviderInvoked(2, "scripted-uppercase", listOf("uppercase")),
@@ -135,4 +138,3 @@ class DeterministicAgentHarnessTest {
         }
     }
 }
-

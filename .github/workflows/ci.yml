@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  jvm-no-android-sdk:
+    name: JVM path without Android SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run audit, core tests, demo tests, and demo
+        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew auditProvenance :harness-core:test :demo:test :demo:run --console=plain
+
+  full-check:
+    name: Full check including Android sample
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run checkM0
+        run: ./gradlew checkM0 --console=plain

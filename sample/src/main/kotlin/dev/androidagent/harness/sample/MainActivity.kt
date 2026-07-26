@@ -25,7 +25,7 @@ class MainActivity : Activity() {
             setText("android")
         }
         val output = TextView(this).apply {
-            text = "Tap Run to execute the local deterministic provider → tool → provider loop."
+            text = "Tap Run to execute the local context → provider → tool → provider loop."
             setTextIsSelectable(true)
             setPadding(0, padding, 0, 0)
         }
@@ -37,9 +37,14 @@ class MainActivity : Activity() {
                 val transcript = result.session.messages.joinToString("\n") { message ->
                     "${message.role}: ${message.content}"
                 }
+                val trace = result.trace.joinToString("\n") { event -> event.toString() }
                 output.text = buildString {
                     append(result.output)
                     append("\n\nProvider steps: ${result.providerSteps}")
+                    append("\n\nArchitecture\n")
+                    append("UI → HarnessRunner → AgentOrchestrator → Context/Tool coordinators")
+                    append("\n\nTrace\n")
+                    append(trace)
                     append("\n\nTranscript\n")
                     append(transcript)
                 }
@@ -48,7 +53,7 @@ class MainActivity : Activity() {
 
         content.addView(
             TextView(this).apply {
-                text = "Android Agent Harness M0"
+                text = "Minimal Android Agent Harness"
                 textSize = 24f
             },
             ViewGroup.LayoutParams.MATCH_PARENT,

@@ -6,7 +6,7 @@ plugins {
 
 tasks.register('auditProvenance') {
     group = 'verification'
-    description = 'Rejects private configuration, embedded credentials, product namespaces, and binary product assets.'
+    description = 'Rejects private configuration, embedded credentials, product namespaces, local machine paths, and binary product assets.'
 
     doLast {
         def repositoryFiles = fileTree(rootDir) {
@@ -37,13 +37,19 @@ tasks.register('auditProvenance') {
             include '**/*.gradle'
             include 'harness-core/src/**/*.kt'
             include 'harness-core/src/**/*.xml'
+            include 'demo/src/**/*.kt'
+            include 'demo/src/**/*.xml'
             include 'sample/src/**/*.kt'
             include 'sample/src/**/*.xml'
+            include 'README.md'
+            include 'THIRD_PARTY_NOTICES.md'
+            include 'docs/**/*.md'
             exclude '**/build/**'
         }.files.findAll { file -> file.isFile() }
 
         def productNamespaces = ['com' + '.mirror', 'com' + '.truebox']
         def embeddedCredential = ~/(?i)(api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["'][^"']+["']/
+        def privateLocalPath = ~/(?i)\b[a-z]:\\[^\s`]/
         def contentViolations = []
         sourceAndBuildFiles.each { file ->
             def text = file.getText('UTF-8')
@@ -54,6 +60,9 @@ tasks.register('auditProvenance') {
             }
             if (embeddedCredential.matcher(text).find()) {
                 contentViolations << "${file}: embedded credential-like assignment"
+            }
+            if (privateLocalPath.matcher(text).find()) {
+                contentViolations << "${file}: local machine path"
             }
         }
 
@@ -76,9 +85,15 @@ tasks.register('auditProvenance') {
 
 tasks.register('checkM0') {
     group = 'verification'
-    description = 'Runs the M0 contract tests, provenance audit, and Android sample debug build.'
+    description = 'Runs the minimal architecture tests, provenance audit, JVM demo build, and Android sample debug build.'
     dependsOn 'auditProvenance'
     dependsOn ':harness-core:test'
+    dependsOn ':demo:test'
     dependsOn ':sample:assembleDebug'
 }
 
+tasks.register('runDemo') {
+    group = 'application'
+    description = 'Runs the deterministic provider -> tool -> provider demo.'
+    dependsOn ':demo:run'
+}

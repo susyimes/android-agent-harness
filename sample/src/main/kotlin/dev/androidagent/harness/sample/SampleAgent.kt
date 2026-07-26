@@ -5,6 +5,7 @@ import dev.androidagent.harness.AgentContextItem
 import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentHarnessRequest
 import dev.androidagent.harness.AgentHarnessResult
+import dev.androidagent.harness.AgentHarnessRunner
 import dev.androidagent.harness.AgentIdGenerator
 import dev.androidagent.harness.AgentProvider
 import dev.androidagent.harness.AgentProviderRequest
@@ -13,12 +14,10 @@ import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.AgentTool
 import dev.androidagent.harness.AgentToolCall
 import dev.androidagent.harness.AgentToolInvocation
-import dev.androidagent.harness.AgentToolRegistry
+import dev.androidagent.harness.AgentToolProfile
 import dev.androidagent.harness.AgentToolResult
 import dev.androidagent.harness.AgentToolSpec
-import dev.androidagent.harness.DeterministicAgentHarness
 import dev.androidagent.harness.FixedAgentClock
-import dev.androidagent.harness.InMemoryAgentSessionStore
 import dev.androidagent.harness.SequentialAgentIdGenerator
 import dev.androidagent.harness.StaticAgentContextProvider
 import java.util.Locale
@@ -26,22 +25,25 @@ import java.util.Locale
 object SampleAgent {
     fun run(input: String): AgentHarnessResult {
         val idGenerator: AgentIdGenerator = SequentialAgentIdGenerator("sample")
-        val harness = DeterministicAgentHarness(
+        val harness = AgentHarnessRunner(
             provider = ScriptedSampleProvider(),
-            contextProvider = StaticAgentContextProvider(
-                listOf(
-                    AgentContextItem(
-                        id = "sample-scope",
-                        source = "bundled-public-sample",
-                        content = "Transform only the text entered in this sample screen.",
-                        trust = AgentContextTrust.APPLICATION
+            contextProviders = listOf(
+                StaticAgentContextProvider(
+                    listOf(
+                        AgentContextItem(
+                            id = "sample-scope",
+                            source = "bundled-public-sample",
+                            content = "Transform only the text entered in this sample screen.",
+                            trust = AgentContextTrust.APPLICATION,
+                            priority = 100
+                        )
                     )
                 )
             ),
-            toolRegistry = AgentToolRegistry(listOf(UppercaseTool())),
-            sessionStore = InMemoryAgentSessionStore(),
+            tools = listOf(UppercaseTool()),
             clock = FixedAgentClock(1_700_000_000_000L),
-            idGenerator = idGenerator
+            idGenerator = idGenerator,
+            toolProfile = AgentToolProfile.only("minimal-sample", setOf("uppercase"))
         )
         return harness.run(AgentHarnessRequest("sample-session", input))
     }
@@ -83,4 +85,3 @@ object SampleAgent {
         }
     }
 }
-

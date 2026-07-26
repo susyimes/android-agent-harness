@@ -74,6 +74,8 @@ class AgentToolRegistry(tools: List<AgentTool>) {
         .map { tool -> tool.spec }
         .sortedBy { spec -> spec.name }
 
+    fun contains(toolName: String): Boolean = toolByName.containsKey(toolName)
+
     fun execute(call: AgentToolCall, sessionId: String): AgentToolResult {
         val tool = toolByName[call.toolName]
             ?: return AgentToolResult.failure("Unknown tool: ${call.toolName}")
@@ -100,3 +102,79 @@ class AgentToolRegistry(tools: List<AgentTool>) {
     }
 }
 
+data class AgentToolProfile(
+    val id: String,
+    val allowedToolNames: Set<String>? = null
+) {
+    init {
+        require(id.isNotBlank()) { "Tool profile id must not be blank." }
+        require(allowedToolNames?.none { name -> name.isBlank() } != false) {
+            "Allowed tool names must not be blank."
+        }
+    }
+
+    fun allows(toolName: String): Boolean = allowedToolNames?.contains(toolName) ?: true
+
+    companion object {
+        fun all(id: String = "all"): AgentToolProfile = AgentToolProfile(id = id)
+
+        fun only(id: String, toolNames: Set<String>): AgentToolProfile {
+            return AgentToolProfile(id = id, allowedToolNames = toolNames.toSet())
+        }
+    }
+}
+
+data class AgentToolExecution(
+    val call: AgentToolCall,
+    val result: AgentToolResult
+)
+
+/** Keeps the provider-visible catalog and executable capability set on the same boundary. */
+class AgentToolOrchestrator(
+    private val registry: AgentToolRegistry,
+    val profile: AgentToolProfile = AgentToolProfile.all(),
+    private val maxToolCallsPerStep: Int = 4
+) {
+    init {
+        require(maxToolCallsPerStep in 1..32) {
+            "maxToolCallsPerStep must be between 1 and 32."
+        }
+        val knownNames = registry.specifications().map { spec -> spec.name }.toSet()
+        val unknownProfileTools = profile.allowedToolNames.orEmpty() - knownNames
+        require(unknownProfileTools.isEmpty()) {
+            "Tool profile '${profile.id}' contains unknown tools: ${unknownProfileTools.sorted().joinToString()}."
+        }
+    }
+
+    fun specifications(): List<AgentToolSpec> {
+        return registry.specifications().filter { spec -> profile.allows(spec.name) }
+    }
+
+    fun execute(calls: List<AgentToolCall>, sessionId: String): List<AgentToolExecution> {
+        if (calls.size > maxToolCallsPerStep) {
+            throw AgentHarnessProtocolException(
+                "Provider returned ${calls.size} tool calls; limit is $maxToolCallsPerStep."
+            )
+        }
+        val duplicateCallIds = calls.groupingBy { call -> call.id }
+            .eachCount()
+            .filterValues { count -> count > 1 }
+            .keys
+        if (duplicateCallIds.isNotEmpty()) {
+            throw AgentHarnessProtocolException(
+                "Tool call ids must be unique within a step: ${duplicateCallIds.sorted().joinToString()}."
+            )
+        }
+
+        return calls.map { call ->
+            val result = when {
+                !registry.contains(call.toolName) -> AgentToolResult.failure("Unknown tool: ${call.toolName}")
+                !profile.allows(call.toolName) -> AgentToolResult.failure(
+                    "Tool '${call.toolName}' is not available in profile '${profile.id}'."
+                )
+                else -> registry.execute(call, sessionId)
+            }
+            AgentToolExecution(call = call, result = result)
+        }
+    }
+}

@@ -1,48 +1,66 @@
 # Extraction boundary and compatibility map
 
-## M0 boundary
+## Minimal boundary
 
-This repository is a narrow, independently authored extraction of architectural seams, not a source-code fork. It keeps only the minimum path needed to prove a deterministic Android agent turn:
+This repository is an independently authored extraction of architectural seams, not a source-code fork. It keeps only the path needed to prove a bounded Android-agent turn:
 
-1. A caller supplies a session id and user text.
-2. A context provider returns explicitly selected context items.
-3. A provider sees an immutable session snapshot, the selected context, and registered tool specifications.
-4. The provider returns either final text or an ordered list of tool calls.
-5. The harness executes registered tools, appends tool results to the session, and asks the provider again.
-6. A configured provider-step limit ends non-terminating runs.
+1. `AgentHarnessRunner` wires explicit adapters and starts a run.
+2. `AgentOrchestrator` saves the user message and requests a controlled context bundle.
+3. `AgentContextCoordinator` gathers context adapters, rejects duplicate ids, sorts by declared priority, applies trust policy, and enforces item/content budgets.
+4. The provider receives an immutable session snapshot, selected context, and the profile-scoped tool catalog.
+5. `AgentToolOrchestrator` validates ordered calls and executes only tools visible in the selected profile.
+6. Tool results are appended to the session before the provider is invoked again.
+7. Final assistant text is saved, or a configured provider/tool-call limit ends the run.
 
-The core is Kotlin/JVM so its contracts can be tested without Android runtime state. The Android sample is a separate consumer and adds no permission or network capability.
+The core is Kotlin/JVM so every runtime boundary can be tested without Android state. The JVM demo is an executable proof. The Android sample is a thin UI consumer and adds no permission or network capability.
 
-## Compatibility mapping to the read-only reference
+## Current alignment map
 
-This is a conceptual adapter map, not source, binary, package, or serialized-data compatibility.
+This map was refreshed on 2026-07-18 against the then-current private `mirror-android` revision (pinned in a private audit log). It describes architectural responsibility, not package, API, source, binary, or serialized-data compatibility.
 
-| M0 contract | Read-only `mirror-android` seam | Adapter responsibility |
+| Extracted boundary | Current `mirror-android` seam | Minimum retained responsibility |
 | --- | --- | --- |
-| `AgentProvider` | `AgentChatClient` provider/model calls | Translate `AgentProviderRequest` messages, context, and `AgentToolSpec` values into the chosen provider protocol; translate provider text/tool calls back. Credentials remain outside the core. |
-| `AgentContextProvider` | `AgentMirrorContextProvider` and the `agent.context` control-plane providers | Select and redact context before returning `AgentContextItem`; do not pass an entire local data store or Android `Context`. |
-| `AgentTool` / `AgentToolRegistry` | `AgentTool`, `AgentContextAwareTool`, and `AgentToolRegistry` | Adapt JSON arguments to the M0 string map (or introduce a separately reviewed typed payload); register only capabilities appropriate for the run profile. |
-| `AgentSessionStore` | `MirrorChatRepository`, `ChatSession`, and `ChatMessage` | Map roles and tool-call ids, choose durable storage if needed, and preserve atomicity outside the core contract. |
-| `DeterministicAgentHarness` | `AgentHarnessRunner` plus `AgentToolOrchestrator` | Build a bounded run around the provider and tool adapters. Streaming, comparisons, overlays, evaluation, and persistence are intentionally outside M0. |
-| `AgentClock` / `AgentIdGenerator` | direct wall-clock and UUID use in the reference harness | Inject production implementations or deterministic fakes; never hide time/randomness inside tests. |
+| `AgentHarnessRunner` | Application/harness composition around the Agent path | Construct the portable runtime from explicit provider, context, tool, session, time, and id adapters. It does not copy House evaluation or Android lifecycle behavior. |
+| `AgentOrchestrator` | `agent.orchestrator.AgentOrchestrator` | Own one run: session mutation, context handoff, provider/tool loop, final persistence, and bounded failure. Streaming, retry UI, debug persistence, memory writeback, and Android cancellation are omitted. |
+| `AgentContextCoordinator` | `agent.context.AgentContextCoordinator` | Keep context collection as a distinct control-plane boundary with trust, priority, and budgets. NeedSpec, retrieval, reranking, EvidencePack, prompt rendering, and route gate remain product extensions. |
+| `AgentProvider` | `AgentChatClient` and its provider/model calls | Translate selected context, session messages, and tool specs to/from a model transport. Credentials and endpoints remain outside the core. |
+| `AgentToolOrchestrator` | `agent.tool.AgentToolOrchestrator` | Keep the provider-visible catalog and executable capability profile consistent; validate bounded ordered calls and return inspectable results. Phone loops, formula tools, envelopes, images, and progress streaming are omitted. |
+| `AgentTool` / `AgentToolRegistry` / `AgentToolProfile` | `AgentTool`, `AgentContextAwareTool`, `AgentToolRegistry`, and `AgentToolProfile` | Adapt individual capabilities and make the profile-scoped registry the runtime authority boundary. |
+| `AgentSessionStore` | `MirrorChatRepository`, `ChatSession`, and `ChatMessage` | Load/save immutable session snapshots. Durable migration, retention, deletion, and atomic I/O belong to an application adapter. |
+| JVM `demo` / Android `sample` | Debug/chat/harness entry surfaces | Prove the portable flow and show only input, run, result, trace, and transcript. No product resources, navigation, permissions, or branding are retained. |
+
+## Why these four runtime layers are separate
+
+```text
+AgentHarnessRunner       composition and launch
+  └─ AgentOrchestrator   one bounded run and session lifecycle
+       ├─ AgentContextCoordinator   data selection boundary
+       ├─ AgentProvider             reasoning/transport boundary
+       └─ AgentToolOrchestrator     capability boundary
+            └─ AgentToolRegistry    executable adapter set
+```
+
+Keeping these responsibilities separate allows an Android application to replace storage, model transport, local context, or tools independently without importing `mirror-android` product code.
 
 ## Deliberate incompatibilities
 
 - Package names are new (`dev.androidagent.harness`); no reference package is reused.
-- Contracts are synchronous in M0. A coroutine or callback adapter can wrap them without changing the deterministic runner.
-- Tool arguments are `Map<String, String>` rather than JSON objects. This keeps M0 dependency-free and makes sample inputs inspectable.
-- Context is structured data passed separately from conversation messages. A provider adapter decides how to render it.
-- The in-memory session store is a sample implementation, not a format compatible with any existing on-device files.
-- Tool results are text-only. Images, opaque evidence references, and large-result envelopes require a later explicit contract.
-- The sample has no Android application-context singleton, services, receivers, accessibility APIs, file access, or permissions.
+- Contracts are synchronous. Coroutine, callback, or streaming adapters can wrap the portable boundary.
+- Tool arguments are `Map<String, String>` rather than JSON objects.
+- Context is structured and passed separately from conversation messages.
+- The context coordinator performs deterministic policy selection, not the reference V2 NeedSpec/EvidencePack/reranking pipeline.
+- The in-memory session store is not compatible with existing on-device files.
+- Tool results are text-only; images, opaque evidence refs, and large-result envelopes require an explicit extension.
+- Tool profiles are caller-declared generic allowlists, not the product's CHAT/HARNESS/PROACTIVE policy table.
+- The sample has no application singleton, service, receiver, accessibility API, file access, permission, telemetry, or network path.
+- The target `AgentHarnessRunner` is the portable composition root; it does not reproduce the reference House baseline/candidate evaluation runner.
 
 ## Safe adapter sequence
 
-1. Implement an `AgentProvider` without embedding credentials; inject authenticated transport from the application boundary.
-2. Implement an `AgentContextProvider` that returns the least context required and labels its source/trust.
-3. Add tools one at a time to an explicit `AgentToolRegistry`; perform permission and user-confirmation checks inside the adapter boundary.
-4. Add a durable `AgentSessionStore` only after defining migration, retention, and deletion behavior.
-5. Keep deterministic clock/id fakes in tests and run `checkM0` after each adapter change.
+1. Implement an `AgentProvider` without embedding credentials; inject authenticated transport at the application boundary.
+2. Implement narrow `AgentContextProvider` adapters and configure allowed trust plus budgets.
+3. Add tools one at a time and place them in an explicit `AgentToolProfile`; perform permission and confirmation checks inside the adapter.
+4. Add a durable `AgentSessionStore` only after defining migration, retention, deletion, and atomicity.
+5. Keep deterministic clock/id fakes in tests and run `checkM0` plus `runDemo` after changes.
 
-No adapter or parity change was made to `D:\mirror-android` in M0.
-
+No change is required in `mirror-android` to consume or evolve this extracted runtime.

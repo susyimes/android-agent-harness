@@ -1,62 +1,107 @@
 # Android Agent Harness
 
-Android Agent Harness is a small, provider-neutral M0 for running a bounded agent turn on Android. It separates five contracts: model provider, selected context, registered tools, session storage, and deterministic harness execution.
+[![CI](https://github.com/susyimes/android-agent-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/susyimes/android-agent-harness/actions/workflows/ci.yml)
 
-The repository contains no network provider, credentials, private data, product configuration, Android permissions, or product assets. The sample is deliberately local: a scripted provider asks a generic uppercase tool to transform user-entered text and then displays the deterministic transcript.
+Android Agent Harness is a minimal, provider-neutral agent runtime extracted from the architectural seams of `mirror-android`. It keeps the reusable path and leaves product code behind:
+
+```text
+Android UI / JVM demo
+        ↓
+AgentHarnessRunner
+        ↓
+AgentOrchestrator
+   ├─ AgentContextCoordinator → context adapters
+   ├─ AgentProvider           → model/transport adapter
+   ├─ AgentToolOrchestrator   → scoped registry → tool adapters
+   └─ AgentSessionStore       → persistence adapter
+```
+
+## Quickstart — 60 seconds, no Android SDK
+
+All you need is JDK 17. No API key, account, device, emulator, or Android SDK:
+
+```sh
+git clone https://github.com/susyimes/android-agent-harness.git
+cd android-agent-harness
+./gradlew :demo:run          # Windows: .\gradlew.bat :demo:run
+```
+
+The deterministic output proves the full context → provider → tool → provider → transcript path:
+
+```text
+OUTPUT=Harness result: ANDROID
+PROVIDER_STEPS=2
+TRACE=ContextLoaded -> ProviderInvoked(1) -> ToolExecuted(uppercase) -> ProviderInvoked(2) -> Completed(2)
+TRANSCRIPT=USER:android | TOOL:ANDROID | ASSISTANT:Harness result: ANDROID
+```
+
+To supply different public demo text:
+
+```sh
+./gradlew :demo:run --args="hello android"
+```
 
 ## Requirements
 
-- JDK 17
-- Android SDK Platform 36
+- JDK 17 for everything JVM (`harness-core`, `demo`, all tests)
+- Android SDK Platform 36 only for building the Android `sample`
 - No API key, account, device, NDK, or external service
 
-## Validate M0
+## Validate the repository
 
-On Windows:
-
-```powershell
-$env:GRADLE_USER_HOME = "$PWD\.gradle-user-home"
-.\gradlew.bat checkM0 --no-daemon
-```
-
-On macOS or Linux:
+JVM-only validation (no Android SDK required):
 
 ```sh
-GRADLE_USER_HOME="$PWD/.gradle-user-home" ./gradlew checkM0 --no-daemon
+./gradlew auditProvenance :harness-core:test :demo:test
 ```
 
-`checkM0` runs the JVM contract tests, the provenance/privacy audit, and `:sample:assembleDebug`.
+Full validation including the Android sample build (requires the Android SDK):
 
-To install the sample on a connected Android device or emulator:
+```sh
+./gradlew checkM0
+```
 
-```powershell
-.\gradlew.bat :sample:installDebug
+`checkM0` runs the provenance/privacy audit, the JVM unit/end-to-end tests, the demo tests, and `:sample:assembleDebug`.
+
+To install the thin sample UI on a connected Android device or emulator:
+
+```sh
+./gradlew :sample:installDebug
 ```
 
 ## Modules
 
-- `harness-core`: Kotlin/JVM contracts and the bounded deterministic runner. It has no Android, network, JSON, storage, or coroutine dependency.
-- `sample`: a minimal Android Activity with an in-memory session, static public context, scripted provider, and one uppercase tool.
+- `harness-core`: pure Kotlin/JVM contracts and four explicit runtime boundaries. It has no Android, network, JSON, storage framework, or coroutine dependency.
+- `demo`: executable JVM proof of the full context → provider → tool → provider → persisted transcript path.
+- `sample`: minimal Android input/run/result UI over the same core; no permission or network capability.
 
-## Contract shape
+## Runtime contracts
 
-Construct `DeterministicAgentHarness` with explicit implementations of:
+`AgentHarnessRunner` is the minimal composition root. Applications provide adapters only for capabilities they need:
 
-- `AgentProvider`
-- `AgentContextProvider`
-- `AgentToolRegistry`
-- `AgentSessionStore`
-- `AgentClock` and `AgentIdGenerator`
+- `AgentProvider`: model or scripted decision boundary.
+- `AgentContextProvider`: product-owned context sources. `AgentContextCoordinator` applies trust, priority, item-count, and content-size policy before a provider sees them.
+- `AgentTool`: one executable capability. `AgentToolOrchestrator` exposes and executes the same profile-scoped catalog, preserving a single capability boundary.
+- `AgentSessionStore`: in-memory by default; applications can adapt durable storage.
+- `AgentClock` and `AgentIdGenerator`: production defaults are available, while deterministic fakes keep tests repeatable.
 
-The harness saves the user message, loads and stably sorts context, exposes a stably sorted tool catalog, executes provider-requested tools in declared order, stops on provider text, and rejects runs that exceed the configured provider-step or per-step tool-call limits.
+`AgentOrchestrator` saves the user turn, obtains a controlled context bundle, invokes the provider, executes ordered tool calls, persists tool results, reinvokes the provider, and saves final assistant text. Provider steps and per-step tool calls are bounded.
 
-See [extraction and compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md) and [provenance/privacy inventory](docs/PROVENANCE_PRIVACY.md) before adapting a real provider or persistence layer.
+`DeterministicAgentHarness` remains as a source-compatible facade for the original bootstrap constructor.
 
-## M0 non-goals
+See [extraction and compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md) and [provenance/privacy inventory](docs/PROVENANCE_PRIVACY.md) before adapting a real provider, Android capability, or persistence layer.
 
-M0 intentionally omits network clients, streaming, JSON Schema, Android service lifecycles, durable storage, permissions, confirmation UX, multimodal input, concurrent tool execution, and product adapters. Those belong in separately reviewed milestones.
+## Deliberate minimum boundary
+
+The minimal runtime omits streaming, network clients, JSON Schema, Android service lifecycles, durable storage, route gates, retrieval/reranking, EvidencePack, confirmation UX, multimodal input, concurrent tool execution, and product adapters. Those are extension points, not hidden dependencies.
+
+## Roadmap
+
+- **M1 (done)** — public runnable baseline: JVM demo, deterministic tests, provenance audit, CI.
+- **M2** — optional OpenAI-compatible provider adapter so the same bounded loop runs against a real model with your own key.
+- **M3** — controlled-context showcase scenarios: trust rejection, priority competition, and budget trimming made visible in the trace.
+- **M4** — evaluation harness (baseline vs candidate comparison over a markdown workspace) and a minimal observe → act → finish device-loop contract with a high-risk pause protocol.
 
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-

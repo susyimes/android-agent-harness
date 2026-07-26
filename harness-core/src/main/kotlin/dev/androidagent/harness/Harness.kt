@@ -12,7 +12,11 @@ data class AgentHarnessConfig(
 }
 
 sealed interface AgentHarnessTraceEvent {
-    data class ContextLoaded(val itemIds: List<String>) : AgentHarnessTraceEvent
+    data class ContextLoaded(
+        val itemIds: List<String>,
+        val droppedItemIds: List<String> = emptyList(),
+        val totalContentChars: Int = 0
+    ) : AgentHarnessTraceEvent
 
     data class ProviderInvoked(
         val step: Int,
@@ -49,21 +53,22 @@ class AgentHarnessProtocolException(message: String) : IllegalStateException(mes
 
 class AgentHarnessLimitException(message: String) : IllegalStateException(message)
 
-class DeterministicAgentHarness(
+/** Coordinates one bounded turn without depending on Android, transport, or storage implementations. */
+class AgentOrchestrator(
     private val provider: AgentProvider,
-    private val contextProvider: AgentContextProvider,
-    private val toolRegistry: AgentToolRegistry,
+    private val contextCoordinator: AgentContextCoordinator,
+    private val toolOrchestrator: AgentToolOrchestrator,
     private val sessionStore: AgentSessionStore,
     private val clock: AgentClock,
     private val idGenerator: AgentIdGenerator,
     private val config: AgentHarnessConfig = AgentHarnessConfig()
-) : AgentHarness {
+) {
 
     init {
         require(provider.id.isNotBlank()) { "Provider id must not be blank." }
     }
 
-    override fun run(request: AgentHarnessRequest): AgentHarnessResult {
+    fun execute(request: AgentHarnessRequest): AgentHarnessResult {
         var session = sessionStore.load(request.sessionId) ?: newSession(request.sessionId)
         session = appendMessage(
             session = session,
@@ -72,25 +77,20 @@ class DeterministicAgentHarness(
         )
         sessionStore.save(session)
 
-        val context = contextProvider.load(
+        val contextBundle = contextCoordinator.build(
             AgentContextRequest(
                 session = session,
                 userInput = request.userInput
             )
-        ).sortedWith(compareBy(AgentContextItem::id, AgentContextItem::source, AgentContextItem::content))
-        val duplicateContextIds = context.groupingBy { item -> item.id }
-            .eachCount()
-            .filterValues { count -> count > 1 }
-            .keys
-        if (duplicateContextIds.isNotEmpty()) {
-            throw AgentHarnessProtocolException(
-                "Context ids must be unique: ${duplicateContextIds.sorted().joinToString()}."
-            )
-        }
-
-        val tools = toolRegistry.specifications()
+        )
+        val context = contextBundle.items
+        val tools = toolOrchestrator.specifications()
         val trace = mutableListOf<AgentHarnessTraceEvent>(
-            AgentHarnessTraceEvent.ContextLoaded(context.map { item -> item.id })
+            AgentHarnessTraceEvent.ContextLoaded(
+                itemIds = context.map { item -> item.id },
+                droppedItemIds = contextBundle.droppedItemIds,
+                totalContentChars = contextBundle.totalContentChars
+            )
         )
 
         for (step in 1..config.maxProviderSteps) {
@@ -117,9 +117,9 @@ class DeterministicAgentHarness(
                 }
 
                 is AgentProviderResponse.ToolRequests -> {
-                    validateToolCalls(response.calls)
-                    response.calls.forEach { call ->
-                        val result = toolRegistry.execute(call, session.id)
+                    toolOrchestrator.execute(response.calls, session.id).forEach { execution ->
+                        val call = execution.call
+                        val result = execution.result
                         session = appendToolResult(session, call, result)
                         sessionStore.save(session)
                         trace += AgentHarnessTraceEvent.ToolExecuted(
@@ -181,22 +181,68 @@ class DeterministicAgentHarness(
             )
         )
     }
+}
 
-    private fun validateToolCalls(calls: List<AgentToolCall>) {
-        if (calls.size > config.maxToolCallsPerStep) {
-            throw AgentHarnessProtocolException(
-                "Provider returned ${calls.size} tool calls; limit is ${config.maxToolCallsPerStep}."
-            )
-        }
-        val duplicateCallIds = calls.groupingBy { call -> call.id }
-            .eachCount()
-            .filterValues { count -> count > 1 }
-            .keys
-        if (duplicateCallIds.isNotEmpty()) {
-            throw AgentHarnessProtocolException(
-                "Tool call ids must be unique within a step: ${duplicateCallIds.sorted().joinToString()}."
-            )
-        }
+/** Public runtime entrypoint and composition root for the minimal architecture. */
+class AgentHarnessRunner(
+    private val orchestrator: AgentOrchestrator
+) : AgentHarness {
+
+    constructor(
+        provider: AgentProvider,
+        contextProviders: List<AgentContextProvider> = listOf(EmptyAgentContextProvider),
+        tools: List<AgentTool> = emptyList(),
+        sessionStore: AgentSessionStore = InMemoryAgentSessionStore(),
+        clock: AgentClock = SystemAgentClock,
+        idGenerator: AgentIdGenerator = UuidAgentIdGenerator(),
+        config: AgentHarnessConfig = AgentHarnessConfig(),
+        contextPolicy: AgentContextPolicy = AgentContextPolicy(),
+        toolProfile: AgentToolProfile = AgentToolProfile.all()
+    ) : this(
+        AgentOrchestrator(
+            provider = provider,
+            contextCoordinator = AgentContextCoordinator(contextProviders, contextPolicy),
+            toolOrchestrator = AgentToolOrchestrator(
+                registry = AgentToolRegistry(tools),
+                profile = toolProfile,
+                maxToolCallsPerStep = config.maxToolCallsPerStep
+            ),
+            sessionStore = sessionStore,
+            clock = clock,
+            idGenerator = idGenerator,
+            config = config
+        )
+    )
+
+    override fun run(request: AgentHarnessRequest): AgentHarnessResult {
+        return orchestrator.execute(request)
     }
 }
 
+/** Source-compatible M0 facade retained for existing consumers. */
+class DeterministicAgentHarness(
+    provider: AgentProvider,
+    contextProvider: AgentContextProvider,
+    toolRegistry: AgentToolRegistry,
+    sessionStore: AgentSessionStore,
+    clock: AgentClock,
+    idGenerator: AgentIdGenerator,
+    config: AgentHarnessConfig = AgentHarnessConfig()
+) : AgentHarness {
+    private val delegate = AgentHarnessRunner(
+        AgentOrchestrator(
+            provider = provider,
+            contextCoordinator = AgentContextCoordinator(contextProvider),
+            toolOrchestrator = AgentToolOrchestrator(
+                registry = toolRegistry,
+                maxToolCallsPerStep = config.maxToolCallsPerStep
+            ),
+            sessionStore = sessionStore,
+            clock = clock,
+            idGenerator = idGenerator,
+            config = config
+        )
+    )
+
+    override fun run(request: AgentHarnessRequest): AgentHarnessResult = delegate.run(request)
+}

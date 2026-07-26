@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness
 
+import java.util.UUID
+
 interface AgentSessionStore {
     fun load(sessionId: String): AgentSession?
 
@@ -53,3 +55,9 @@ class SequentialAgentIdGenerator(
     }
 }
 
+class UuidAgentIdGenerator : AgentIdGenerator {
+    override fun nextId(kind: String): String {
+        require(kind.isNotBlank()) { "Id kind must not be blank." }
+        return "$kind-${UUID.randomUUID()}"
+    }
+}
