@@ -61,9 +61,14 @@ class OpenAiCompatibleProvider(
     override fun respond(request: AgentProviderRequest): AgentProviderResponse {
         val body = MinimalJson.encode(buildRequestBody(request))
         val headers = linkedMapOf("Content-Type" to "application/json")
+        headers.putAll(config.extraHeaders)
         val credential = config.keyValue
         if (credential != null) {
-            headers["Authorization"] = "Bearer $credential"
+            headers["Authorization"] = if (credential.startsWith("Bearer ", ignoreCase = true)) {
+                credential
+            } else {
+                "Bearer $credential"
+            }
         }
         val url = config.baseUrl.trimEnd('/') + "/chat/completions"
         return parseResponse(transport.post(url, headers, body))
@@ -80,6 +85,9 @@ class OpenAiCompatibleProvider(
             if (parallelToolCalls != null) {
                 body["parallel_tool_calls"] = parallelToolCalls
             }
+        }
+        config.extraBodyFields.forEach { (name, value) ->
+            body[name] = value
         }
         return body
     }
@@ -203,7 +211,8 @@ class OpenAiCompatibleProvider(
     }
 
     private fun renderToolSpec(spec: AgentToolSpec): Map<String, Any?> {
-        val argumentNames = spec.requiredArguments.sorted()
+        val argumentNames = spec.arguments.sorted()
+        val requiredArgumentNames = spec.requiredArguments.sorted()
         val properties = linkedMapOf<String, Any?>()
         argumentNames.forEach { argument ->
             properties[argument] = linkedMapOf<String, Any?>("type" to "string")
@@ -216,7 +225,7 @@ class OpenAiCompatibleProvider(
                 "parameters" to linkedMapOf(
                     "type" to "object",
                     "properties" to properties,
-                    "required" to argumentNames,
+                    "required" to requiredArgumentNames,
                     "additionalProperties" to false
                 )
             )

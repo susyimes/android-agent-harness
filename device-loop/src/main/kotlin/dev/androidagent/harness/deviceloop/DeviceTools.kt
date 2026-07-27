@@ -92,8 +92,30 @@ class DeviceActTool(
 ) : AgentTool {
     override val spec = AgentToolSpec(
         name = "device_act",
-        description = "Performs one device action ($ACTION_LIST); high-risk targets pause for user confirmation.",
-        requiredArguments = setOf("action")
+        description = buildString {
+            append("Performs one device action (")
+            append(if (allowHome) ACTION_LIST_WITH_HOME else ACTION_LIST_WITHOUT_HOME)
+            append("). Required by action: tap=node; set_text=node,text; ")
+            append("swipe=direction; scroll_to_text=text; launch_app=app (display name or package). ")
+            append("expected_label guards tap/set_text against stale nodes; distance_px, duration_ms, ")
+            append("max_scrolls, direction and timeout_ms are optional tuning arguments. ")
+            if (!allowHome) {
+                append("The home action is disabled; use back, launch_app, or in-app navigation. ")
+            }
+            append("High-risk targets pause for user confirmation.")
+        },
+        requiredArguments = setOf("action"),
+        optionalArguments = setOf(
+            "node",
+            "expected_label",
+            "text",
+            "direction",
+            "distance_px",
+            "duration_ms",
+            "max_scrolls",
+            "app",
+            "timeout_ms"
+        )
     )
 
     override fun execute(invocation: AgentToolInvocation): AgentToolResult {
@@ -110,7 +132,9 @@ class DeviceActTool(
                 ACTION_WAIT_STABLE -> waitAction(arguments)
                 else -> DeviceText.failure(
                     DeviceErrorType.UNSUPPORTED_ACTION,
-                    "Unknown action '$action'. Use one of: $ACTION_LIST."
+                    "Unknown action '$action'. Use one of: ${
+                        if (allowHome) ACTION_LIST_WITH_HOME else ACTION_LIST_WITHOUT_HOME
+                    }."
                 )
             }
         } catch (unsupported: UnsupportedOperationException) {
@@ -407,7 +431,9 @@ class DeviceActTool(
         const val ACTION_LAUNCH_APP = "launch_app"
         const val ACTION_WAIT_STABLE = "wait_stable"
 
-        const val ACTION_LIST = "tap | set_text | back | home | swipe | scroll_to_text | " +
+        const val ACTION_LIST_WITH_HOME =
+            "tap | set_text | back | home | swipe | scroll_to_text | launch_app | wait_stable"
+        const val ACTION_LIST_WITHOUT_HOME = "tap | set_text | back | swipe | scroll_to_text | " +
             "launch_app | wait_stable"
         const val DIRECTION_LIST = "up | down | left | right"
 
@@ -453,7 +479,8 @@ class DeviceFinishTool(
             setOf("summary")
         } else {
             setOf("summary", "evidence")
-        }
+        },
+        optionalArguments = if (surface == null) emptySet() else setOf("expected_app")
     )
 
     override fun execute(invocation: AgentToolInvocation): AgentToolResult {

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:startColor="#FFFFFC"
+        android:centerColor="#FFF7F0"
+        android:endColor="#FBE9DC"
+        android:type="linear" />
+</shape>

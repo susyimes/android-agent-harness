@@ -4,17 +4,24 @@ package dev.androidagent.harness
 data class AgentToolSpec(
     val name: String,
     val description: String,
-    val requiredArguments: Set<String> = emptySet()
+    val requiredArguments: Set<String> = emptySet(),
+    val optionalArguments: Set<String> = emptySet()
 ) {
     init {
         require(TOOL_NAME.matches(name)) {
             "Tool name '$name' must match ${TOOL_NAME.pattern}."
         }
         require(description.isNotBlank()) { "Tool description must not be blank." }
-        require(requiredArguments.none { argument -> argument.isBlank() }) {
-            "Required argument names must not be blank."
+        require((requiredArguments + optionalArguments).none { argument -> argument.isBlank() }) {
+            "Argument names must not be blank."
+        }
+        require(requiredArguments.intersect(optionalArguments).isEmpty()) {
+            "Arguments cannot be both required and optional."
         }
     }
+
+    val arguments: Set<String>
+        get() = requiredArguments + optionalArguments
 
     companion object {
         private val TOOL_NAME = Regex("[a-z][a-z0-9_]{0,63}")

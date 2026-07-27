@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="@color/dangerPressed" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    <item>
+        <layer-list>
+            <item android:top="2dp">
+                <shape>
+                    <solid android:color="@color/dangerShadow" />
+                    <corners android:radius="24dp" />
+                </shape>
+            </item>
+            <item android:bottom="2dp">
+                <shape>
+                    <solid android:color="@color/danger" />
+                    <corners android:radius="24dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

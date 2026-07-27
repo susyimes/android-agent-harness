@@ -36,6 +36,10 @@ import java.time.Duration
  *   quadratically until the endpoint answers 400. See
  *   [OpenAiCompatibleProvider] for the exact trimming rules. Must be positive
  *   when set.
+ * @property extraHeaders provider-specific, non-credential headers. Reserved
+ *   protocol headers cannot be overridden.
+ * @property extraBodyFields provider-specific top-level request fields such as
+ *   `reasoning_effort`. Core protocol fields cannot be overridden.
  */
 data class OpenAiCompatibleConfig(
     val baseUrl: String,
@@ -43,7 +47,9 @@ data class OpenAiCompatibleConfig(
     val keyValue: String? = null,
     val requestTimeout: Duration = Duration.ofSeconds(60),
     val parallelToolCalls: Boolean? = null,
-    val historyCharBudget: Int? = null
+    val historyCharBudget: Int? = null,
+    val extraHeaders: Map<String, String> = emptyMap(),
+    val extraBodyFields: Map<String, Any?> = emptyMap()
 ) {
     init {
         require(baseUrl.isNotBlank()) { "Base URL must not be blank." }
@@ -54,6 +60,15 @@ data class OpenAiCompatibleConfig(
         require(historyCharBudget == null || historyCharBudget > 0) {
             "History char budget must be positive when set."
         }
+        require(extraHeaders.keys.none { name -> name.lowercase() in RESERVED_HEADERS }) {
+            "Extra headers must not override Authorization or Content-Type."
+        }
+        require(extraHeaders.all { (name, value) -> name.isNotBlank() && value.isNotBlank() }) {
+            "Extra header names and values must not be blank."
+        }
+        require(extraBodyFields.keys.none { name -> name in RESERVED_BODY_FIELDS }) {
+            "Extra body fields must not override core chat-completions fields."
+        }
     }
 
     /** Renders every field except the credential, which is replaced by [REDACTED]. */
@@ -61,7 +76,9 @@ data class OpenAiCompatibleConfig(
         val credential = if (keyValue == null) "null" else REDACTED
         return "OpenAiCompatibleConfig(baseUrl=$baseUrl, model=$model, " +
             "keyValue=$credential, requestTimeout=$requestTimeout, " +
-            "parallelToolCalls=$parallelToolCalls, historyCharBudget=$historyCharBudget)"
+            "parallelToolCalls=$parallelToolCalls, historyCharBudget=$historyCharBudget, " +
+            "extraHeaders=${extraHeaders.keys.sorted()}, " +
+            "extraBodyFields=${extraBodyFields.keys.sorted()})"
     }
 
     companion object {
@@ -70,6 +87,14 @@ data class OpenAiCompatibleConfig(
 
         /** Placeholder printed by [toString] in place of a present credential. */
         const val REDACTED: String = "<redacted>"
+
+        private val RESERVED_HEADERS = setOf("authorization", "content-type")
+        private val RESERVED_BODY_FIELDS = setOf(
+            "model",
+            "messages",
+            "tools",
+            "parallel_tool_calls"
+        )
 
         /**
          * Builds a configuration from environment variables:

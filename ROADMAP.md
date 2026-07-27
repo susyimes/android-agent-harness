@@ -20,7 +20,14 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 - A human approval gate: in the installed app, every high-risk action pauses on a blocking on-screen dialog; the model-supplied `confirmed` argument is ignored, so only the user's tap on Allow can approve, and timeout or dismissal counts as denial.
 - An installable APK: the `sample` is now a debug-signed, sideload-only chat app — paste your own OpenAI-compatible credential for live chat, run the offline scripted provider with no credential at all, and optionally enable phone mode after turning the accessibility service on manually in system settings. CI builds and uploads the APK on every `main` build.
 
-## Beyond M5
+### M6 — provider-ready Android sample
+- A redesigned chat surface with warm layered cards, clear status hierarchy, message bubbles, and a provider/model picker sized for one-handed use.
+- Explicit provider choices: offline demo, experimental Codex account login, Kimi Plan, Ark Plan, and a custom OpenAI-compatible endpoint. Each provider keeps its own model and endpoint settings.
+- Browser PKCE and device-code fallback for the experimental Codex adapter, plus token refresh and logout. The adapter is isolated because third-party Android account login is not a documented official Codex surface.
+- Android Keystore-backed encryption for API keys and login tokens, including one-time migration and removal of the sample's legacy plaintext custom credential.
+- Phone mode is available only when the selected online provider is ready, so changing providers cannot accidentally reuse another provider's credential or session.
+
+## Beyond M6
 
 - Streaming provider responses behind the same bounded-step contract.
 - JSON-schema tool arguments (today: flat `Map<String, String>`).

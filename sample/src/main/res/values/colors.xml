@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <color name="primary">#FF7648</color>
+    <color name="primaryPressed">#E9653D</color>
+    <color name="primarySoft">#FFE7DA</color>
+    <color name="primaryShadow">#33552A18</color>
+    <color name="surfaceShadow">#1F302820</color>
+    <color name="screenBackground">#FFF7F0</color>
+    <color name="surface">#FFFFFB</color>
+    <color name="surfaceSoft">#FFF1E7</color>
+    <color name="textPrimary">#171B2A</color>
+    <color name="textSecondary">#746D66</color>
+    <color name="cardStroke">#F2E4D8</color>
+    <color name="success">#4F9D69</color>
+    <color name="warning">#D88920</color>
+    <color name="danger">#C84B4B</color>
+    <color name="dangerPressed">#A93B3B</color>
+    <color name="dangerShadow">#33451C1C</color>
+    <color name="toolSurface">#F3EEFF</color>
+    <color name="toolText">#6A4CA0</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

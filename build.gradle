@@ -88,6 +88,7 @@ tasks.register('checkM0') {
     dependsOn ':harness-eval:test'
     dependsOn ':device-loop:test'
     dependsOn ':demo:test'
+    dependsOn ':sample:testDebugUnitTest'
     dependsOn ':sample:assembleDebug'
 }
 

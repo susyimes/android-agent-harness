@@ -6,6 +6,10 @@ import java.net.InetSocketAddress
 import java.nio.charset.Charset
 import java.time.Duration
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,9 +24,13 @@ class UrlConnectionHttpTransportTest {
     private val receivedBodies = Collections.synchronizedList(mutableListOf<String>())
     private val receivedHeaders = Collections.synchronizedList(mutableListOf<Map<String, String>>())
     private val receivedPaths = Collections.synchronizedList(mutableListOf<String>())
+    private lateinit var blockingRequestStarted: CountDownLatch
+    private lateinit var releaseBlockingRequest: CountDownLatch
 
     @Before
     fun startServer() {
+        blockingRequestStarted = CountDownLatch(1)
+        releaseBlockingRequest = CountDownLatch(1)
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/ok") { exchange ->
             recordRequest(exchange)
@@ -67,6 +75,15 @@ class UrlConnectionHttpTransportTest {
         server.createContext("/redirect-relative") { exchange ->
             recordRequest(exchange)
             redirect(exchange, 308, "/ok")
+        }
+        server.createContext("/blocking") { exchange ->
+            recordRequest(exchange)
+            blockingRequestStarted.countDown()
+            releaseBlockingRequest.await(10, TimeUnit.SECONDS)
+            runCatching {
+                respond(exchange, 200, "{\"status\":\"late\"}", "application/json")
+            }
+            exchange.close()
         }
         server.start()
     }
@@ -265,6 +282,43 @@ class UrlConnectionHttpTransportTest {
             "Expected a correctly decoded error body in: ${error.message}",
             (error.message ?: "").contains(ACCENTED_BODY)
         )
+    }
+
+    @Test
+    fun cancelBeforePostRejectsTheRequest() {
+        val transport = transport()
+
+        transport.cancel()
+
+        assertThrows(HttpRequestCancelledException::class.java) {
+            transport.post(url("/ok"), emptyMap(), "{}")
+        }
+        assertTrue(receivedPaths.isEmpty())
+    }
+
+    @Test
+    fun cancelDisconnectsAnInFlightRequest() {
+        val transport = transport()
+        val worker = Executors.newSingleThreadExecutor()
+        try {
+            val request = worker.submit<String> {
+                transport.post(url("/blocking"), emptyMap(), "{}")
+            }
+            assertTrue(
+                "The test server never received the blocking request.",
+                blockingRequestStarted.await(3, TimeUnit.SECONDS)
+            )
+
+            transport.cancel()
+
+            val failure = assertThrows(ExecutionException::class.java) {
+                request.get(3, TimeUnit.SECONDS)
+            }
+            assertTrue(failure.cause is HttpRequestCancelledException)
+        } finally {
+            releaseBlockingRequest.countDown()
+            worker.shutdownNow()
+        }
     }
 
     private companion object {

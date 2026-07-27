@@ -151,7 +151,7 @@ class DeviceToolsTest {
         assertTrue(badAction.isError)
         assertEquals(
             "UNSUPPORTED_ACTION: Unknown action 'fly'. Use one of: tap | set_text | back | " +
-                "home | swipe | scroll_to_text | launch_app | wait_stable.",
+                "swipe | scroll_to_text | launch_app | wait_stable.",
             badAction.content
         )
 
@@ -302,6 +302,18 @@ class DeviceToolsTest {
         val spec = DeviceActTool(newDevice(), RiskPolicy()).spec
 
         assertEquals(setOf("action"), spec.requiredArguments)
+        assertTrue(spec.optionalArguments.contains("app"))
+        assertTrue(spec.optionalArguments.contains("node"))
+        assertTrue(spec.description.contains("launch_app=app"))
+        assertFalse(spec.description.substringBefore(").").contains("home"))
+    }
+
+    @Test
+    fun finishSpecExposesExpectedAppWithoutRequiringIt() {
+        val spec = DeviceFinishTool(newDevice()).spec
+
+        assertEquals(setOf("summary", "evidence"), spec.requiredArguments)
+        assertEquals(setOf("expected_app"), spec.optionalArguments)
     }
 }
 

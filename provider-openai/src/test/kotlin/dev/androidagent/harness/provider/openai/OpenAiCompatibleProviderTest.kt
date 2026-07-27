@@ -64,7 +64,8 @@ class OpenAiCompatibleProviderTest {
                 AgentToolSpec(
                     name = "uppercase",
                     description = "Uppercases the provided text.",
-                    requiredArguments = setOf("text", "locale")
+                    requiredArguments = setOf("text"),
+                    optionalArguments = setOf("locale")
                 )
             ),
             providerStep = 1
@@ -101,7 +102,7 @@ class OpenAiCompatibleProviderTest {
         val parameters = asObject(function["parameters"])
         assertEquals("object", parameters["type"])
         assertEquals(false, parameters["additionalProperties"])
-        assertEquals(listOf("locale", "text"), parameters["required"])
+        assertEquals(listOf("text"), parameters["required"])
         val properties = asObject(parameters["properties"])
         assertEquals(mapOf("type" to "string"), properties["locale"])
         assertEquals(mapOf("type" to "string"), properties["text"])
@@ -182,6 +183,43 @@ class OpenAiCompatibleProviderTest {
         )
 
         assertEquals(true, asObject(MinimalJson.parse(transport.bodies[0]))["parallel_tool_calls"])
+    }
+
+    @Test
+    fun sendsProviderSpecificHeadersAndBodyFields() {
+        val transport = RecordingTransport(finalResponse("done"))
+        OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "provider-model",
+                extraHeaders = mapOf("User-Agent" to "HarnessSample/1"),
+                extraBodyFields = mapOf(
+                    "reasoning_effort" to "high",
+                    "max_tokens" to 4096
+                )
+            ),
+            transport = transport
+        ).respond(simpleRequest())
+
+        assertEquals("HarnessSample/1", transport.sentHeaders.single()["User-Agent"])
+        val body = asObject(MinimalJson.parse(transport.bodies.single()))
+        assertEquals("high", body["reasoning_effort"])
+        assertEquals(4096L, body["max_tokens"])
+    }
+
+    @Test
+    fun preservesAnAlreadyPrefixedBearerCredential() {
+        val transport = RecordingTransport(finalResponse("done"))
+        OpenAiCompatibleProvider(
+            config = OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "provider-model",
+                keyValue = "Bearer prefixed-value"
+            ),
+            transport = transport
+        ).respond(simpleRequest())
+
+        assertEquals("Bearer prefixed-value", transport.sentHeaders.single()["Authorization"])
     }
 
     @Test

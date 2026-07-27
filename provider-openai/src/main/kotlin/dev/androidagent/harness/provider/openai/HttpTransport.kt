@@ -9,6 +9,8 @@ import java.net.URISyntaxException
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** Minimal HTTP boundary so the provider can be tested without sockets. */
 fun interface HttpTransport {
@@ -20,6 +22,12 @@ class HttpTransportException(
     val statusCode: Int,
     message: String
 ) : RuntimeException(message)
+
+/** Thrown when the owner explicitly cancels an in-flight HTTP request. */
+class HttpRequestCancelledException(
+    message: String = "HTTP request was cancelled.",
+    cause: Throwable? = null
+) : IOException(message, cause)
 
 /**
  * Blocking [HttpTransport] built on [HttpURLConnection].
@@ -51,11 +59,18 @@ class HttpTransportException(
 class UrlConnectionHttpTransport(
     private val requestTimeout: Duration = Duration.ofSeconds(60)
 ) : HttpTransport {
+    private val cancelled = AtomicBoolean(false)
+    private val activeConnection = AtomicReference<HttpURLConnection?>()
 
     override fun post(url: String, headers: Map<String, String>, body: String): String {
+        ensureNotCancelled()
         val connection = URI.create(url).toURL().openConnection() as? HttpURLConnection
             ?: throw IOException("Not an HTTP(S) URL: $url")
+        check(activeConnection.compareAndSet(null, connection)) {
+            "UrlConnectionHttpTransport supports one active request at a time."
+        }
         try {
+            ensureNotCancelled()
             connection.requestMethod = "POST"
             connection.instanceFollowRedirects = false
             connection.connectTimeout = timeoutMillis()
@@ -77,15 +92,39 @@ class UrlConnectionHttpTransport(
             }
             val charset = responseCharset(connection)
             if (status !in 200..299) {
+                ensureNotCancelled()
                 throw HttpTransportException(
                     statusCode = status,
                     message = "HTTP $status from $url: " +
                         truncate(readAll(connection.errorStream, charset))
                 )
             }
-            return readAll(connection.inputStream, charset)
+            val response = readAll(connection.inputStream, charset)
+            ensureNotCancelled()
+            return response
+        } catch (error: IOException) {
+            if (cancelled.get()) {
+                throw HttpRequestCancelledException(cause = error)
+            }
+            throw error
         } finally {
+            activeConnection.compareAndSet(connection, null)
             connection.disconnect()
+        }
+    }
+
+    /**
+     * Permanently cancels this turn-scoped transport and disconnects its
+     * current socket. A cancelled transport cannot be reused.
+     */
+    fun cancel() {
+        cancelled.set(true)
+        activeConnection.get()?.disconnect()
+    }
+
+    private fun ensureNotCancelled() {
+        if (cancelled.get()) {
+            throw HttpRequestCancelledException()
         }
     }
 

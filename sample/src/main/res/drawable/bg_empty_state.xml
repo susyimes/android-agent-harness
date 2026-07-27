@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#FAFFFFFB" />
+    <stroke
+        android:width="1dp"
+        android:color="#EADACE"
+        android:dashWidth="7dp"
+        android:dashGap="5dp" />
+    <corners android:radius="22dp" />
+</shape>

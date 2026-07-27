@@ -6,8 +6,14 @@ data class AgentHarnessConfig(
     val maxToolCallsPerStep: Int = 4
 ) {
     init {
-        require(maxProviderSteps in 1..32) { "maxProviderSteps must be between 1 and 32." }
+        require(maxProviderSteps in 1..MAX_PROVIDER_STEPS) {
+            "maxProviderSteps must be between 1 and $MAX_PROVIDER_STEPS."
+        }
         require(maxToolCallsPerStep in 1..32) { "maxToolCallsPerStep must be between 1 and 32." }
+    }
+
+    companion object {
+        const val MAX_PROVIDER_STEPS = 80
     }
 }
 

@@ -19,6 +19,8 @@ class OpenAiCompatibleConfigTest {
         assertNull(config.keyValue)
         assertNull(config.parallelToolCalls)
         assertNull(config.historyCharBudget)
+        assertTrue(config.extraHeaders.isEmpty())
+        assertTrue(config.extraBodyFields.isEmpty())
     }
 
     @Test
@@ -103,6 +105,24 @@ class OpenAiCompatibleConfigTest {
             assertTrue(
                 error.message ?: "",
                 (error.message ?: "").contains("History char budget must be positive")
+            )
+        }
+    }
+
+    @Test
+    fun rejectsOverridesOfCoreProtocolFields() {
+        assertThrows(IllegalArgumentException::class.java) {
+            OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model",
+                extraHeaders = mapOf("Authorization" to "unexpected")
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            OpenAiCompatibleConfig(
+                baseUrl = "https://example.invalid/v1",
+                model = "test-model",
+                extraBodyFields = mapOf("model" to "unexpected")
             )
         }
     }
