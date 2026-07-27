@@ -3,9 +3,23 @@
 <resources>
     <string name="app_name">Agent Harness</string>
     <string name="session_subtitle">轻量运行时 · 真实工具 · 凭据留在本机</string>
+    <string name="home_subtitle">本地优先的 Agent 控制台</string>
+    <string name="home_ready_title">今天想让 Agent 做什么？</string>
+    <string name="home_continue_chat">继续对话</string>
+    <string name="home_quick_actions">快捷入口</string>
+    <string name="home_house_action">房子\n身份 · 技能 · 记忆</string>
+    <string name="home_model_action">模型与账号\nCodex · Kimi · Ark</string>
+    <string name="home_runtime_title">运行状态</string>
+    <string name="home_recent_sessions">最近会话</string>
 
     <string name="btn_new_chat">新对话</string>
     <string name="btn_provider">模型</string>
+    <string name="btn_settings">设置</string>
+    <string name="btn_home">首页</string>
+    <string name="btn_house">房子</string>
+    <string name="btn_sessions">会话</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_save">保存</string>
     <string name="btn_choose_provider">选择在线提供商</string>
     <string name="btn_send">发送</string>
     <string name="btn_stop">停止</string>
@@ -18,11 +32,33 @@
     <string name="empty_title">从一句话开始</string>
     <string name="empty_description">当前可直接运行离线演示；选择 Codex、Kimi Plan 或 Ark Plan 后可进行真实模型对话。</string>
 
-    <string name="phone_mode_title">Phone Mode</string>
-    <string name="phone_mode_compact_note">读取当前界面并执行操作；高风险动作必须由你确认</string>
+    <string name="phone_use_title">Phone Use</string>
+    <string name="phone_use_compact_note">由模型在确有需要时调用手机工具，不使用关键词预判</string>
+    <string name="phone_use_permissions">权限</string>
+
+    <string name="settings_title">设置</string>
+    <string name="settings_subtitle">账号、Phone Use 与本地数据</string>
+    <string name="settings_model_title">模型与账号</string>
+    <string name="settings_configure_model">配置提供商或登录 Codex</string>
+    <string name="settings_accessibility_title">手机操作权限</string>
+    <string name="settings_house_title">Agent House</string>
+    <string name="settings_house_description">编辑身份与协作方式，审核 Agent 写入的技能草案和本地记忆；上下文会保留来源。</string>
+    <string name="settings_open_house">打开房子</string>
+    <string name="settings_data_title">本地会话</string>
+    <string name="settings_clear_sessions">清除全部会话</string>
+
+    <string name="house_title">房子</string>
+    <string name="house_subtitle">查看 Agent 的核心文件、技能草案与每日记忆</string>
+    <string name="house_rename">改名</string>
+    <string name="house_agent_managed_note">技能和记忆由 Agent 在对话中按需写入。技能默认是停用草案，只有你审核并启用后才会参与后续对话。</string>
+    <string name="house_skill_name_hint">技能名称</string>
+    <string name="house_skill_description_hint">一句话说明</string>
+    <string name="house_skill_enabled">在对话中启用此技能</string>
+    <string name="house_markdown_hint">输入 Markdown 内容…</string>
 
     <string name="status_ready">已就绪</string>
     <string name="status_running">Agent 正在运行…</string>
+    <string name="status_phone_use">Phone Use 运行中…</string>
     <string name="status_waiting_approval">等待你的批准…</string>
     <string name="status_dot">●</string>
     <string name="provider_choice">%1$s\n%2$s</string>
@@ -31,13 +67,11 @@
 
     <string name="msg_new_chat">已开始新对话</string>
     <string name="msg_no_credential_scripted">当前使用离线演示，不会发起网络模型请求。</string>
-    <string name="msg_phone_needs_live_provider">Phone Mode 需要已登录或已配置密钥的在线提供商。</string>
-    <string name="msg_service_not_connected">无障碍服务尚未连接。启用服务后再打开 Phone Mode。</string>
-    <string name="msg_service_enabled_not_connected">无障碍服务已启用但尚未连接，请稍等后重试。</string>
+    <string name="msg_phone_use_started">模型已按需进入 Phone Use；此后每一步只执行一个手机工具调用。</string>
     <string name="msg_turn_stopped">已停止本轮；已经执行的设备操作不会撤销，本轮内容不会加入后续对话。</string>
 
     <string name="accessibility_dialog_title">启用无障碍服务</string>
-    <string name="accessibility_dialog_message">Phone Mode 使用无障碍服务读取当前界面的语义节点，并代表你点击或输入。只有你主动发起任务时才会运行；高风险动作始终停下来等待你的批准。</string>
+    <string name="accessibility_dialog_message">模型只有在任务确实需要时才会进入 Phone Use，使用无障碍服务读取当前界面的语义节点并代表你点击或输入；高风险动作始终停下来等待你的批准。</string>
 
     <string name="approval_title">批准高风险动作？</string>
     <string name="approval_action_tap">点击</string>

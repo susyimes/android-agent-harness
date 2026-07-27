@@ -18,7 +18,7 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 ### M5 — phone use on a real device
 - `device-loop-android`: the device-loop contract over a real Android accessibility surface — a pull-only accessibility service (snapshots are read on demand, never event-driven), a deterministic screen mapper that renders the foreground window as semantic nodes with synthetic ids (unit-tested on the JVM behind the `UiNodeReader` seam), and a device surface executing taps and text entry.
 - A human approval gate: in the installed app, every high-risk action pauses on a blocking on-screen dialog; the model-supplied `confirmed` argument is ignored, so only the user's tap on Allow can approve, and timeout or dismissal counts as denial.
-- An installable APK: the `sample` is now a debug-signed, sideload-only chat app — paste your own OpenAI-compatible credential for live chat, run the offline scripted provider with no credential at all, and optionally enable phone mode after turning the accessibility service on manually in system settings. CI builds and uploads the APK on every `main` build.
+- An installable APK: the `sample` is now a debug-signed, sideload-only chat app — paste your own OpenAI-compatible credential for live chat, run the offline scripted provider with no credential at all, and optionally enable accessibility-backed Phone Use manually in system settings. CI builds and uploads the APK on every `main` build.
 
 ### M6 — provider-ready Android sample
 - A redesigned chat surface with warm layered cards, clear status hierarchy, message bubbles, and a provider/model picker sized for one-handed use.
@@ -33,13 +33,19 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 - `TransactionalAgentSessionStore`: only a complete successful turn commits. Failure or user stop discards partial messages while documenting that external tool/device effects cannot be rolled back.
 - Typed `AgentToolArgumentSchema` metadata is rendered by both OpenAI-compatible and experimental Codex transports while the core retains its dependency-free normalized-string execution ABI.
 - `OpenAiProviderFactories` creates an isolated cancellable transport per run; Kimi Plan and all Ark Plan model presets are reusable defaults, not hard allow-lists.
-- `agent-sdk-android`: opt-in Phone Mode composition requiring a host-supplied risk policy and human approval gate. The SDK has no permissive production default.
+- `agent-sdk-android`: model-routed Phone Use composition requiring a host-supplied risk policy and human approval gate. The SDK has no permissive production default.
 - Six Maven-style JAR/AAR publications, source artifacts, an independent consumer smoke module, `checkSdk`, and a complete host integration guide.
 
-## Beyond M7
+### M8 — product shell and durable local context
+- `FileAgentSessionStore`: an app-private, dependency-free session catalog with hashed file names, bounded decoding, atomic replace, and list/delete/clear management APIs.
+- Agent House: generic core Markdown files, Agent-written disabled skill drafts, and idempotently appended daily memories behind a portable repository; bounded context preserves application/user/Agent provenance without leaking storage paths.
+- Model-driven Phone Use: device tools are visible during ordinary planning, but only an actual model device-tool call activates the sticky one-action-per-step loop and expands its ceiling from 8 to 80 steps.
+- The sample now has home, chat, session, Agent House/editor, and settings surfaces, plus persistent recent conversations and provider/accessibility status.
+
+## Beyond M8
 
 - Streaming provider responses behind the same bounded-step contract.
-- A durable `AgentSessionStore` adapter with defined migration, retention, and deletion semantics.
+- Optional encrypted/database session and House adapters with application-defined migration and retention.
 - Binary API compatibility validation and a release pipeline to a remote Maven repository.
 - A web-devtools capability component.
 

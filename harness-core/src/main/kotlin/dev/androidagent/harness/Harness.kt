@@ -3,17 +3,54 @@ package dev.androidagent.harness
 
 data class AgentHarnessConfig(
     val maxProviderSteps: Int = 4,
-    val maxToolCallsPerStep: Int = 4
+    val maxToolCallsPerStep: Int = 4,
+    val toolLoopActivation: AgentToolLoopActivation? = null
 ) {
     init {
         require(maxProviderSteps in 1..MAX_PROVIDER_STEPS) {
             "maxProviderSteps must be between 1 and $MAX_PROVIDER_STEPS."
         }
         require(maxToolCallsPerStep in 1..32) { "maxToolCallsPerStep must be between 1 and 32." }
+        toolLoopActivation?.let { activation ->
+            require(activation.maxProviderSteps >= maxProviderSteps) {
+                "Activated maxProviderSteps must be at least the initial maxProviderSteps."
+            }
+            require(activation.maxToolCallsPerStep <= maxToolCallsPerStep) {
+                "Activated maxToolCallsPerStep cannot exceed the initial maxToolCallsPerStep."
+            }
+        }
     }
 
     companion object {
         const val MAX_PROVIDER_STEPS = 80
+    }
+}
+
+/**
+ * Expands a run only after the provider actually requests one of [toolNames].
+ *
+ * The provider sees the full tool catalog from the first step. This policy does
+ * not infer intent from user text; the model's tool call is the activation
+ * signal. Once activated, the larger step budget and tighter per-step tool
+ * limit remain in force for the rest of the turn.
+ */
+data class AgentToolLoopActivation(
+    val toolNames: Set<String>,
+    val maxProviderSteps: Int = AgentHarnessConfig.MAX_PROVIDER_STEPS,
+    val maxToolCallsPerStep: Int = 1
+) {
+    init {
+        require(toolNames.isNotEmpty()) { "Activation tool names must not be empty." }
+        require(toolNames.none(String::isBlank)) {
+            "Activation tool names must not contain blank values."
+        }
+        require(maxProviderSteps in 1..AgentHarnessConfig.MAX_PROVIDER_STEPS) {
+            "Activated maxProviderSteps must be between 1 and " +
+                "${AgentHarnessConfig.MAX_PROVIDER_STEPS}."
+        }
+        require(maxToolCallsPerStep in 1..32) {
+            "Activated maxToolCallsPerStep must be between 1 and 32."
+        }
     }
 }
 
@@ -37,6 +74,13 @@ sealed interface AgentHarnessTraceEvent {
         val succeeded: Boolean,
         val content: String,
         val arguments: Map<String, String> = emptyMap()
+    ) : AgentHarnessTraceEvent
+
+    data class ToolLoopActivated(
+        val step: Int,
+        val toolName: String,
+        val maxProviderSteps: Int,
+        val maxToolCallsPerStep: Int
     ) : AgentHarnessTraceEvent
 
     data class Completed(
@@ -98,6 +142,12 @@ class AgentOrchestrator(
 
     init {
         require(provider.id.isNotBlank()) { "Provider id must not be blank." }
+        val unknownActivationTools = config.toolLoopActivation?.toolNames.orEmpty() -
+            toolOrchestrator.specifications().map { specification -> specification.name }.toSet()
+        require(unknownActivationTools.isEmpty()) {
+            "Tool-loop activation contains unavailable tools: " +
+                "${unknownActivationTools.sorted().joinToString()}."
+        }
     }
 
     fun execute(request: AgentHarnessRequest): AgentHarnessResult {
@@ -128,7 +178,9 @@ class AgentOrchestrator(
             )
         )
 
-        for (step in 1..config.maxProviderSteps) {
+        var step = 1
+        var toolLoopActivated = false
+        while (step <= providerStepLimit(toolLoopActivated)) {
             ensureActive()
             record(
                 trace,
@@ -159,8 +211,27 @@ class AgentOrchestrator(
                 }
 
                 is AgentProviderResponse.ToolRequests -> {
+                    val activation = config.toolLoopActivation
+                    val activatingCall = if (toolLoopActivated || activation == null) {
+                        null
+                    } else {
+                        response.calls.firstOrNull { call -> call.toolName in activation.toolNames }
+                    }
+                    if (activatingCall != null) {
+                        val activatedPolicy = requireNotNull(activation)
+                        toolLoopActivated = true
+                        record(
+                            trace,
+                            AgentHarnessTraceEvent.ToolLoopActivated(
+                                step = step,
+                                toolName = activatingCall.toolName,
+                                maxProviderSteps = activatedPolicy.maxProviderSteps,
+                                maxToolCallsPerStep = activatedPolicy.maxToolCallsPerStep
+                            )
+                        )
+                    }
                     toolOrchestrator.execute(
-                        calls = response.calls,
+                        calls = selectToolCalls(response.calls, toolLoopActivated),
                         sessionId = session.id,
                         beforeEach = ::ensureActive
                     ).forEach { execution ->
@@ -183,11 +254,33 @@ class AgentOrchestrator(
                     }
                 }
             }
+            step += 1
         }
 
+        val limit = providerStepLimit(toolLoopActivated)
         throw AgentHarnessLimitException(
-            "Provider '${provider.id}' did not finish within ${config.maxProviderSteps} steps."
+            "Provider '${provider.id}' did not finish within $limit steps."
         )
+    }
+
+    private fun providerStepLimit(toolLoopActivated: Boolean): Int {
+        return if (toolLoopActivated) {
+            config.toolLoopActivation?.maxProviderSteps ?: config.maxProviderSteps
+        } else {
+            config.maxProviderSteps
+        }
+    }
+
+    private fun selectToolCalls(
+        calls: List<AgentToolCall>,
+        toolLoopActivated: Boolean
+    ): List<AgentToolCall> {
+        val activation = config.toolLoopActivation
+        if (!toolLoopActivated || activation == null) {
+            return calls
+        }
+        val activationCalls = calls.filter { call -> call.toolName in activation.toolNames }
+        return (activationCalls.ifEmpty { calls }).take(activation.maxToolCallsPerStep)
     }
 
     private fun ensureActive() {

@@ -7,6 +7,10 @@ import dev.androidagent.harness.AgentProviderRequest
 import dev.androidagent.harness.AgentProviderResponse
 import dev.androidagent.harness.AgentSession
 import dev.androidagent.harness.AgentContextRequest
+import dev.androidagent.harness.AgentTool
+import dev.androidagent.harness.AgentToolInvocation
+import dev.androidagent.harness.AgentToolResult
+import dev.androidagent.harness.AgentToolSpec
 import dev.androidagent.harness.deviceloop.ApprovalDecision
 import dev.androidagent.harness.deviceloop.DeviceNode
 import dev.androidagent.harness.deviceloop.DeviceScreen
@@ -20,7 +24,7 @@ import org.junit.Test
 class AndroidPhoneAgentTest {
 
     @Test
-    fun createsBoundedPhoneRequestWithoutPermissiveApprovalDefaults() {
+    fun createsModelRoutedPhoneRequestWithoutPermissiveApprovalDefaults() {
         val phone = AndroidPhoneAgent(
             surface = StaticSurface(),
             configuration = AndroidPhoneAgentConfiguration(
@@ -32,13 +36,20 @@ class AndroidPhoneAgentTest {
         val request = phone.request(
             sessionId = "phone-session",
             userInput = "open maps",
-            providerFactory = AgentProviderFactory.fixed(FinalProvider())
+            providerFactory = AgentProviderFactory.fixed(FinalProvider()),
+            additionalTools = listOf(WeatherTool())
         )
 
-        assertEquals(80, request.harnessConfig.maxProviderSteps)
-        assertEquals(1, request.harnessConfig.maxToolCallsPerStep)
+        assertEquals(8, request.harnessConfig.maxProviderSteps)
+        assertEquals(4, request.harnessConfig.maxToolCallsPerStep)
+        assertEquals(80, request.harnessConfig.toolLoopActivation?.maxProviderSteps)
+        assertEquals(1, request.harnessConfig.toolLoopActivation?.maxToolCallsPerStep)
         assertEquals(
             setOf("device_observe", "device_act", "device_finish"),
+            request.harnessConfig.toolLoopActivation?.toolNames
+        )
+        assertEquals(
+            setOf("device_observe", "device_act", "device_finish", "weather"),
             request.tools.map { tool -> tool.spec.name }.toSet()
         )
         val guidance = request.contextProviders.first().load(
@@ -49,6 +60,8 @@ class AndroidPhoneAgentTest {
         ).single().content
         assertTrue(guidance.contains("launch_app"))
         assertTrue(guidance.contains("home action is unavailable"))
+        assertTrue(guidance.contains("ordinary conversation"))
+        assertTrue(guidance.contains("do not call any device tool"))
         assertTrue(phone.isAvailable())
     }
 
@@ -85,6 +98,14 @@ class AndroidPhoneAgentTest {
 
         override fun respond(request: AgentProviderRequest): AgentProviderResponse {
             return AgentProviderResponse.FinalText("done")
+        }
+    }
+
+    private class WeatherTool : AgentTool {
+        override val spec = AgentToolSpec("weather", "Returns test weather.")
+
+        override fun execute(invocation: AgentToolInvocation): AgentToolResult {
+            return AgentToolResult.success("sunny")
         }
     }
 }

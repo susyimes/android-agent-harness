@@ -23,9 +23,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class AgentSdkTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
 
     @Test
     fun hostCanRunToolsObserveEventsAndReuseCommittedSession() {
@@ -122,6 +126,50 @@ class AgentSdkTest {
             }
 
             first.cancel()
+        }
+    }
+
+    @Test
+    fun catalogManagementFencesActiveRunsAndDeletesCommittedSessions() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val store = FileAgentSessionStore(temporaryFolder.newFolder("sdk-catalog"))
+        AgentSdk(store).use { sdk ->
+            val active = sdk.run(
+                AgentRunRequest(
+                    sessionId = "managed-session",
+                    userInput = "blocking",
+                    providerFactory = AgentProviderFactory {
+                        AgentProviderConnection(
+                            BlockingProvider(entered, release),
+                            release::countDown
+                        )
+                    }
+                )
+            )
+            assertTrue(entered.await(3, TimeUnit.SECONDS))
+
+            assertThrows(AgentSessionBusyException::class.java) {
+                sdk.deleteSession("managed-session")
+            }
+            assertThrows(IllegalStateException::class.java) {
+                sdk.clearSessions()
+            }
+            assertTrue(active.cancel())
+            assertTrue(active.await(3, TimeUnit.SECONDS) is AgentRunOutcome.Cancelled)
+
+            assertTrue(
+                sdk.run(
+                    AgentRunRequest(
+                        sessionId = "managed-session",
+                        userInput = "commit",
+                        providerFactory = AgentProviderFactory.fixed(FinalProvider("saved"))
+                    )
+                ).await(3, TimeUnit.SECONDS) is AgentRunOutcome.Success
+            )
+            assertEquals(listOf("managed-session"), sdk.listSessions().map { it.id })
+            assertTrue(sdk.deleteSession("managed-session"))
+            assertTrue(sdk.listSessions().isEmpty())
         }
     }
 

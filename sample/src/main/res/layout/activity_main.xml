@@ -9,6 +9,8 @@
         android:id="@+id/contentRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
         android:paddingStart="20dp"
         android:paddingTop="18dp"
@@ -18,63 +20,123 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/textPrimary"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/sessionSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="@string/session_subtitle"
+                android:textColor="@color/textSecondary"
+                android:textSize="13sp" />
 
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                android:layout_marginTop="11dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/app_name"
+                <Button
+                    android:id="@+id/homeButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:minWidth="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/btn_home"
+                    android:textAllCaps="false"
                     android:textColor="@color/textPrimary"
-                    android:textSize="28sp"
-                    android:textStyle="bold" />
+                    android:textSize="12sp"
+                    android:translationZ="0dp" />
 
-                <TextView
-                    android:id="@+id/sessionSubtitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="@string/session_subtitle"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="13sp" />
+                <Space
+                    android:layout_width="6dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/houseButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:minWidth="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/btn_house"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp"
+                    android:translationZ="0dp" />
+
+                <Space
+                    android:layout_width="6dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/sessionButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:minWidth="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/btn_sessions"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp"
+                    android:translationZ="0dp" />
+
+                <Space
+                    android:layout_width="6dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/newChatButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:minWidth="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/btn_new_chat"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp"
+                    android:translationZ="0dp" />
+
+                <Space
+                    android:layout_width="6dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/settingsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:minWidth="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/btn_settings"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp"
+                    android:translationZ="0dp" />
             </LinearLayout>
-
-            <Button
-                android:id="@+id/newChatButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:background="@drawable/bg_secondary_button"
-                android:elevation="0dp"
-                android:minWidth="0dp"
-                android:paddingStart="13dp"
-                android:paddingEnd="13dp"
-                android:stateListAnimator="@null"
-                android:text="@string/btn_new_chat"
-                android:textAllCaps="false"
-                android:textColor="@color/textPrimary"
-                android:textSize="13sp" />
-
-            <Button
-                android:id="@+id/settingsButton"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/bg_secondary_button"
-                android:elevation="0dp"
-                android:minWidth="0dp"
-                android:paddingStart="13dp"
-                android:paddingEnd="13dp"
-                android:stateListAnimator="@null"
-                android:text="@string/btn_provider"
-                android:textAllCaps="false"
-                android:textColor="@color/textPrimary"
-                android:textSize="13sp" />
         </LinearLayout>
 
         <Button
@@ -94,7 +156,7 @@
             android:textSize="13sp" />
 
         <LinearLayout
-            android:id="@+id/phoneModeCard"
+            android:id="@+id/phoneUseCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
@@ -115,25 +177,36 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/phone_mode_title"
+                    android:text="@string/phone_use_title"
                     android:textColor="@color/textPrimary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/phoneUseDescription"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="@string/phone_mode_compact_note"
+                    android:text="@string/phone_use_compact_note"
                     android:textColor="@color/textSecondary"
                     android:textSize="11sp" />
             </LinearLayout>
 
-            <Switch
-                android:id="@+id/phoneSwitch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:showText="false" />
+            <Button
+                android:id="@+id/phoneUseSettingsButton"
+                android:layout_width="88dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:stateListAnimator="@null"
+                android:text="@string/phone_use_permissions"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:textSize="12sp"
+                android:translationZ="0dp" />
         </LinearLayout>
 
         <FrameLayout

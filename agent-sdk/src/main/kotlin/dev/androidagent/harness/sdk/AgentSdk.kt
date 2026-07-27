@@ -163,6 +163,7 @@ class AgentSdk(
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
     private val activeBySession = ConcurrentHashMap<String, RunningAgentRun>()
+    private val sessionLifecycleLock = Any()
     private val executor: ExecutorService = Executors.newFixedThreadPool(
         configuration.maxConcurrentRuns,
         SdkThreadFactory(configuration.threadNamePrefix)
@@ -171,15 +172,24 @@ class AgentSdk(
     fun run(request: AgentRunRequest): AgentRunHandle {
         check(!closed.get()) { "AgentSdk is closed." }
         val connection = request.providerFactory.connect()
-        val transaction = TransactionalAgentSessionStore(sessionStore, request.sessionId)
-        val running = RunningAgentRun(
-            owner = this,
-            runId = UUID.randomUUID().toString(),
-            request = request,
-            connection = connection,
-            transaction = transaction
-        )
-        val existing = activeBySession.putIfAbsent(request.sessionId, running)
+        val (running, existing) = try {
+            synchronized(sessionLifecycleLock) {
+                val candidate = RunningAgentRun(
+                    owner = this,
+                    runId = UUID.randomUUID().toString(),
+                    request = request,
+                    connection = connection,
+                    transaction = TransactionalAgentSessionStore(
+                        sessionStore,
+                        request.sessionId
+                    )
+                )
+                candidate to activeBySession.putIfAbsent(request.sessionId, candidate)
+            }
+        } catch (error: RuntimeException) {
+            runCatching(connection.cancel)
+            throw error
+        }
         if (existing != null) {
             runCatching(connection.cancel)
             throw AgentSessionBusyException(request.sessionId)
@@ -211,6 +221,43 @@ class AgentSdk(
     }
 
     fun loadSession(sessionId: String) = sessionStore.load(sessionId)
+
+    /**
+     * Lists durable conversations when the configured store implements
+     * [AgentSessionCatalog]. Plain [AgentSessionStore] implementations expose
+     * no catalog and therefore return an empty list.
+     */
+    fun listSessions(): List<AgentSessionSummary> {
+        return (sessionStore as? AgentSessionCatalog)?.listSessions().orEmpty()
+    }
+
+    /**
+     * Deletes a committed session. An active session is fenced so its eventual
+     * successful commit cannot silently recreate data the host just deleted.
+     */
+    fun deleteSession(sessionId: String): Boolean {
+        require(sessionId.isNotBlank()) { "Session id must not be blank." }
+        return synchronized(sessionLifecycleLock) {
+            if (activeBySession.containsKey(sessionId)) {
+                throw AgentSessionBusyException(sessionId)
+            }
+            (sessionStore as? AgentSessionCatalog)?.deleteSession(sessionId) ?: false
+        }
+    }
+
+    /**
+     * Clears committed sessions only when no run is active.
+     *
+     * Returns zero for stores that do not implement [AgentSessionCatalog].
+     */
+    fun clearSessions(): Int {
+        return synchronized(sessionLifecycleLock) {
+            check(activeBySession.isEmpty()) {
+                "Cannot clear Agent sessions while a run is active."
+            }
+            (sessionStore as? AgentSessionCatalog)?.clearSessions() ?: 0
+        }
+    }
 
     private fun execute(running: RunningAgentRun) {
         running.worker.set(Thread.currentThread())

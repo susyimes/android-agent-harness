@@ -32,7 +32,6 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import dev.androidagent.harness.AgentContextItem
@@ -40,8 +39,8 @@ import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentHarnessConfig
 import dev.androidagent.harness.AgentHarnessTraceEvent
 import dev.androidagent.harness.AgentProviderFactory
+import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.AgentToolProfile
-import dev.androidagent.harness.InMemoryAgentSessionStore
 import dev.androidagent.harness.StaticAgentContextProvider
 import dev.androidagent.harness.deviceloop.android.AccessibilityAvailability
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
@@ -62,15 +61,21 @@ import dev.androidagent.harness.sdk.AgentRunListener
 import dev.androidagent.harness.sdk.AgentRunOutcome
 import dev.androidagent.harness.sdk.AgentRunRequest
 import dev.androidagent.harness.sdk.AgentSdk
+import dev.androidagent.harness.sdk.AgentSessionSummary
+import dev.androidagent.harness.sdk.FileAgentSessionStore
+import dev.androidagent.harness.sdk.house.AgentHouseContextProvider
+import dev.androidagent.harness.sdk.house.AgentHouseWriteTools
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgent
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgentConfiguration
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Productized Android sample for the bounded Agent Harness runtime. */
 class MainActivity : Activity() {
@@ -78,18 +83,25 @@ class MainActivity : Activity() {
     private lateinit var mainHandler: Handler
     private lateinit var agentSdk: AgentSdk
     private lateinit var authExecutor: ExecutorService
+    private lateinit var diskExecutor: ExecutorService
     private lateinit var dialogGate: DialogApprovalGate
     private lateinit var approvalGate: PhoneApprovalGate
+    private lateinit var sessionStore: FileAgentSessionStore
+    private lateinit var samplePreferences: SamplePreferences
     private lateinit var providerSettings: ProviderSettingsRepository
     private lateinit var codexRepository: CodexAuthRepository
     private lateinit var codexAuth: CodexAuthService
 
     private lateinit var contentRoot: LinearLayout
     private lateinit var sessionSubtitle: TextView
+    private lateinit var homeButton: Button
+    private lateinit var houseButton: Button
+    private lateinit var sessionButton: Button
     private lateinit var newChatButton: Button
     private lateinit var settingsButton: Button
     private lateinit var providerSelector: Button
-    private lateinit var phoneSwitch: Switch
+    private lateinit var phoneUseSettingsButton: Button
+    private lateinit var phoneUseDescription: TextView
     private lateinit var transcriptScroll: ScrollView
     private lateinit var transcriptContainer: LinearLayout
     private lateinit var emptyState: LinearLayout
@@ -114,6 +126,7 @@ class MainActivity : Activity() {
 
     private var turnSequence = 0L
     private var activeTurn: ActiveTurn? = null
+    private lateinit var currentSessionId: String
 
     private val deviceSurface by lazy {
         AccessibilityDeviceSurface(
@@ -124,8 +137,11 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainHandler = Handler(Looper.getMainLooper())
-        agentSdk = AgentSdk(SESSION_STORE)
+        samplePreferences = SamplePreferences(this)
+        sessionStore = SampleRuntime.sessions(this)
+        agentSdk = AgentSdk(sessionStore)
         authExecutor = Executors.newSingleThreadExecutor()
+        diskExecutor = Executors.newSingleThreadExecutor()
         providerSettings = ProviderSettingsRepository(this)
         codexRepository = CodexAuthRepository(this)
         codexAuth = CodexAuthService(codexRepository)
@@ -137,18 +153,33 @@ class MainActivity : Activity() {
             ),
             dialog = dialogGate
         )
+        currentSessionId = intent.getStringExtra(EXTRA_SESSION_ID)
+            ?.takeIf(String::isNotBlank)
+            ?: samplePreferences.lastSessionId()
+            ?: newSessionId()
+        samplePreferences.setLastSessionId(currentSessionId)
 
         setContentView(R.layout.activity_main)
         bindViews()
         applyWindowInsets(contentRoot)
         setupInteractions()
+        renderPersistedSession()
         updateProviderUi()
+        updatePhoneUseUi()
         updateEmptyState()
+        if (intent.getBooleanExtra(EXTRA_OPEN_PROVIDER_SETTINGS, false)) {
+            intent.removeExtra(EXTRA_OPEN_PROVIDER_SETTINGS)
+            mainHandler.post { showProviderDialog() }
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        if (::providerSelector.isInitialized) updateProviderUi()
+        if (::providerSelector.isInitialized) {
+            updateProviderUi()
+            updatePhoneUseUi()
+            if (!isBusy()) renderPersistedSession()
+        }
     }
 
     override fun onDestroy() {
@@ -165,6 +196,7 @@ class MainActivity : Activity() {
         authTask = null
         authInProgress = false
         authExecutor.shutdownNow()
+        diskExecutor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -172,10 +204,14 @@ class MainActivity : Activity() {
     private fun bindViews() {
         contentRoot = findViewById(R.id.contentRoot)
         sessionSubtitle = findViewById(R.id.sessionSubtitle)
+        homeButton = findViewById(R.id.homeButton)
+        houseButton = findViewById(R.id.houseButton)
+        sessionButton = findViewById(R.id.sessionButton)
         newChatButton = findViewById(R.id.newChatButton)
         settingsButton = findViewById(R.id.settingsButton)
         providerSelector = findViewById(R.id.providerSelector)
-        phoneSwitch = findViewById(R.id.phoneSwitch)
+        phoneUseSettingsButton = findViewById(R.id.phoneUseSettingsButton)
+        phoneUseDescription = findViewById(R.id.phoneUseDescription)
         transcriptScroll = findViewById(R.id.transcriptScroll)
         transcriptContainer = findViewById(R.id.transcriptContainer)
         emptyState = findViewById(R.id.emptyState)
@@ -188,8 +224,18 @@ class MainActivity : Activity() {
     }
 
     private fun setupInteractions() {
+        homeButton.setOnClickListener {
+            startActivity(Intent(this, HomeActivity::class.java))
+            finish()
+        }
+        houseButton.setOnClickListener {
+            startActivity(Intent(this, AgentHouseActivity::class.java))
+        }
+        sessionButton.setOnClickListener { showSessionDialog() }
         newChatButton.setOnClickListener { startNewChat(showToast = true) }
-        settingsButton.setOnClickListener { showProviderDialog() }
+        settingsButton.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
         providerSelector.setOnClickListener { showProviderDialog() }
         emptySetupButton.setOnClickListener { showProviderDialog() }
         sendButton.setOnClickListener {
@@ -203,8 +249,8 @@ class MainActivity : Activity() {
                 false
             }
         }
-        phoneSwitch.setOnCheckedChangeListener { _, checked ->
-            if (checked) onPhoneModeRequested()
+        phoneUseSettingsButton.setOnClickListener {
+            startActivity(AccessibilityAvailability.settingsIntent())
         }
     }
 
@@ -556,7 +602,7 @@ class MainActivity : Activity() {
         }
         sessionSubtitle.text = getString(
             R.string.active_session,
-            currentSessionId,
+            sessionDisplayName(currentSessionId),
             profile.kind.title
         )
         if (!isBusy()) {
@@ -819,30 +865,115 @@ class MainActivity : Activity() {
         }
     }
 
-    // ------------------------------------------------------------ phone mode
+    // -------------------------------------------------- phone use and history
 
-    private fun onPhoneModeRequested() {
-        val profile = providerSettings.profile()
-        if (!providerReadiness(profile.kind).ready || profile.kind == ProviderKind.OFFLINE) {
-            phoneSwitch.isChecked = false
-            appendLine(LineKind.ERROR, getString(R.string.msg_phone_needs_live_provider))
-            showProviderDialog()
+    private fun updatePhoneUseUi() {
+        val connected = HarnessAccessibilityService.connectedInstance() != null
+        val enabled = AccessibilityAvailability.isServiceEnabled(this)
+        phoneUseDescription.text = when {
+            connected ->
+                "已授权。模型只在任务确实需要操作手机时进入；高风险动作仍需你确认。"
+            enabled ->
+                "已授权，服务正在连接。模型需要操作手机时会调用工具并获得明确的连接状态。"
+            else ->
+                "模型会按任务需要决定是否进入；当前未授权，普通对话不受影响。"
+        }
+        phoneUseSettingsButton.text = if (enabled) "权限设置" else "去开启"
+    }
+
+    private fun renderPersistedSession() {
+        val requestedSession = currentSessionId
+        diskExecutor.execute {
+            val session = sessionStore.load(requestedSession)
+            postToUi {
+                if (requestedSession != currentSessionId) return@postToUi
+                transcriptContainer.removeAllViews()
+                session?.messages.orEmpty().forEach { message ->
+                    val kind = when (message.role) {
+                        AgentRole.USER -> LineKind.USER
+                        AgentRole.ASSISTANT -> LineKind.ASSISTANT
+                        AgentRole.TOOL -> LineKind.TOOL
+                    }
+                    appendLine(kind, message.content)
+                }
+                updateProviderUi()
+                updateEmptyState()
+            }
+        }
+    }
+
+    private fun showSessionDialog() {
+        if (isBusy()) return
+        diskExecutor.execute {
+            val sessions = agentSdk.listSessions()
+            postToUi { showLoadedSessions(sessions) }
+        }
+    }
+
+    private fun showLoadedSessions(sessions: List<AgentSessionSummary>) {
+        if (sessions.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("会话")
+                .setMessage("还没有已保存的会话。成功完成一轮后会自动保存在应用私有目录。")
+                .setPositiveButton("新对话") { _, _ -> startNewChat(showToast = true) }
+                .setNegativeButton("关闭", null)
+                .show()
             return
         }
-        if (HarnessAccessibilityService.connectedInstance() != null) return
-        phoneSwitch.isChecked = false
-        if (AccessibilityAvailability.isServiceEnabled(this)) {
-            appendLine(LineKind.INFO, getString(R.string.msg_service_enabled_not_connected))
-        } else {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.accessibility_dialog_title)
-                .setMessage(R.string.accessibility_dialog_message)
-                .setPositiveButton(R.string.btn_open_accessibility_settings) { _, _ ->
-                    startActivity(AccessibilityAvailability.settingsIntent())
+        val labels = sessions.map { summary ->
+            val selected = if (summary.id == currentSessionId) "当前 · " else ""
+            "$selected${summary.title}\n${summary.messageCount} 条消息"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("会话")
+            .setItems(labels) { _, which -> switchSession(sessions[which].id) }
+            .setPositiveButton("新对话") { _, _ -> startNewChat(showToast = true) }
+            .setNeutralButton("删除…") { _, _ -> showDeleteSessionDialog(sessions) }
+            .setNegativeButton("关闭", null)
+            .show()
+    }
+
+    private fun showDeleteSessionDialog(sessions: List<AgentSessionSummary>) {
+        val labels = sessions.map { summary -> summary.title }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("删除一个会话")
+            .setItems(labels) { _, which -> confirmDeleteSession(sessions[which]) }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun confirmDeleteSession(summary: AgentSessionSummary) {
+        AlertDialog.Builder(this)
+            .setTitle("删除“${summary.title}”？")
+            .setMessage("这只删除本机聊天历史，已经执行的外部操作不会撤销。")
+            .setPositiveButton("删除") { _, _ ->
+                diskExecutor.execute {
+                    val deleted = runCatching { agentSdk.deleteSession(summary.id) }
+                    postToUi {
+                        deleted.onSuccess {
+                            if (it && summary.id == currentSessionId) {
+                                startNewChat(showToast = false)
+                            }
+                            Toast.makeText(this, "会话已删除", Toast.LENGTH_SHORT).show()
+                        }.onFailure { error ->
+                            Toast.makeText(
+                                this,
+                                error.message ?: "无法删除会话",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 }
-                .setNegativeButton(R.string.btn_cancel, null)
-                .show()
-        }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun switchSession(sessionId: String) {
+        if (isBusy() || sessionId == currentSessionId) return
+        currentSessionId = sessionId
+        samplePreferences.setLastSessionId(sessionId)
+        renderPersistedSession()
     }
 
     // ------------------------------------------------------------------ turn
@@ -853,24 +984,14 @@ class MainActivity : Activity() {
 
         val profile = providerSettings.profile()
         val readiness = providerReadiness(profile.kind)
-        val phoneMode = phoneSwitch.isChecked
         if (!readiness.ready) {
             appendLine(LineKind.ERROR, readiness.detail)
             showProviderDialog()
             return
         }
-        if (phoneMode && profile.kind == ProviderKind.OFFLINE) {
-            appendLine(LineKind.ERROR, getString(R.string.msg_phone_needs_live_provider))
-            return
-        }
-        if (phoneMode && HarnessAccessibilityService.connectedInstance() == null) {
-            appendLine(LineKind.ERROR, getString(R.string.msg_service_not_connected))
-            phoneSwitch.isChecked = false
-            return
-        }
 
         val providerFactory = try {
-            buildProviderFactory(profile, phoneMode)
+            buildProviderFactory(profile)
         } catch (error: RuntimeException) {
             appendLine(LineKind.ERROR, error.message ?: "提供商配置无效")
             return
@@ -883,9 +1004,12 @@ class MainActivity : Activity() {
         inputField.setText("")
         setBusy(true)
         val turnId = ++turnSequence
-        val listener = AgentRunListener { event -> onRunEvent(turnId, event) }
+        val phoneUseActivated = AtomicBoolean(false)
+        val listener = AgentRunListener { event ->
+            onRunEvent(turnId, phoneUseActivated, event)
+        }
         val request = buildRunRequest(
-            phoneMode = phoneMode,
+            providerKind = profile.kind,
             providerFactory = providerFactory,
             userText = userText,
             listener = listener
@@ -897,17 +1021,32 @@ class MainActivity : Activity() {
             appendLine(LineKind.ERROR, error.message ?: "无法启动 Agent")
             return
         }
-        activeTurn = ActiveTurn(turnId, handle, phoneMode)
+        activeTurn = ActiveTurn(turnId, handle, phoneUseActivated)
     }
 
-    private fun onRunEvent(turnId: Long, event: AgentRunEvent) {
+    private fun onRunEvent(
+        turnId: Long,
+        phoneUseActivated: AtomicBoolean,
+        event: AgentRunEvent
+    ) {
         when (event) {
             is AgentRunEvent.Trace -> {
                 val trace = event.event
-                if (trace is AgentHarnessTraceEvent.ToolExecuted) {
-                    postTurnUi(turnId) {
-                        appendLine(LineKind.TOOL, renderToolTrace(trace))
+                when (trace) {
+                    is AgentHarnessTraceEvent.ToolLoopActivated -> {
+                        phoneUseActivated.set(true)
+                        postTurnUi(turnId) {
+                            appendLine(LineKind.INFO, getString(R.string.msg_phone_use_started))
+                            statusView.text = getString(R.string.status_phone_use)
+                            statusDot.setTextColor(getColor(R.color.warning))
+                        }
                     }
+                    is AgentHarnessTraceEvent.ToolExecuted -> {
+                        postTurnUi(turnId) {
+                            appendLine(LineKind.TOOL, renderToolTrace(trace))
+                        }
+                    }
+                    else -> Unit
                 }
             }
             is AgentRunEvent.Finished -> postToUi {
@@ -924,7 +1063,7 @@ class MainActivity : Activity() {
             is AgentRunOutcome.Success -> appendLine(LineKind.ASSISTANT, outcome.result.output)
             is AgentRunOutcome.Failure -> appendLine(
                 LineKind.ERROR,
-                renderRunFailure(outcome.error, turn.phoneMode)
+                renderRunFailure(outcome.error, turn.phoneUseActivated.get())
             )
             is AgentRunOutcome.Cancelled -> Unit
         }
@@ -940,11 +1079,12 @@ class MainActivity : Activity() {
         appendLine(LineKind.INFO, getString(R.string.msg_turn_stopped))
     }
 
-    private fun buildProviderFactory(
-        profile: ProviderProfile,
-        phoneMode: Boolean
-    ): AgentProviderFactory {
-        val historyBudget = if (phoneMode) PHONE_HISTORY_BUDGET else null
+    private fun buildProviderFactory(profile: ProviderProfile): AgentProviderFactory {
+        val historyBudget = if (profile.kind == ProviderKind.OFFLINE) {
+            null
+        } else {
+            MODEL_ROUTED_HISTORY_BUDGET
+        }
         return when (profile.kind) {
             ProviderKind.OFFLINE -> AgentProviderFactory.fixed(ScriptedChatProvider())
             ProviderKind.CODEX -> OpenAiProviderFactories.codex(
@@ -969,7 +1109,7 @@ class MainActivity : Activity() {
                     parallelToolCalls = false,
                     historyCharBudget = historyBudget,
                     extraHeaders = mapOf(
-                        "User-Agent" to "AgentHarness/0.4 coding-agent"
+                        "User-Agent" to "AgentHarness/0.5 coding-agent"
                     ),
                     extraBodyFields = if (profile.model == "k3") {
                         mapOf("reasoning_effort" to "high")
@@ -1000,17 +1140,38 @@ class MainActivity : Activity() {
     }
 
     private fun buildRunRequest(
-        phoneMode: Boolean,
+        providerKind: ProviderKind,
         providerFactory: AgentProviderFactory,
         userText: String,
         listener: AgentRunListener
     ): AgentRunRequest {
-        if (phoneMode) {
+        val houseContext = AgentHouseContextProvider(SampleRuntime.house(this))
+        val chatTools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool()) +
+            AgentHouseWriteTools(SampleRuntime.house(this)).tools()
+        val sampleGuidance = StaticAgentContextProvider(
+            listOf(
+                AgentContextItem(
+                    id = "sample-guidance",
+                    source = "sample-app",
+                    content = "You are a helpful assistant inside the Agent Harness sample app. " +
+                        "Use uppercase, current_time, or word_count when they fit; otherwise " +
+                        "answer directly. Agent memory and skill tools are optional maintenance " +
+                        "tools, not a required first step. Append memory only for a durable fact, " +
+                        "preference, decision, or completed outcome worth using later. Write a " +
+                        "disabled skill draft only after repeated evidence shows a reusable " +
+                        "instruction would help; never call either tool merely because it exists.",
+                    trust = AgentContextTrust.APPLICATION,
+                    priority = 100
+                )
+            )
+        )
+        if (providerKind != ProviderKind.OFFLINE) {
             return AndroidPhoneAgent(
                 surface = deviceSurface,
                 configuration = AndroidPhoneAgentConfiguration(
                     riskPolicy = SampleRiskPolicy.policy(),
                     approvalGate = approvalGate,
+                    initialMaxProviderSteps = CHAT_MAX_PROVIDER_STEPS,
                     maxProviderSteps = PHONE_MAX_PROVIDER_STEPS
                 ),
                 availability = { HarnessAccessibilityService.connectedInstance() != null }
@@ -1018,36 +1179,24 @@ class MainActivity : Activity() {
                 sessionId = currentSessionId,
                 userInput = userText,
                 providerFactory = providerFactory,
-                listener = listener
+                listener = listener,
+                additionalContextProviders = listOf(sampleGuidance, houseContext),
+                additionalTools = chatTools
             ).copy(errorMapper = sampleErrorMapper())
         }
         return AgentRunRequest(
             sessionId = currentSessionId,
             userInput = userText,
             providerFactory = providerFactory,
-            contextProviders = listOf(
-                StaticAgentContextProvider(
-                    listOf(
-                        AgentContextItem(
-                            id = "sample-guidance",
-                            source = "sample-app",
-                            content = "You are a helpful assistant inside the Agent Harness " +
-                                "sample app. Use uppercase, current_time, or word_count when " +
-                                "they fit; otherwise answer directly.",
-                            trust = AgentContextTrust.APPLICATION,
-                            priority = 100
-                        )
-                    )
-                )
-            ),
-            tools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool()),
+            contextProviders = listOf(sampleGuidance, houseContext),
+            tools = chatTools,
             harnessConfig = AgentHarnessConfig(
                 maxProviderSteps = CHAT_MAX_PROVIDER_STEPS,
                 maxToolCallsPerStep = 4
             ),
             toolProfile = AgentToolProfile.only(
                 id = "sample-chat",
-                toolNames = setOf("uppercase", "current_time", "word_count")
+                toolNames = chatTools.map { tool -> tool.spec.name }.toSet()
             ),
             listener = listener,
             errorMapper = sampleErrorMapper()
@@ -1077,9 +1226,13 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun renderRunFailure(error: AgentRunError, phoneMode: Boolean): String {
+    private fun renderRunFailure(error: AgentRunError, phoneUseActivated: Boolean): String {
         if (error.kind == AgentRunErrorKind.LIMIT) {
-            val limit = if (phoneMode) PHONE_MAX_PROVIDER_STEPS else CHAT_MAX_PROVIDER_STEPS
+            val limit = if (phoneUseActivated) {
+                PHONE_MAX_PROVIDER_STEPS
+            } else {
+                CHAT_MAX_PROVIDER_STEPS
+            }
             return "本轮达到 $limit 步安全上限，已停止；" +
                 "模型可能在重复调用工具，或没有及时调用完成工具。"
         }
@@ -1150,8 +1303,8 @@ class MainActivity : Activity() {
     }
 
     private fun startNewChat(showToast: Boolean) {
-        sessionOrdinal += 1
-        currentSessionId = "chat-$sessionOrdinal"
+        currentSessionId = newSessionId()
+        samplePreferences.setLastSessionId(currentSessionId)
         transcriptContainer.removeAllViews()
         updateProviderUi()
         updateEmptyState()
@@ -1176,10 +1329,13 @@ class MainActivity : Activity() {
     private fun setBusy(busy: Boolean) {
         sendButton.isEnabled = true
         inputField.isEnabled = !busy
+        homeButton.isEnabled = !busy
+        houseButton.isEnabled = !busy
+        sessionButton.isEnabled = !busy
         newChatButton.isEnabled = !busy
         settingsButton.isEnabled = !busy
         providerSelector.isEnabled = !busy
-        phoneSwitch.isEnabled = !busy
+        phoneUseSettingsButton.isEnabled = !busy
         sendButton.alpha = 1f
         sendButton.text = getString(if (busy) R.string.btn_stop else R.string.btn_send)
         sendButton.background = getDrawable(
@@ -1296,6 +1452,18 @@ class MainActivity : Activity() {
         return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(epochMs))
     }
 
+    private fun newSessionId(): String {
+        return "chat-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+    }
+
+    private fun sessionDisplayName(sessionId: String): String {
+        return if (sessionId.startsWith("chat-") && sessionId.length > 8) {
+            sessionId.takeLast(8)
+        } else {
+            sessionId.take(20)
+        }
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private data class ProviderDialogFields(
@@ -1313,20 +1481,18 @@ class MainActivity : Activity() {
     private data class ActiveTurn(
         val id: Long,
         val handle: AgentRunHandle,
-        val phoneMode: Boolean
+        val phoneUseActivated: AtomicBoolean
     )
 
-    private companion object {
-        const val CHAT_MAX_PROVIDER_STEPS = 8
-        const val PHONE_MAX_PROVIDER_STEPS = 80
-        const val PHONE_HISTORY_BUDGET = 24_000
-        const val MAX_TOOL_LINE_CHARS = 200
-        val WHITESPACE = Regex("\\s+")
+    companion object {
+        const val EXTRA_SESSION_ID = "session_id"
+        const val EXTRA_OPEN_PROVIDER_SETTINGS = "open_provider_settings"
+        private const val CHAT_MAX_PROVIDER_STEPS = 8
+        private const val PHONE_MAX_PROVIDER_STEPS = 80
+        private const val MODEL_ROUTED_HISTORY_BUDGET = 24_000
+        private const val MAX_TOOL_LINE_CHARS = 200
+        private val WHITESPACE = Regex("\\s+")
 
-        /** One store and session id per app process, so history survives re-creation. */
-        val SESSION_STORE = InMemoryAgentSessionStore()
-        var sessionOrdinal = 1
-        var currentSessionId = "chat-1"
     }
 }
 

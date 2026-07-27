@@ -123,6 +123,7 @@ class DevicePaymentFlowIntegrationTest {
         return when (this) {
             is AgentHarnessTraceEvent.ContextLoaded -> "ContextLoaded"
             is AgentHarnessTraceEvent.ProviderInvoked -> "ProviderInvoked($step)"
+            is AgentHarnessTraceEvent.ToolLoopActivated -> "ToolLoopActivated($toolName)"
             is AgentHarnessTraceEvent.ToolExecuted -> "ToolExecuted($toolName)"
             is AgentHarnessTraceEvent.Completed -> "Completed($step)"
         }

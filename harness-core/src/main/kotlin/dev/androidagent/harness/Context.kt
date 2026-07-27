@@ -4,6 +4,13 @@ package dev.androidagent.harness
 enum class AgentContextTrust {
     APPLICATION,
     USER,
+    /**
+     * Durable context produced by an Agent tool or background self cycle.
+     *
+     * It remains usable evidence, but it is not silently promoted to a fact
+     * asserted or approved by the user.
+     */
+    AGENT,
     EXTERNAL
 }
 
