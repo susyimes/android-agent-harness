@@ -19,6 +19,17 @@ The repository also contains an installable Android reference app with:
 - model-selected Phone Use with explicit human approval for high-risk actions;
 - a real Stop control and an 80-step ceiling after Phone Use activates.
 
+## Android app at a glance
+
+<p align="center">
+  <a href="docs/screenshots/android-home.png"><img src="docs/screenshots/android-home.png" alt="Agent Harness home dashboard on a physical Android phone" width="23%"></a>
+  <a href="docs/screenshots/android-chat.png"><img src="docs/screenshots/android-chat.png" alt="Agent Harness chat and model-routed Phone Use screen" width="23%"></a>
+  <a href="docs/screenshots/android-house.png"><img src="docs/screenshots/android-house.png" alt="Agent House core files, skills, and memory screen" width="23%"></a>
+  <a href="docs/screenshots/android-settings.png"><img src="docs/screenshots/android-settings.png" alt="Agent Harness provider, Phone Use, House, and session settings" width="23%"></a>
+</p>
+
+<p align="center"><sub>Home · Chat · Agent House · Settings — captured from v0.3.0 on a physical Android phone.</sub></p>
+
 This is a bounded agent SDK and reference host, not a background autonomous-agent service. Heartbeat, Dream, persona proposals, proactive scheduling, and unattended background execution are intentionally not implemented.
 
 ## Architecture
