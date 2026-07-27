@@ -73,7 +73,7 @@ No Android SDK, account, API key, device, emulator, or network call is needed fo
 
 ## Use it as an SDK
 
-Development coordinates use group `dev.androidagent.harness` and version `0.5.0-SNAPSHOT`.
+The v0.3.0 coordinates use group `dev.androidagent.harness` and version `0.3.0`.
 
 | Artifact | Type | Purpose |
 | --- | --- | --- |
@@ -100,10 +100,10 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.0-SNAPSHOT"
-    implementation "dev.androidagent.harness:provider-openai:0.5.0-SNAPSHOT"
+    implementation "dev.androidagent.harness:agent-sdk:0.3.0"
+    implementation "dev.androidagent.harness:provider-openai:0.3.0"
     // Android Phone Use only:
-    implementation "dev.androidagent.harness:agent-sdk-android:0.5.0-SNAPSHOT"
+    implementation "dev.androidagent.harness:agent-sdk-android:0.3.0"
 }
 ```
 

@@ -9,7 +9,7 @@ Provider and capability adapters stay separate so an application only ships what
 
 ## Artifacts
 
-The current development coordinates use group `dev.androidagent.harness` and version `0.5.0-SNAPSHOT`.
+The v0.3.0 coordinates use group `dev.androidagent.harness` and version `0.3.0`.
 
 | Artifact | Packaging | Purpose |
 | --- | --- | --- |
@@ -36,8 +36,8 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.0-SNAPSHOT"
-    implementation "dev.androidagent.harness:provider-openai:0.5.0-SNAPSHOT"
+    implementation "dev.androidagent.harness:agent-sdk:0.3.0"
+    implementation "dev.androidagent.harness:provider-openai:0.3.0"
 }
 ```
 
