@@ -13,9 +13,9 @@ Android Agent Harness is a minimal, provider-neutral agent runtime extracted fro
 ```text
 Android UI / JVM demo
         ↓
-AgentHarnessRunner
+AgentSdk (run / events / cancel)
         ↓
-AgentOrchestrator
+AgentHarnessRunner → AgentOrchestrator
    ├─ AgentContextCoordinator → context adapters
    ├─ AgentProvider           → model/transport adapter
    ├─ AgentToolOrchestrator   → scoped registry → tool adapters
@@ -46,6 +46,29 @@ To supply different public demo text:
 ```sh
 ./gradlew :demo:run --args="hello android"
 ```
+
+## Use it as an SDK
+
+The host-facing API is now split into publishable JVM and Android artifacts:
+
+```kotlin
+val sdk = AgentSdk()
+val run = sdk.run(
+    AgentRunRequest(
+        sessionId = "chat-1",
+        userInput = "Summarize the current task",
+        providerFactory = OpenAiProviderFactories.compatible(providerConfig),
+        listener = AgentRunListener { event -> render(event) }
+    )
+)
+
+// A Stop button can call this from any thread.
+run.cancel("Stopped by user.")
+```
+
+`AgentSdk` gives every run an isolated provider connection, structured lifecycle/trace events, a cancellable handle, per-session concurrency protection, and transactional conversation persistence. A successful turn commits as a unit; a stopped or failed turn discards partial user/tool/model messages. External actions already performed by tools cannot be rolled back.
+
+Run `./gradlew publishSdk` to build the six JAR/AAR artifacts into `build/sdk-repository`, or `./gradlew checkSdk` to test the public API, compile an independent consumer, and verify publication. See the [SDK quickstart and integration contract](docs/SDK_QUICKSTART.md).
 
 ## Try it on your phone
 
@@ -116,7 +139,7 @@ Phone: an observe → act → finish loop over a deterministic fake device. The 
 JVM-only validation (no Android SDK required):
 
 ```sh
-./gradlew auditProvenance :harness-core:test :demo:test
+./gradlew auditProvenance :harness-core:test :agent-sdk:test :provider-openai:test :demo:test
 ```
 
 Full validation including the Android sample build (requires the Android SDK):
@@ -127,6 +150,12 @@ Full validation including the Android sample build (requires the Android SDK):
 
 `checkM0` runs the provenance/privacy audit, the JVM unit/end-to-end tests, the provider-catalog tests, the demo tests, and `:sample:assembleDebug`. The Android library's JVM-hosted mapper tests run with `:device-loop-android:testDebugUnitTest` (also requires the SDK).
 
+SDK packaging and public-consumer validation:
+
+```sh
+./gradlew checkSdk
+```
+
 To install the sample app on a connected Android device or emulator:
 
 ```sh
@@ -136,20 +165,24 @@ To install the sample app on a connected Android device or emulator:
 ## Modules
 
 - `harness-core`: pure Kotlin/JVM contracts and four explicit runtime boundaries. It has no Android, network, JSON, storage framework, or coroutine dependency.
+- `agent-sdk`: stable host-facing JVM facade — run handles, lifecycle/trace events, cancellation fencing, transactional sessions, per-session concurrency protection, and error mapping.
 - `provider-openai`: zero-dependency adapters for OpenAI-compatible chat-completions endpoints and the experimental Codex Responses transport (hand-written JSON codec, JDK HTTP client, caller-supplied credentials).
 - `harness-eval`: governed-evolution evaluation — a candidate overlay over a markdown workspace must beat the baseline on fixed cases before promotion.
 - `device-loop`: minimal observe → act → finish device-operation contract over a fake device, with an explicit high-risk pause protocol.
 - `device-loop-android`: Android library that puts the `device-loop` contract on a real accessibility tree — a screen mapper that assigns content-derived node ids stable across scrolling (JVM-unit-tested behind the `UiNodeReader` seam), a device surface executing taps, text entry, Back, swipes, scroll-to-text and app launches, and an approval panel drawn by the service so it stays visible over the app being driven.
+- `agent-sdk-android`: optional Phone Mode composition for Android hosts. It requires an explicit risk policy and human-backed approval gate, and defaults to one action per step with an 80-step ceiling.
+- `sdk-consumer-smoke`: an independent host module that compiles and runs against public SDK/provider APIs only.
 - `demo`: executable JVM proof of the full context → provider → tool → provider → persisted transcript path, plus the `scenarios`/`live`/`eval`/`phone` subcommands.
 - `sample`: installable Android chat app over the same core — a polished provider/model picker for offline demo, experimental Codex account login, Kimi Plan, Ark Plan, and a custom compatible endpoint; Android Keystore-backed secret storage; and optional phone mode with a human approval dialog gating every high-risk action.
 
 ## Runtime contracts
 
-`AgentHarnessRunner` is the minimal composition root. Applications provide adapters only for capabilities they need:
+`AgentSdk` is the application-facing composition root. `AgentHarnessRunner` remains the synchronous low-level runtime for hosts that need to own every lifecycle detail. Applications provide adapters only for capabilities they need:
 
 - `AgentProvider`: model or scripted decision boundary.
 - `AgentContextProvider`: product-owned context sources. `AgentContextCoordinator` applies trust, priority, item-count, and content-size policy before a provider sees them.
 - `AgentTool`: one executable capability. `AgentToolOrchestrator` exposes and executes the same profile-scoped catalog, preserving a single capability boundary.
+- `AgentToolArgumentSchema`: dependency-free JSON Schema metadata for typed provider tool definitions; execution values remain normalized strings/JSON text.
 - `AgentSessionStore`: in-memory by default; applications can adapt durable storage.
 - `AgentClock` and `AgentIdGenerator`: production defaults are available, while deterministic fakes keep tests repeatable.
 
@@ -161,7 +194,7 @@ See [extraction and compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md) and [pr
 
 ## Deliberate minimum boundary
 
-The core runtime (`harness-core`) omits streaming, network clients, JSON Schema, Android service lifecycles, durable storage, route gates, retrieval/reranking, EvidencePack, confirmation UX, multimodal input, concurrent tool execution, and product adapters. Those are extension points, not hidden dependencies — `provider-openai`, `harness-eval`, `device-loop`, and `device-loop-android` are extensions living outside the core, and the `sample` app shows a network transport, an accessibility service lifecycle, and confirmation UX composed at the application boundary while `harness-core` itself stays free of them.
+The core runtime (`harness-core`) omits streaming, network clients, Android service lifecycles, a built-in durable database, route gates, retrieval/reranking, EvidencePack, confirmation UX, multimodal input, concurrent tool execution, and product adapters. Those are extension points, not hidden dependencies — `agent-sdk`, `provider-openai`, `harness-eval`, `device-loop`, and the Android libraries compose around the core, while the `sample` app demonstrates product-owned authentication, encrypted secret storage, accessibility lifecycle, and confirmation UX.
 
 ## Roadmap
 
@@ -171,6 +204,7 @@ The core runtime (`harness-core`) omits streaming, network clients, JSON Schema,
 - **M4 (done)** — `harness-eval` (baseline vs candidate over a markdown workspace) and `device-loop` (observe → act → finish with a high-risk pause protocol; `eval` and `phone` subcommands).
 - **M5 (done)** — phone use: `device-loop-android` puts the device loop on a real accessibility tree, and the `sample` becomes an installable APK with live chat, phone mode, and an on-screen human approval gate.
 - **M6 (done)** — provider-ready sample: redesigned chat/settings UI, per-provider model selection, encrypted secrets, experimental Codex account login, Kimi Plan, Ark Plan, and a custom compatible endpoint.
+- **M7 (done)** — productized SDK: stable async facade and events, hard cancellation fencing, transactional turns, typed tool schemas, provider factories/presets, optional Phone Mode AAR, local Maven publication, and an independent host smoke test.
 
 See [ROADMAP.md](ROADMAP.md) for details and what comes next.
 

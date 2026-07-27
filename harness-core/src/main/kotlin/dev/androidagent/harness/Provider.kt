@@ -28,3 +28,28 @@ interface AgentProvider {
     fun respond(request: AgentProviderRequest): AgentProviderResponse
 }
 
+/**
+ * One turn-scoped provider plus the hook that aborts its current I/O.
+ *
+ * Provider implementations should make [cancel] idempotent. The SDK creates a
+ * fresh connection per run, so cancellation never poisons a later run.
+ */
+data class AgentProviderConnection(
+    val provider: AgentProvider,
+    val cancel: () -> Unit = {}
+) {
+    init {
+        require(provider.id.isNotBlank()) { "Provider id must not be blank." }
+    }
+}
+
+/** Creates an isolated provider connection for each Agent run. */
+fun interface AgentProviderFactory {
+    fun connect(): AgentProviderConnection
+
+    companion object {
+        fun fixed(provider: AgentProvider): AgentProviderFactory {
+            return AgentProviderFactory { AgentProviderConnection(provider) }
+        }
+    }
+}

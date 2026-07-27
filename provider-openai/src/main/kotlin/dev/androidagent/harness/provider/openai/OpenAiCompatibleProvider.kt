@@ -215,7 +215,7 @@ class OpenAiCompatibleProvider(
         val requiredArgumentNames = spec.requiredArguments.sorted()
         val properties = linkedMapOf<String, Any?>()
         argumentNames.forEach { argument ->
-            properties[argument] = linkedMapOf<String, Any?>("type" to "string")
+            properties[argument] = spec.schemaFor(argument).toJsonSchema()
         }
         return linkedMapOf(
             "type" to "function",

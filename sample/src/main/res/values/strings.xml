@@ -20,12 +20,14 @@
 
     <string name="phone_mode_title">Phone Mode</string>
     <string name="phone_mode_compact_note">读取当前界面并执行操作；高风险动作必须由你确认</string>
-    <string name="phone_mode_note">高风险控件（支付、购买、转账、删除、卸载、确认订单）始终暂停并等待人工批准。模型传入的 confirmed 参数会被忽略，只有你点击“允许”才能执行。</string>
 
     <string name="status_ready">已就绪</string>
     <string name="status_running">Agent 正在运行…</string>
     <string name="status_waiting_approval">等待你的批准…</string>
-    <string name="status_authenticating">正在等待 Codex 登录…</string>
+    <string name="status_dot">●</string>
+    <string name="provider_choice">%1$s\n%2$s</string>
+    <string name="active_session">会话 %1$s · %2$s</string>
+    <string name="transcript_line">%1$s\n%2$s</string>
 
     <string name="msg_new_chat">已开始新对话</string>
     <string name="msg_no_credential_scripted">当前使用离线演示，不会发起网络模型请求。</string>

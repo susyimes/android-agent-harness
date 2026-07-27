@@ -27,11 +27,20 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 - Android Keystore-backed encryption for API keys and login tokens, including one-time migration and removal of the sample's legacy plaintext custom credential.
 - Phone mode is available only when the selected online provider is ready, so changing providers cannot accidentally reuse another provider's credential or session.
 
-## Beyond M6
+### M7 — productized host SDK
+- `agent-sdk`: a host-facing async facade with run handles, structured Started/Trace/Finished events, safe listener isolation, bounded worker concurrency, and one active run per session.
+- Cancellation is a real protocol boundary: it aborts turn-scoped provider I/O, interrupts the worker, rechecks a cancellation signal after provider calls and before every tool side effect, and fences all late results.
+- `TransactionalAgentSessionStore`: only a complete successful turn commits. Failure or user stop discards partial messages while documenting that external tool/device effects cannot be rolled back.
+- Typed `AgentToolArgumentSchema` metadata is rendered by both OpenAI-compatible and experimental Codex transports while the core retains its dependency-free normalized-string execution ABI.
+- `OpenAiProviderFactories` creates an isolated cancellable transport per run; Kimi Plan and all Ark Plan model presets are reusable defaults, not hard allow-lists.
+- `agent-sdk-android`: opt-in Phone Mode composition requiring a host-supplied risk policy and human approval gate. The SDK has no permissive production default.
+- Six Maven-style JAR/AAR publications, source artifacts, an independent consumer smoke module, `checkSdk`, and a complete host integration guide.
+
+## Beyond M7
 
 - Streaming provider responses behind the same bounded-step contract.
-- JSON-schema tool arguments (today: flat `Map<String, String>`).
 - A durable `AgentSessionStore` adapter with defined migration, retention, and deletion semantics.
+- Binary API compatibility validation and a release pipeline to a remote Maven repository.
 - A web-devtools capability component.
 
 Policy for production subsystems such as the web-devtools component: they are extracted into their own separately reviewed components or repositories — authored afresh against public contracts, never copied into this repository.

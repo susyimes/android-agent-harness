@@ -9,6 +9,13 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven {
+            name = 'sdkLocal'
+            url = uri("${rootDir}/build/sdk-repository")
+            content {
+                includeGroup 'dev.androidagent.harness'
+            }
+        }
         google()
         mavenCentral()
     }
@@ -16,9 +23,12 @@ dependencyResolutionManagement {
 
 rootProject.name = 'android-agent-harness'
 include ':harness-core'
+include ':agent-sdk'
 include ':provider-openai'
 include ':harness-eval'
 include ':device-loop'
 include ':device-loop-android'
+include ':agent-sdk-android'
 include ':demo'
 include ':sample'
+include ':sdk-consumer-smoke'

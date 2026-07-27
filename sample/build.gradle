@@ -28,6 +28,8 @@ android {
 }
 
 dependencies {
+    implementation project(':agent-sdk')
+    implementation project(':agent-sdk-android')
     implementation project(':harness-core')
     implementation project(':provider-openai')
     implementation project(':device-loop')

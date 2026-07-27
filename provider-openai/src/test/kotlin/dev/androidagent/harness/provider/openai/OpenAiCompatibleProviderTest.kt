@@ -9,6 +9,7 @@ import dev.androidagent.harness.AgentProviderResponse
 import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.AgentSession
 import dev.androidagent.harness.AgentToolSpec
+import dev.androidagent.harness.AgentToolArgumentSchema
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -65,7 +66,15 @@ class OpenAiCompatibleProviderTest {
                     name = "uppercase",
                     description = "Uppercases the provided text.",
                     requiredArguments = setOf("text"),
-                    optionalArguments = setOf("locale")
+                    optionalArguments = setOf("locale"),
+                    argumentSchemas = mapOf(
+                        "text" to AgentToolArgumentSchema(
+                            description = "Text to uppercase."
+                        ),
+                        "locale" to AgentToolArgumentSchema(
+                            enumValues = listOf("en-US", "zh-CN")
+                        )
+                    )
                 )
             ),
             providerStep = 1
@@ -104,8 +113,14 @@ class OpenAiCompatibleProviderTest {
         assertEquals(false, parameters["additionalProperties"])
         assertEquals(listOf("text"), parameters["required"])
         val properties = asObject(parameters["properties"])
-        assertEquals(mapOf("type" to "string"), properties["locale"])
-        assertEquals(mapOf("type" to "string"), properties["text"])
+        assertEquals(
+            mapOf("type" to "string", "enum" to listOf("en-US", "zh-CN")),
+            properties["locale"]
+        )
+        assertEquals(
+            mapOf("type" to "string", "description" to "Text to uppercase."),
+            properties["text"]
+        )
     }
 
     @Test

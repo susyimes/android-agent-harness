@@ -202,7 +202,7 @@ class CodexResponsesProvider(
         val requiredArguments = spec.requiredArguments.sorted()
         val properties = linkedMapOf<String, Any?>()
         arguments.forEach { name ->
-            properties[name] = mapOf("type" to "string")
+            properties[name] = spec.schemaFor(name).toJsonSchema()
         }
         return linkedMapOf(
             "type" to "function",

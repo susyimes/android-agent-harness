@@ -218,7 +218,7 @@
                 android:id="@+id/statusDot"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="●"
+                android:text="@string/status_dot"
                 android:textColor="@color/success"
                 android:textSize="12sp" />
 
@@ -256,6 +256,7 @@
                 android:background="@android:color/transparent"
                 android:hint="@string/hint_message"
                 android:imeOptions="actionSend"
+                android:importantForAutofill="no"
                 android:inputType="textMultiLine|textCapSentences"
                 android:maxLines="4"
                 android:minHeight="46dp"

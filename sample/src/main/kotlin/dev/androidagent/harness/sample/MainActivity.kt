@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Insets
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -39,22 +38,11 @@ import android.widget.Toast
 import dev.androidagent.harness.AgentContextItem
 import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentHarnessConfig
-import dev.androidagent.harness.AgentHarnessLimitException
-import dev.androidagent.harness.AgentHarnessRequest
-import dev.androidagent.harness.AgentHarnessRunner
-import dev.androidagent.harness.AgentProvider
-import dev.androidagent.harness.AgentSessionStore
-import dev.androidagent.harness.AgentTool
-import dev.androidagent.harness.AgentToolInvocation
+import dev.androidagent.harness.AgentHarnessTraceEvent
+import dev.androidagent.harness.AgentProviderFactory
 import dev.androidagent.harness.AgentToolProfile
-import dev.androidagent.harness.AgentToolResult
-import dev.androidagent.harness.AgentToolSpec
 import dev.androidagent.harness.InMemoryAgentSessionStore
 import dev.androidagent.harness.StaticAgentContextProvider
-import dev.androidagent.harness.deviceloop.DeviceActTool
-import dev.androidagent.harness.deviceloop.DeviceFinishTool
-import dev.androidagent.harness.deviceloop.DeviceLoopProfile
-import dev.androidagent.harness.deviceloop.DeviceObserveTool
 import dev.androidagent.harness.deviceloop.android.AccessibilityAvailability
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
 import dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService
@@ -62,17 +50,24 @@ import dev.androidagent.harness.deviceloop.android.OverlayApprovalGate
 import dev.androidagent.harness.provider.openai.CodexCredential
 import dev.androidagent.harness.provider.openai.CodexCredentialProvider
 import dev.androidagent.harness.provider.openai.CodexResponsesConfig
-import dev.androidagent.harness.provider.openai.CodexResponsesProvider
-import dev.androidagent.harness.provider.openai.HttpRequestCancelledException
 import dev.androidagent.harness.provider.openai.HttpTransportException
 import dev.androidagent.harness.provider.openai.OpenAiCompatibleConfig
-import dev.androidagent.harness.provider.openai.OpenAiCompatibleProvider
-import dev.androidagent.harness.provider.openai.UrlConnectionHttpTransport
+import dev.androidagent.harness.provider.openai.OpenAiProviderFactories
+import dev.androidagent.harness.sdk.AgentRunError
+import dev.androidagent.harness.sdk.AgentRunErrorKind
+import dev.androidagent.harness.sdk.AgentRunErrorMapper
+import dev.androidagent.harness.sdk.AgentRunEvent
+import dev.androidagent.harness.sdk.AgentRunHandle
+import dev.androidagent.harness.sdk.AgentRunListener
+import dev.androidagent.harness.sdk.AgentRunOutcome
+import dev.androidagent.harness.sdk.AgentRunRequest
+import dev.androidagent.harness.sdk.AgentSdk
+import dev.androidagent.harness.sdk.android.AndroidPhoneAgent
+import dev.androidagent.harness.sdk.android.AndroidPhoneAgentConfiguration
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.CancellationException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -81,7 +76,7 @@ import java.util.concurrent.Future
 class MainActivity : Activity() {
 
     private lateinit var mainHandler: Handler
-    private lateinit var executor: ExecutorService
+    private lateinit var agentSdk: AgentSdk
     private lateinit var authExecutor: ExecutorService
     private lateinit var dialogGate: DialogApprovalGate
     private lateinit var approvalGate: PhoneApprovalGate
@@ -129,7 +124,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainHandler = Handler(Looper.getMainLooper())
-        executor = Executors.newSingleThreadExecutor()
+        agentSdk = AgentSdk(SESSION_STORE)
         authExecutor = Executors.newSingleThreadExecutor()
         providerSettings = ProviderSettingsRepository(this)
         codexRepository = CodexAuthRepository(this)
@@ -159,10 +154,9 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         activeTurn?.let { turn ->
             activeTurn = null
-            turn.sessionStore.discard()
-            runCatching(turn.cancelProvider)
-            turn.future?.cancel(true)
+            turn.handle.cancel("Activity destroyed.")
         }
+        agentSdk.close()
         dialogGate.cancelPending()
         authAttempt += 1
         activeBrowserSession?.callback?.close()
@@ -170,7 +164,6 @@ class MainActivity : Activity() {
         authTask?.cancel(true)
         authTask = null
         authInProgress = false
-        executor.shutdownNow()
         authExecutor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
@@ -225,26 +218,33 @@ class MainActivity : Activity() {
         val baseRight = root.paddingRight
         val baseBottom = root.paddingBottom
         root.setOnApplyWindowInsetsListener { view, insets ->
-            val bars: Insets
-            val ime: Insets
+            var insetLeft = 0
+            var insetTop = 0
+            var insetRight = 0
+            var insetBottom = 0
+            var imeBottom = 0
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                bars = insets.getInsets(WindowInsets.Type.systemBars())
-                ime = insets.getInsets(WindowInsets.Type.ime())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                val ime = insets.getInsets(WindowInsets.Type.ime())
+                insetLeft = bars.left
+                insetTop = bars.top
+                insetRight = bars.right
+                insetBottom = bars.bottom
+                imeBottom = ime.bottom
             } else {
                 @Suppress("DEPRECATION")
-                bars = Insets.of(
-                    insets.systemWindowInsetLeft,
-                    insets.systemWindowInsetTop,
-                    insets.systemWindowInsetRight,
-                    insets.systemWindowInsetBottom
-                )
-                ime = Insets.NONE
+                run {
+                    insetLeft = insets.systemWindowInsetLeft
+                    insetTop = insets.systemWindowInsetTop
+                    insetRight = insets.systemWindowInsetRight
+                    insetBottom = insets.systemWindowInsetBottom
+                }
             }
             view.setPadding(
-                baseLeft + bars.left,
-                baseTop + bars.top,
-                baseRight + bars.right,
-                baseBottom + maxOf(bars.bottom, ime.bottom)
+                baseLeft + insetLeft,
+                baseTop + insetTop,
+                baseRight + insetRight,
+                baseBottom + maxOf(insetBottom, imeBottom)
             )
             insets
         }
@@ -286,7 +286,7 @@ class MainActivity : Activity() {
         ProviderKind.entries.forEach { kind ->
             val button = RadioButton(this).apply {
                 id = View.generateViewId()
-                text = "${kind.title}\n${kind.subtitle}"
+                text = getString(R.string.provider_choice, kind.title, kind.subtitle)
                 textSize = 14f
                 setTextColor(getColor(R.color.textPrimary))
                 buttonTintList = ColorStateList(
@@ -554,7 +554,11 @@ class MainActivity : Activity() {
             append('\n')
             append(readiness.detail)
         }
-        sessionSubtitle.text = "会话 $currentSessionId · ${profile.kind.title}"
+        sessionSubtitle.text = getString(
+            R.string.active_session,
+            currentSessionId,
+            profile.kind.title
+        )
         if (!isBusy()) {
             statusView.text = readiness.detail
             statusDot.setTextColor(readiness.color)
@@ -865,8 +869,8 @@ class MainActivity : Activity() {
             return
         }
 
-        val providerHandle = try {
-            buildProvider(profile, phoneMode)
+        val providerFactory = try {
+            buildProviderFactory(profile, phoneMode)
         } catch (error: RuntimeException) {
             appendLine(LineKind.ERROR, error.message ?: "提供商配置无效")
             return
@@ -879,67 +883,50 @@ class MainActivity : Activity() {
         inputField.setText("")
         setBusy(true)
         val turnId = ++turnSequence
-        val turnStore = TurnSessionStore(SESSION_STORE, currentSessionId)
-        val turn = ActiveTurn(
-            id = turnId,
-            sessionStore = turnStore,
-            cancelProvider = providerHandle.cancel
-        )
-        activeTurn = turn
-        val harness = buildHarness(
+        val listener = AgentRunListener { event -> onRunEvent(turnId, event) }
+        val request = buildRunRequest(
             phoneMode = phoneMode,
-            provider = providerHandle.provider,
-            sessionStore = turnStore,
-            turnId = turnId
+            providerFactory = providerFactory,
+            userText = userText,
+            listener = listener
         )
-        val request = AgentHarnessRequest(currentSessionId, userText)
-        turn.future = executor.submit {
-            val outcome = try {
-                val result = harness.run(request)
-                TurnOutcome.Success(result.output)
-            } catch (_: HttpRequestCancelledException) {
-                TurnOutcome.Stopped
-            } catch (_: CancellationException) {
-                TurnOutcome.Stopped
-            } catch (error: InterruptedException) {
-                Thread.currentThread().interrupt()
-                TurnOutcome.Stopped
-            } catch (error: CodexAuthException) {
-                TurnOutcome.Failure(error.message ?: "Codex 登录失效")
-            } catch (error: HttpTransportException) {
-                TurnOutcome.Failure(error.message ?: "HTTP ${error.statusCode}")
-            } catch (_: AgentHarnessLimitException) {
-                val stepLimit = if (phoneMode) PHONE_MAX_PROVIDER_STEPS else CHAT_MAX_PROVIDER_STEPS
-                TurnOutcome.Failure(
-                    "本轮达到 $stepLimit 步安全上限，已停止；" +
-                        "模型可能在重复调用工具，或没有及时调用完成工具。"
-                )
-            } catch (error: IllegalStateException) {
-                TurnOutcome.Failure(error.message ?: error.javaClass.simpleName)
-            } catch (error: IOException) {
-                TurnOutcome.Failure("网络错误：${error.message}")
-            } catch (error: RuntimeException) {
-                TurnOutcome.Failure("${error.javaClass.simpleName}: ${error.message}")
+        val handle = try {
+            agentSdk.run(request)
+        } catch (error: RuntimeException) {
+            setBusy(false)
+            appendLine(LineKind.ERROR, error.message ?: "无法启动 Agent")
+            return
+        }
+        activeTurn = ActiveTurn(turnId, handle, phoneMode)
+    }
+
+    private fun onRunEvent(turnId: Long, event: AgentRunEvent) {
+        when (event) {
+            is AgentRunEvent.Trace -> {
+                val trace = event.event
+                if (trace is AgentHarnessTraceEvent.ToolExecuted) {
+                    postTurnUi(turnId) {
+                        appendLine(LineKind.TOOL, renderToolTrace(trace))
+                    }
+                }
             }
-            postToUi { completeTurn(turnId, outcome) }
+            is AgentRunEvent.Finished -> postToUi {
+                completeTurn(turnId, event.outcome)
+            }
+            is AgentRunEvent.Started -> Unit
         }
     }
 
-    private fun completeTurn(turnId: Long, outcome: TurnOutcome) {
+    private fun completeTurn(turnId: Long, outcome: AgentRunOutcome) {
         val turn = activeTurn?.takeIf { candidate -> candidate.id == turnId } ?: return
         activeTurn = null
-        turn.future = null
         when (outcome) {
-            is TurnOutcome.Success -> {
-                if (turn.sessionStore.commit()) {
-                    appendLine(LineKind.ASSISTANT, outcome.output)
-                }
-            }
-            is TurnOutcome.Failure -> {
-                turn.sessionStore.discard()
-                appendLine(LineKind.ERROR, outcome.message)
-            }
-            TurnOutcome.Stopped -> turn.sessionStore.discard()
+            is AgentRunOutcome.Success -> appendLine(LineKind.ASSISTANT, outcome.result.output)
+            is AgentRunOutcome.Failure -> appendLine(
+                LineKind.ERROR,
+                renderRunFailure(outcome.error, turn.phoneMode)
+            )
+            is AgentRunOutcome.Cancelled -> Unit
         }
         setBusy(false)
     }
@@ -947,54 +934,42 @@ class MainActivity : Activity() {
     private fun stopActiveTurn() {
         val turn = activeTurn ?: return
         activeTurn = null
-        turn.sessionStore.discard()
-        runCatching(turn.cancelProvider)
-        turn.future?.cancel(true)
+        turn.handle.cancel("用户停止了本轮。")
         dialogGate.cancelPending()
-
-        val stoppedExecutor = executor
-        stoppedExecutor.shutdownNow()
-        executor = Executors.newSingleThreadExecutor()
-
         setBusy(false)
         appendLine(LineKind.INFO, getString(R.string.msg_turn_stopped))
     }
 
-    private fun buildProvider(profile: ProviderProfile, phoneMode: Boolean): TurnProvider {
+    private fun buildProviderFactory(
+        profile: ProviderProfile,
+        phoneMode: Boolean
+    ): AgentProviderFactory {
         val historyBudget = if (phoneMode) PHONE_HISTORY_BUDGET else null
         return when (profile.kind) {
-            ProviderKind.OFFLINE -> TurnProvider(ScriptedChatProvider())
-            ProviderKind.CODEX -> {
-                val config = CodexResponsesConfig(
+            ProviderKind.OFFLINE -> AgentProviderFactory.fixed(ScriptedChatProvider())
+            ProviderKind.CODEX -> OpenAiProviderFactories.codex(
+                config = CodexResponsesConfig(
                     model = profile.model,
                     baseUrl = profile.baseUrl,
                     historyCharBudget = historyBudget,
                     originator = "openclaw",
                     clientVersion = "android-agent-harness"
-                )
-                val transport = UrlConnectionHttpTransport(config.requestTimeout)
-                TurnProvider(
-                    provider = CodexResponsesProvider(
-                        config = config,
-                        credentials = CodexCredentialProvider { forceRefresh ->
-                            codexAuth.requireProfile(forceRefresh).let { auth ->
-                                CodexCredential(auth.accessToken, auth.accountId)
-                            }
-                        },
-                        transport = transport
-                    ),
-                    cancel = transport::cancel
-                )
-            }
-            ProviderKind.KIMI_PLAN -> openAiTurnProvider(
-                config = OpenAiCompatibleConfig(
+                ),
+                credentials = CodexCredentialProvider { forceRefresh ->
+                    codexAuth.requireProfile(forceRefresh).let { auth ->
+                        CodexCredential(auth.accessToken, auth.accountId)
+                    }
+                }
+            )
+            ProviderKind.KIMI_PLAN -> OpenAiProviderFactories.compatible(
+                OpenAiCompatibleConfig(
                     baseUrl = profile.baseUrl,
                     model = profile.model,
                     keyValue = requireNotNull(profile.secret),
                     parallelToolCalls = false,
                     historyCharBudget = historyBudget,
                     extraHeaders = mapOf(
-                        "User-Agent" to "AgentHarness/0.3 coding-agent"
+                        "User-Agent" to "AgentHarness/0.4 coding-agent"
                     ),
                     extraBodyFields = if (profile.model == "k3") {
                         mapOf("reasoning_effort" to "high")
@@ -1003,8 +978,8 @@ class MainActivity : Activity() {
                     }
                 )
             )
-            ProviderKind.ARK_PLAN -> openAiTurnProvider(
-                config = OpenAiCompatibleConfig(
+            ProviderKind.ARK_PLAN -> OpenAiProviderFactories.compatible(
+                OpenAiCompatibleConfig(
                     baseUrl = profile.baseUrl,
                     model = profile.model,
                     keyValue = requireNotNull(profile.secret),
@@ -1012,8 +987,8 @@ class MainActivity : Activity() {
                     historyCharBudget = historyBudget
                 )
             )
-            ProviderKind.CUSTOM -> openAiTurnProvider(
-                config = OpenAiCompatibleConfig(
+            ProviderKind.CUSTOM -> OpenAiProviderFactories.compatible(
+                OpenAiCompatibleConfig(
                     baseUrl = profile.baseUrl,
                     model = profile.model,
                     keyValue = requireNotNull(profile.secret),
@@ -1024,78 +999,108 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun openAiTurnProvider(config: OpenAiCompatibleConfig): TurnProvider {
-        val transport = UrlConnectionHttpTransport(config.requestTimeout)
-        return TurnProvider(
-            provider = OpenAiCompatibleProvider(config, transport),
-            cancel = transport::cancel
-        )
-    }
-
-    private fun buildHarness(
+    private fun buildRunRequest(
         phoneMode: Boolean,
-        provider: AgentProvider,
-        sessionStore: AgentSessionStore,
-        turnId: Long
-    ): AgentHarnessRunner {
-        val onToolLine: (String) -> Unit = { line ->
-            postTurnUi(turnId) { appendLine(LineKind.TOOL, line) }
-        }
-        val tools: List<AgentTool>
-        val profile: AgentToolProfile
-        val config: AgentHarnessConfig
-        val guidance: String
+        providerFactory: AgentProviderFactory,
+        userText: String,
+        listener: AgentRunListener
+    ): AgentRunRequest {
         if (phoneMode) {
-            tools = listOf(
-                DeviceObserveTool(deviceSurface),
-                DeviceActTool(deviceSurface, SampleRiskPolicy.policy(), approvalGate),
-                DeviceFinishTool(deviceSurface)
-            )
-            profile = DeviceLoopProfile.profile()
-            config = AgentHarnessConfig(
-                maxProviderSteps = PHONE_MAX_PROVIDER_STEPS,
-                maxToolCallsPerStep = 1
-            )
-            guidance = "You operate this Android device through the device tools. " +
-                "Call device_observe first, perform exactly one device_act per step, and " +
-                "observe again after every action. Refer to controls by the shown id and pass " +
-                "expected_label. The home action is unavailable. launch_app must include the " +
-                "app display name or package in the app argument. Finish with device_finish " +
-                "and evidence visible on screen. " +
-                "If a high-risk action is denied or times out, do not retry it."
-        } else {
-            tools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool())
-            profile = AgentToolProfile.only(
-                id = "sample-chat",
-                toolNames = setOf("uppercase", "current_time", "word_count")
-            )
-            config = AgentHarnessConfig(
-                maxProviderSteps = CHAT_MAX_PROVIDER_STEPS,
-                maxToolCallsPerStep = 4
-            )
-            guidance = "You are a helpful assistant inside the Agent Harness sample app. " +
-                "Use uppercase, current_time, or word_count when they fit; otherwise answer directly."
+            return AndroidPhoneAgent(
+                surface = deviceSurface,
+                configuration = AndroidPhoneAgentConfiguration(
+                    riskPolicy = SampleRiskPolicy.policy(),
+                    approvalGate = approvalGate,
+                    maxProviderSteps = PHONE_MAX_PROVIDER_STEPS
+                ),
+                availability = { HarnessAccessibilityService.connectedInstance() != null }
+            ).request(
+                sessionId = currentSessionId,
+                userInput = userText,
+                providerFactory = providerFactory,
+                listener = listener
+            ).copy(errorMapper = sampleErrorMapper())
         }
-        return AgentHarnessRunner(
-            provider = provider,
+        return AgentRunRequest(
+            sessionId = currentSessionId,
+            userInput = userText,
+            providerFactory = providerFactory,
             contextProviders = listOf(
                 StaticAgentContextProvider(
                     listOf(
                         AgentContextItem(
                             id = "sample-guidance",
                             source = "sample-app",
-                            content = guidance,
+                            content = "You are a helpful assistant inside the Agent Harness " +
+                                "sample app. Use uppercase, current_time, or word_count when " +
+                                "they fit; otherwise answer directly.",
                             trust = AgentContextTrust.APPLICATION,
                             priority = 100
                         )
                     )
                 )
             ),
-            tools = tools.map { tool -> TranscriptTool(tool, onToolLine) },
-            sessionStore = sessionStore,
-            config = config,
-            toolProfile = profile
+            tools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool()),
+            harnessConfig = AgentHarnessConfig(
+                maxProviderSteps = CHAT_MAX_PROVIDER_STEPS,
+                maxToolCallsPerStep = 4
+            ),
+            toolProfile = AgentToolProfile.only(
+                id = "sample-chat",
+                toolNames = setOf("uppercase", "current_time", "word_count")
+            ),
+            listener = listener,
+            errorMapper = sampleErrorMapper()
         )
+    }
+
+    private fun sampleErrorMapper(): AgentRunErrorMapper {
+        return AgentRunErrorMapper { error ->
+            when (error) {
+                is CodexAuthException -> AgentRunError(
+                    AgentRunErrorKind.PROVIDER,
+                    error.message ?: "Codex 登录失效",
+                    error
+                )
+                is HttpTransportException -> AgentRunError(
+                    AgentRunErrorKind.PROVIDER,
+                    error.message ?: "HTTP ${error.statusCode}",
+                    error
+                )
+                is IOException -> AgentRunError(
+                    AgentRunErrorKind.PROVIDER,
+                    "网络错误：${error.message}",
+                    error
+                )
+                else -> null
+            }
+        }
+    }
+
+    private fun renderRunFailure(error: AgentRunError, phoneMode: Boolean): String {
+        if (error.kind == AgentRunErrorKind.LIMIT) {
+            val limit = if (phoneMode) PHONE_MAX_PROVIDER_STEPS else CHAT_MAX_PROVIDER_STEPS
+            return "本轮达到 $limit 步安全上限，已停止；" +
+                "模型可能在重复调用工具，或没有及时调用完成工具。"
+        }
+        return error.message
+    }
+
+    private fun renderToolTrace(event: AgentHarnessTraceEvent.ToolExecuted): String {
+        val arguments = event.arguments.entries
+            .sortedBy { entry -> entry.key }
+            .joinToString(", ") { entry -> "${entry.key}=${abbreviate(entry.value)}" }
+        val marker = if (event.succeeded) "" else "ERROR "
+        return "${event.toolName}($arguments) -> $marker${abbreviate(event.content)}"
+    }
+
+    private fun abbreviate(value: String): String {
+        val singleLine = value.replace(WHITESPACE, " ").trim()
+        return if (singleLine.length <= MAX_TOOL_LINE_CHARS) {
+            singleLine
+        } else {
+            singleLine.take(MAX_TOOL_LINE_CHARS - 3) + "..."
+        }
     }
 
     // ------------------------------------------------------------- transcript
@@ -1111,7 +1116,7 @@ class MainActivity : Activity() {
             row.addView(Space(this), weightedParams())
         }
         val bubble = TextView(this).apply {
-            text = "${kind.prefix}\n$message"
+            text = getString(R.string.transcript_line, kind.prefix, message)
             setTextIsSelectable(true)
             setTextColor(kind.textColor(this@MainActivity))
             textSize = if (kind.monospace) 12f else 14f
@@ -1305,28 +1310,18 @@ class MainActivity : Activity() {
         val color: Int
     )
 
-    private data class TurnProvider(
-        val provider: AgentProvider,
-        val cancel: () -> Unit = {}
-    )
-
     private data class ActiveTurn(
         val id: Long,
-        val sessionStore: TurnSessionStore,
-        val cancelProvider: () -> Unit,
-        var future: Future<*>? = null
+        val handle: AgentRunHandle,
+        val phoneMode: Boolean
     )
-
-    private sealed interface TurnOutcome {
-        data class Success(val output: String) : TurnOutcome
-        data class Failure(val message: String) : TurnOutcome
-        data object Stopped : TurnOutcome
-    }
 
     private companion object {
         const val CHAT_MAX_PROVIDER_STEPS = 8
         const val PHONE_MAX_PROVIDER_STEPS = 80
         const val PHONE_HISTORY_BUDGET = 24_000
+        const val MAX_TOOL_LINE_CHARS = 200
+        val WHITESPACE = Regex("\\s+")
 
         /** One store and session id per app process, so history survives re-creation. */
         val SESSION_STORE = InMemoryAgentSessionStore()
@@ -1376,41 +1371,4 @@ private enum class LineKind(
             ERROR -> R.color.danger
         }
     )
-}
-
-/** Decorates a tool so every execution is echoed into the transcript. */
-private class TranscriptTool(
-    private val inner: AgentTool,
-    private val onToolLine: (String) -> Unit
-) : AgentTool {
-
-    override val spec: AgentToolSpec = inner.spec
-
-    override fun execute(invocation: AgentToolInvocation): AgentToolResult {
-        val arguments = invocation.arguments.entries
-            .joinToString(", ") { entry -> "${entry.key}=${abbreviate(entry.value)}" }
-        val result = try {
-            inner.execute(invocation)
-        } catch (error: RuntimeException) {
-            onToolLine("${spec.name}($arguments) failed: ${abbreviate(error.message.orEmpty())}")
-            throw error
-        }
-        val marker = if (result.isError) "ERROR " else ""
-        onToolLine("${spec.name}($arguments) -> $marker${abbreviate(result.content)}")
-        return result
-    }
-
-    private fun abbreviate(value: String): String {
-        val singleLine = value.replace(WHITESPACE, " ").trim()
-        return if (singleLine.length <= MAX_LINE_CHARS) {
-            singleLine
-        } else {
-            singleLine.take(MAX_LINE_CHARS - 3) + "..."
-        }
-    }
-
-    private companion object {
-        const val MAX_LINE_CHARS = 200
-        val WHITESPACE = Regex("\\s+")
-    }
 }

@@ -17,7 +17,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Run audit, JVM module tests, and demo
-        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew auditProvenance :harness-core:test :provider-openai:test :harness-eval:test :device-loop:test :demo:test :demo:run --console=plain
+        run: env -u ANDROID_HOME -u ANDROID_SDK_ROOT ./gradlew auditProvenance :harness-core:test :agent-sdk:test :provider-openai:test :harness-eval:test :device-loop:test :sdk-consumer-smoke:test :demo:test :demo:run --console=plain
 
   full-check:
     name: Full check including Android modules and APK
@@ -30,7 +30,7 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Run checkM0 and Android library unit tests
-        run: ./gradlew checkM0 :device-loop-android:testDebugUnitTest --console=plain
+        run: ./gradlew checkM0 checkSdk --console=plain
       - name: Upload sample debug APK
         uses: actions/upload-artifact@v4
         with:

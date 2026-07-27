@@ -9,6 +9,8 @@ import dev.androidagent.harness.AgentProviderResponse
 import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.AgentSession
 import dev.androidagent.harness.AgentToolSpec
+import dev.androidagent.harness.AgentToolArgumentSchema
+import dev.androidagent.harness.AgentToolArgumentType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -37,7 +39,16 @@ class CodexResponsesProviderTest {
                         name = "word_count",
                         description = "Counts words.",
                         requiredArguments = setOf("text"),
-                        optionalArguments = setOf("language")
+                        optionalArguments = setOf("language"),
+                        argumentSchemas = mapOf(
+                            "language" to AgentToolArgumentSchema(
+                                description = "BCP-47 language tag."
+                            ),
+                            "text" to AgentToolArgumentSchema(
+                                type = AgentToolArgumentType.ARRAY,
+                                items = AgentToolArgumentSchema()
+                            )
+                        )
                     )
                 )
             )
@@ -71,8 +82,14 @@ class CodexResponsesProviderTest {
         val parameters = asObject(tools.single()["parameters"])
         assertEquals(listOf("text"), parameters["required"])
         val properties = asObject(parameters["properties"])
-        assertEquals(mapOf("type" to "string"), properties["language"])
-        assertEquals(mapOf("type" to "string"), properties["text"])
+        assertEquals(
+            mapOf("type" to "string", "description" to "BCP-47 language tag."),
+            properties["language"]
+        )
+        assertEquals(
+            mapOf("type" to "array", "items" to mapOf("type" to "string")),
+            properties["text"]
+        )
         assertEquals(false, body["parallel_tool_calls"])
     }
 

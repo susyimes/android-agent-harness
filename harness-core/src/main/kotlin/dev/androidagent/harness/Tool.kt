@@ -1,11 +1,73 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness
 
+enum class AgentToolArgumentType(val jsonSchemaName: String) {
+    STRING("string"),
+    INTEGER("integer"),
+    NUMBER("number"),
+    BOOLEAN("boolean"),
+    OBJECT("object"),
+    ARRAY("array")
+}
+
+/**
+ * Provider-facing JSON Schema metadata for one tool argument.
+ *
+ * Tool implementations continue receiving a normalized string value: scalar
+ * JSON values become their textual form, while arrays and objects become JSON.
+ * This keeps the execution ABI dependency-free while letting providers ask
+ * models for correctly typed arguments.
+ */
+data class AgentToolArgumentSchema(
+    val type: AgentToolArgumentType = AgentToolArgumentType.STRING,
+    val description: String? = null,
+    val enumValues: List<String> = emptyList(),
+    val items: AgentToolArgumentSchema? = null,
+    val properties: Map<String, AgentToolArgumentSchema> = emptyMap(),
+    val requiredProperties: Set<String> = emptySet(),
+    val additionalProperties: Boolean = false
+) {
+    init {
+        require(description == null || description.isNotBlank()) {
+            "Argument schema description must not be blank."
+        }
+        require(enumValues.none { value -> value.isBlank() }) {
+            "Argument schema enum values must not be blank."
+        }
+        require(enumValues.distinct().size == enumValues.size) {
+            "Argument schema enum values must be unique."
+        }
+        require(type == AgentToolArgumentType.STRING || enumValues.isEmpty()) {
+            "String enum values are supported only for STRING arguments."
+        }
+        require((type == AgentToolArgumentType.ARRAY) == (items != null)) {
+            "ARRAY arguments require items; non-ARRAY arguments cannot declare items."
+        }
+        require(properties.keys.none { name -> name.isBlank() }) {
+            "Object property names must not be blank."
+        }
+        require(
+            type == AgentToolArgumentType.OBJECT ||
+                (
+                    properties.isEmpty() &&
+                        requiredProperties.isEmpty() &&
+                        !additionalProperties
+                    )
+        ) {
+            "Only OBJECT arguments can declare properties or additional properties."
+        }
+        require(requiredProperties.all(properties::containsKey)) {
+            "Required object properties must be declared in properties."
+        }
+    }
+}
+
 data class AgentToolSpec(
     val name: String,
     val description: String,
     val requiredArguments: Set<String> = emptySet(),
-    val optionalArguments: Set<String> = emptySet()
+    val optionalArguments: Set<String> = emptySet(),
+    val argumentSchemas: Map<String, AgentToolArgumentSchema> = emptyMap()
 ) {
     init {
         require(TOOL_NAME.matches(name)) {
@@ -18,10 +80,18 @@ data class AgentToolSpec(
         require(requiredArguments.intersect(optionalArguments).isEmpty()) {
             "Arguments cannot be both required and optional."
         }
+        require(argumentSchemas.keys.all(arguments::contains)) {
+            "Argument schemas can only describe declared arguments."
+        }
     }
 
     val arguments: Set<String>
         get() = requiredArguments + optionalArguments
+
+    fun schemaFor(argument: String): AgentToolArgumentSchema {
+        require(argument in arguments) { "Unknown argument '$argument' for tool '$name'." }
+        return argumentSchemas[argument] ?: AgentToolArgumentSchema()
+    }
 
     companion object {
         private val TOOL_NAME = Regex("[a-z][a-z0-9_]{0,63}")
@@ -157,7 +227,11 @@ class AgentToolOrchestrator(
         return registry.specifications().filter { spec -> profile.allows(spec.name) }
     }
 
-    fun execute(calls: List<AgentToolCall>, sessionId: String): List<AgentToolExecution> {
+    fun execute(
+        calls: List<AgentToolCall>,
+        sessionId: String,
+        beforeEach: () -> Unit = {}
+    ): List<AgentToolExecution> {
         if (calls.size > maxToolCallsPerStep) {
             throw AgentHarnessProtocolException(
                 "Provider returned ${calls.size} tool calls; limit is $maxToolCallsPerStep."
@@ -174,6 +248,7 @@ class AgentToolOrchestrator(
         }
 
         return calls.map { call ->
+            beforeEach()
             val result = when {
                 !registry.contains(call.toolName) -> AgentToolResult.failure("Unknown tool: ${call.toolName}")
                 !profile.allows(call.toolName) -> AgentToolResult.failure(

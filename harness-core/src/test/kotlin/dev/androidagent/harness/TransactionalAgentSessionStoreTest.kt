@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-package dev.androidagent.harness.sample
+package dev.androidagent.harness
 
-import dev.androidagent.harness.AgentMessage
-import dev.androidagent.harness.AgentRole
-import dev.androidagent.harness.AgentSession
-import dev.androidagent.harness.InMemoryAgentSessionStore
 import java.util.concurrent.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,39 +9,39 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class TurnSessionStoreTest {
+class TransactionalAgentSessionStoreTest {
 
     @Test
-    fun `staged session stays private until commit`() {
+    fun stagedHistoryIsInvisibleUntilCommit() {
         val delegate = InMemoryAgentSessionStore()
-        val turn = TurnSessionStore(delegate, SESSION_ID)
+        val transaction = TransactionalAgentSessionStore(delegate, SESSION_ID)
         val session = session("first")
 
-        turn.save(session)
+        transaction.save(session)
 
         assertNull(delegate.load(SESSION_ID))
-        assertEquals(session.messages, turn.load(SESSION_ID)?.messages)
-        assertTrue(turn.commit())
+        assertEquals(session.messages, transaction.load(SESSION_ID)?.messages)
+        assertTrue(transaction.commit())
         assertEquals(session.messages, delegate.load(SESSION_ID)?.messages)
-        assertFalse(turn.commit())
+        assertFalse(transaction.commit())
     }
 
     @Test
-    fun `discard drops staged history and ignores late saves`() {
+    fun discardPreservesDelegateAndIgnoresLateSaves() {
         val delegate = InMemoryAgentSessionStore()
         val original = session("kept")
         delegate.save(original)
-        val turn = TurnSessionStore(delegate, SESSION_ID)
+        val transaction = TransactionalAgentSessionStore(delegate, SESSION_ID)
 
-        turn.save(session("partial"))
-        assertTrue(turn.discard())
-        turn.save(session("late"))
+        transaction.save(session("partial"))
+        assertTrue(transaction.discard())
+        transaction.save(session("late"))
 
         assertEquals(original.messages, delegate.load(SESSION_ID)?.messages)
         assertThrows(CancellationException::class.java) {
-            turn.load(SESSION_ID)
+            transaction.load(SESSION_ID)
         }
-        assertFalse(turn.commit())
+        assertFalse(transaction.commit())
     }
 
     private fun session(content: String): AgentSession {
@@ -66,6 +62,6 @@ class TurnSessionStoreTest {
     }
 
     private companion object {
-        const val SESSION_ID = "chat-1"
+        const val SESSION_ID = "session-1"
     }
 }

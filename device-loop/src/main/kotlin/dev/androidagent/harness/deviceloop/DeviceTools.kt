@@ -2,6 +2,8 @@
 package dev.androidagent.harness.deviceloop
 
 import dev.androidagent.harness.AgentTool
+import dev.androidagent.harness.AgentToolArgumentSchema
+import dev.androidagent.harness.AgentToolArgumentType
 import dev.androidagent.harness.AgentToolInvocation
 import dev.androidagent.harness.AgentToolProfile
 import dev.androidagent.harness.AgentToolResult
@@ -115,6 +117,48 @@ class DeviceActTool(
             "max_scrolls",
             "app",
             "timeout_ms"
+        ),
+        argumentSchemas = mapOf(
+            "action" to AgentToolArgumentSchema(
+                description = "Exactly one device action to perform.",
+                enumValues = if (allowHome) {
+                    listOf(
+                        ACTION_TAP,
+                        ACTION_SET_TEXT,
+                        ACTION_BACK,
+                        ACTION_HOME,
+                        ACTION_SWIPE,
+                        ACTION_SCROLL_TO_TEXT,
+                        ACTION_LAUNCH_APP,
+                        ACTION_WAIT_STABLE
+                    )
+                } else {
+                    listOf(
+                        ACTION_TAP,
+                        ACTION_SET_TEXT,
+                        ACTION_BACK,
+                        ACTION_SWIPE,
+                        ACTION_SCROLL_TO_TEXT,
+                        ACTION_LAUNCH_APP,
+                        ACTION_WAIT_STABLE
+                    )
+                }
+            ),
+            "direction" to AgentToolArgumentSchema(
+                enumValues = DIRECTIONS.sorted()
+            ),
+            "distance_px" to AgentToolArgumentSchema(
+                type = AgentToolArgumentType.INTEGER
+            ),
+            "duration_ms" to AgentToolArgumentSchema(
+                type = AgentToolArgumentType.INTEGER
+            ),
+            "max_scrolls" to AgentToolArgumentSchema(
+                type = AgentToolArgumentType.INTEGER
+            ),
+            "timeout_ms" to AgentToolArgumentSchema(
+                type = AgentToolArgumentType.INTEGER
+            )
         )
     )
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <style name="Theme.AgentHarness" parent="@style/AgentHarnessBaseTheme">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

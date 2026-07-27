@@ -48,7 +48,14 @@ class DeterministicAgentHarnessTest {
                     totalContentChars = 9
                 ),
                 AgentHarnessTraceEvent.ProviderInvoked(1, "scripted-uppercase", listOf("uppercase")),
-                AgentHarnessTraceEvent.ToolExecuted(1, "uppercase-1", "uppercase", true, "ANDROID"),
+                AgentHarnessTraceEvent.ToolExecuted(
+                    1,
+                    "uppercase-1",
+                    "uppercase",
+                    true,
+                    "ANDROID",
+                    mapOf("text" to "android")
+                ),
                 AgentHarnessTraceEvent.ProviderInvoked(2, "scripted-uppercase", listOf("uppercase")),
                 AgentHarnessTraceEvent.Completed(2, "Harness result: ANDROID")
             ),
@@ -85,6 +92,24 @@ class DeterministicAgentHarnessTest {
         }
 
         assertEquals("Duplicate tool names: uppercase.", error.message)
+    }
+
+    @Test
+    fun streamsTraceEventsToObserverWithoutLosingFinalTrace() {
+        val observed = mutableListOf<AgentHarnessTraceEvent>()
+        val runner = AgentHarnessRunner(
+            provider = UppercaseProvider(),
+            tools = listOf(UppercaseTool()),
+            clock = FixedAgentClock(0L),
+            idGenerator = SequentialAgentIdGenerator("observer"),
+            observer = AgentHarnessObserver(observed::add)
+        )
+
+        val result = runner.run(AgentHarnessRequest("observer-session", "sdk"))
+
+        assertEquals(result.trace, observed)
+        val toolEvent = observed.filterIsInstance<AgentHarnessTraceEvent.ToolExecuted>().single()
+        assertEquals(mapOf("text" to "sdk"), toolEvent.arguments)
     }
 
     private class UppercaseProvider : AgentProvider {

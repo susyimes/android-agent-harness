@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
+    id 'maven-publish'
 }
 
 android {
@@ -19,9 +20,26 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+        }
+    }
 }
 
 dependencies {
     api project(':device-loop')
     testImplementation 'junit:junit:4.13.2'
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            sdk(MavenPublication) {
+                from components.release
+                artifactId = 'device-loop-android'
+            }
+        }
+    }
 }

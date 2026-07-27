@@ -35,13 +35,33 @@ sealed interface AgentHarnessTraceEvent {
         val callId: String,
         val toolName: String,
         val succeeded: Boolean,
-        val content: String
+        val content: String,
+        val arguments: Map<String, String> = emptyMap()
     ) : AgentHarnessTraceEvent
 
     data class Completed(
         val step: Int,
         val output: String
     ) : AgentHarnessTraceEvent
+}
+
+/** Receives trace events synchronously as a bounded run progresses. */
+fun interface AgentHarnessObserver {
+    fun onEvent(event: AgentHarnessTraceEvent)
+
+    companion object {
+        val NONE = AgentHarnessObserver {}
+    }
+}
+
+fun interface AgentCancellationSignal {
+    fun isCancellationRequested(): Boolean
+
+    companion object {
+        val THREAD_INTERRUPTED = AgentCancellationSignal {
+            Thread.currentThread().isInterrupted
+        }
+    }
 }
 
 data class AgentHarnessResult(
@@ -59,6 +79,9 @@ class AgentHarnessProtocolException(message: String) : IllegalStateException(mes
 
 class AgentHarnessLimitException(message: String) : IllegalStateException(message)
 
+class AgentHarnessCancelledException(message: String = "Agent run was cancelled.") :
+    IllegalStateException(message)
+
 /** Coordinates one bounded turn without depending on Android, transport, or storage implementations. */
 class AgentOrchestrator(
     private val provider: AgentProvider,
@@ -67,7 +90,10 @@ class AgentOrchestrator(
     private val sessionStore: AgentSessionStore,
     private val clock: AgentClock,
     private val idGenerator: AgentIdGenerator,
-    private val config: AgentHarnessConfig = AgentHarnessConfig()
+    private val config: AgentHarnessConfig = AgentHarnessConfig(),
+    private val observer: AgentHarnessObserver = AgentHarnessObserver.NONE,
+    private val cancellationSignal: AgentCancellationSignal =
+        AgentCancellationSignal.THREAD_INTERRUPTED
 ) {
 
     init {
@@ -75,6 +101,7 @@ class AgentOrchestrator(
     }
 
     fun execute(request: AgentHarnessRequest): AgentHarnessResult {
+        ensureActive()
         var session = sessionStore.load(request.sessionId) ?: newSession(request.sessionId)
         session = appendMessage(
             session = session,
@@ -91,7 +118,9 @@ class AgentOrchestrator(
         )
         val context = contextBundle.items
         val tools = toolOrchestrator.specifications()
-        val trace = mutableListOf<AgentHarnessTraceEvent>(
+        val trace = mutableListOf<AgentHarnessTraceEvent>()
+        record(
+            trace,
             AgentHarnessTraceEvent.ContextLoaded(
                 itemIds = context.map { item -> item.id },
                 droppedItemIds = contextBundle.droppedItemIds,
@@ -100,20 +129,27 @@ class AgentOrchestrator(
         )
 
         for (step in 1..config.maxProviderSteps) {
-            trace += AgentHarnessTraceEvent.ProviderInvoked(
+            ensureActive()
+            record(
+                trace,
+                AgentHarnessTraceEvent.ProviderInvoked(
                 step = step,
                 providerId = provider.id,
                 toolNames = tools.map { spec -> spec.name }
+                )
             )
-            when (val response = provider.respond(AgentProviderRequest(session, context, tools, step))) {
+            val response = provider.respond(AgentProviderRequest(session, context, tools, step))
+            ensureActive()
+            when (response) {
                 is AgentProviderResponse.FinalText -> {
+                    ensureActive()
                     session = appendMessage(
                         session = session,
                         role = AgentRole.ASSISTANT,
                         content = response.content
                     )
                     sessionStore.save(session)
-                    trace += AgentHarnessTraceEvent.Completed(step, response.content)
+                    record(trace, AgentHarnessTraceEvent.Completed(step, response.content))
                     return AgentHarnessResult(
                         session = session,
                         output = response.content,
@@ -123,17 +159,26 @@ class AgentOrchestrator(
                 }
 
                 is AgentProviderResponse.ToolRequests -> {
-                    toolOrchestrator.execute(response.calls, session.id).forEach { execution ->
+                    toolOrchestrator.execute(
+                        calls = response.calls,
+                        sessionId = session.id,
+                        beforeEach = ::ensureActive
+                    ).forEach { execution ->
+                        ensureActive()
                         val call = execution.call
                         val result = execution.result
                         session = appendToolResult(session, call, result)
                         sessionStore.save(session)
-                        trace += AgentHarnessTraceEvent.ToolExecuted(
-                            step = step,
-                            callId = call.id,
-                            toolName = call.toolName,
-                            succeeded = !result.isError,
-                            content = result.content
+                        record(
+                            trace,
+                            AgentHarnessTraceEvent.ToolExecuted(
+                                step = step,
+                                callId = call.id,
+                                toolName = call.toolName,
+                                succeeded = !result.isError,
+                                content = result.content,
+                                arguments = call.arguments.toMap()
+                            )
                         )
                     }
                 }
@@ -143,6 +188,24 @@ class AgentOrchestrator(
         throw AgentHarnessLimitException(
             "Provider '${provider.id}' did not finish within ${config.maxProviderSteps} steps."
         )
+    }
+
+    private fun ensureActive() {
+        if (cancellationSignal.isCancellationRequested()) {
+            throw AgentHarnessCancelledException()
+        }
+    }
+
+    private fun record(
+        trace: MutableList<AgentHarnessTraceEvent>,
+        event: AgentHarnessTraceEvent
+    ) {
+        trace += event
+        try {
+            observer.onEvent(event)
+        } catch (_: RuntimeException) {
+            // Observability is not allowed to break the Agent protocol.
+        }
     }
 
     private fun newSession(sessionId: String): AgentSession {
@@ -203,7 +266,10 @@ class AgentHarnessRunner(
         idGenerator: AgentIdGenerator = UuidAgentIdGenerator(),
         config: AgentHarnessConfig = AgentHarnessConfig(),
         contextPolicy: AgentContextPolicy = AgentContextPolicy(),
-        toolProfile: AgentToolProfile = AgentToolProfile.all()
+        toolProfile: AgentToolProfile = AgentToolProfile.all(),
+        observer: AgentHarnessObserver = AgentHarnessObserver.NONE,
+        cancellationSignal: AgentCancellationSignal =
+            AgentCancellationSignal.THREAD_INTERRUPTED
     ) : this(
         AgentOrchestrator(
             provider = provider,
@@ -216,7 +282,9 @@ class AgentHarnessRunner(
             sessionStore = sessionStore,
             clock = clock,
             idGenerator = idGenerator,
-            config = config
+            config = config,
+            observer = observer,
+            cancellationSignal = cancellationSignal
         )
     )
 
