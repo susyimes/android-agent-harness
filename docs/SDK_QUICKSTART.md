@@ -190,6 +190,8 @@ The conservative default policy is:
 - local durable write, external write, and device action: explicit approval;
 - policy errors or missing approval UI: deny.
 
+Hosts may replace that policy. The sample app deliberately exposes a persisted product setting with No approval (the sample default), Risk-based, and Strict modes. No approval returns `NOT_REQUIRED` for every effect; it does not bypass Android runtime, special, or accessibility permissions.
+
 Tool output is normalized to `AgentToolResultEnvelope`. Keep provider-visible summaries bounded; place large or sensitive bytes behind an opaque `AgentRawPayloadStore` reference with a TTL.
 
 ## 7. Persist sessions and traces
@@ -231,6 +233,35 @@ Unapproved candidates and experimental revisions never enter `AgentApprovedState
 
 The legacy Agent House file adapter remains available. `AgentHouseStateMigrator` proposes existing Agent memory as candidates rather than silently treating it as approved State.
 
+### Remote AgentBrief
+
+`agent-state` can create a compact AgentBrief immediately before CCP selects
+context. The remote call uses a fresh connection from the same provider
+factory; it has no tools and cannot write State Vault directly.
+
+```kotlin
+val briefSource = RemoteAgentBriefContextSource(
+    vault = stateVault,
+    providerFactory = providerFactory,
+    options = RemoteAgentBriefOptions(timeoutMillis = 4_000)
+)
+
+val request = AgentRunRequest(
+    sessionId = "chat-1",
+    userInput = "Continue the current task",
+    providerFactory = providerFactory,
+    contextSources = listOf(
+        NamedContextSource("remote-agent-brief", briefSource)
+    )
+)
+```
+
+The compiler always has a deterministic local summary. A successful
+`FinalText` replaces that summary within the configured character budget.
+Tool calls, blank output, provider errors, and timeouts use the local summary.
+On timeout the connection is cancelled and any late text is discarded before
+State Vault persistence.
+
 ## 9. Schedule reliable work
 
 `ScheduleSpec` describes cadence, timezone, constraints, execution window, missed-run policy, revision, delivery policy, reason, and policy ids. `GovernedScheduleService` applies or deletes an exact revision through the approval protocol.
@@ -270,7 +301,7 @@ observe(snapshot)
 
 An action invalidates the snapshot even when the platform reports failure. Stale ids, action-before-observe, consecutive actions, and finish-without-evidence are protocol errors.
 
-`AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. High-risk operations use the same approval protocol and a human-backed Android surface.
+`AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. Device effects use the same approval protocol. A host policy may allow them directly or require a human-backed Android surface; the sample's setting applies the selected policy to the generic coordinator bound to the returned request.
 
 ## 12. Streaming, attachments, and voice
 

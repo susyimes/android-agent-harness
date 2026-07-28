@@ -99,10 +99,16 @@ class SampleNavigationInstrumentedTest {
     fun settingsLinksToCompleteControlCenter() {
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                assertEquals(
-                    View.VISIBLE,
-                    activity.findViewById<View>(R.id.settingsControlCenterButton).visibility
-                )
+                listOf(
+                    R.id.settingsApprovalStatus,
+                    R.id.configureApprovalModeButton,
+                    R.id.settingsControlCenterButton
+                ).forEach { id ->
+                    assertEquals(
+                        View.VISIBLE,
+                        activity.findViewById<View>(id).visibility
+                    )
+                }
             }
         }
     }

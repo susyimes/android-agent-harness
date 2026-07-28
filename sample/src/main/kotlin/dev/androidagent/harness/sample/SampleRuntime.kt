@@ -3,12 +3,9 @@ package dev.androidagent.harness.sample
 
 import android.content.Context
 import android.content.ComponentName
+import dev.androidagent.harness.AgentProviderFactory
 import dev.androidagent.harness.approval.AgentApprovalCoordinator
-import dev.androidagent.harness.approval.AgentApprovalPolicy
-import dev.androidagent.harness.approval.AgentApprovalRequirement
 import dev.androidagent.harness.approval.InMemoryAgentApprovalJournal
-import dev.androidagent.harness.AgentToolRisk
-import dev.androidagent.harness.AgentToolSideEffect
 import dev.androidagent.harness.sdk.AgentEvent
 import dev.androidagent.harness.sdk.AgentRunHandle
 import dev.androidagent.harness.sdk.TraceSink
@@ -23,6 +20,10 @@ import dev.androidagent.harness.permission.android.StandardAndroidPermissionSpec
 import dev.androidagent.harness.sdk.FileAgentSessionStore
 import dev.androidagent.harness.sdk.house.FileAgentHouseRepository
 import dev.androidagent.harness.state.AgentAssetGovernance
+import dev.androidagent.harness.state.AgentStateCollection
+import dev.androidagent.harness.state.AgentVaultDocumentContextSource
+import dev.androidagent.harness.state.RemoteAgentBriefContextSource
+import dev.androidagent.harness.state.RemoteAgentBriefOptions
 import dev.androidagent.harness.feedback.FileOutcomeJournal
 import dev.androidagent.harness.feedback.FileSignalJournal
 import dev.androidagent.harness.feedback.OutcomeJournal
@@ -90,29 +91,14 @@ object SampleRuntime {
     private val traces = CopyOnWriteArrayList<AgentEvent>()
     private val occurrenceReceipts = CopyOnWriteArrayList<DispatchReceipt>()
 
+    @Volatile
+    private var approvalMode = SampleApprovalMode.NONE
+
     private val approvalBridge = AndroidApprovalSurfaceBridge()
     private val approvalJournal = InMemoryAgentApprovalJournal()
     private val approvals = AgentApprovalCoordinator(
         gate = approvalBridge,
-        policy = AgentApprovalPolicy { intent ->
-            when (intent.capability.sideEffect) {
-                AgentToolSideEffect.NONE,
-                AgentToolSideEffect.LOCAL_READ,
-                AgentToolSideEffect.LOCAL_DRAFT_WRITE ->
-                    AgentApprovalRequirement.NOT_REQUIRED
-
-                AgentToolSideEffect.DEVICE_ACTION ->
-                    if (intent.capability.risk == AgentToolRisk.LOW) {
-                        AgentApprovalRequirement.NOT_REQUIRED
-                    } else {
-                        AgentApprovalRequirement.REQUIRED
-                    }
-
-                AgentToolSideEffect.LOCAL_DURABLE_WRITE,
-                AgentToolSideEffect.EXTERNAL_WRITE ->
-                    AgentApprovalRequirement.REQUIRED
-            }
-        },
+        policy = SampleApprovalPolicy.policy { approvalMode },
         journal = approvalJournal
     )
 
@@ -139,6 +125,25 @@ object SampleRuntime {
         }
     }
 
+    fun remoteAgentBriefSource(
+        context: Context,
+        providerFactory: AgentProviderFactory
+    ): RemoteAgentBriefContextSource {
+        return RemoteAgentBriefContextSource(
+            vault = state(context),
+            providerFactory = providerFactory,
+            options = RemoteAgentBriefOptions(timeoutMillis = REMOTE_AGENT_BRIEF_TIMEOUT_MILLIS)
+        )
+    }
+
+    fun stateDocumentContextSource(context: Context): AgentVaultDocumentContextSource {
+        return AgentVaultDocumentContextSource(
+            vault = state(context),
+            allowedCollections = AgentVaultDocumentContextSource.DEFAULT_COLLECTIONS -
+                AgentStateCollection.BRIEFS
+        )
+    }
+
     fun governance(context: Context): AgentAssetGovernance {
         return governance ?: synchronized(this) {
             governance ?: AgentAssetGovernance(
@@ -147,6 +152,8 @@ object SampleRuntime {
             ).also { created -> governance = created }
         }
     }
+
+    private const val REMOTE_AGENT_BRIEF_TIMEOUT_MILLIS = 4_000L
 
     fun todo(context: Context): FileTodoRepository {
         return todo ?: synchronized(this) {
@@ -354,6 +361,18 @@ object SampleRuntime {
     fun approvalBridge(): AndroidApprovalSurfaceBridge = approvalBridge
 
     fun approvalCoordinator(): AgentApprovalCoordinator = approvals
+
+    fun initializeApprovalMode(context: Context) {
+        approvalMode = SamplePreferences(context).approvalMode()
+    }
+
+    fun approvalMode(): SampleApprovalMode = approvalMode
+
+    fun setApprovalMode(context: Context, mode: SampleApprovalMode) {
+        SamplePreferences(context).setApprovalMode(mode)
+        approvalMode = mode
+        approvalBridge.cancelAll()
+    }
 
     fun approvalRecords() = approvalJournal.snapshot()
 

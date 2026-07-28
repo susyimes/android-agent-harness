@@ -13,6 +13,7 @@ The repository also ships an installable sample app. It is a reference compositi
 - A cancellable and transactional run lifecycle with deadlines, per-session isolation, late-result fences, stable events, traces, and deterministic replay checks.
 - CCP V2 context compilation with `ContextNeedSpec`, named-source availability checks, source trust/privacy/risk, conflict resolution, deterministic audited compression, token and item budgets, `EvidencePack`, `RouteGate`, and prompt rendering.
 - A State Vault for memory, skill, and persona candidates with validation, evaluation, exact approval, promotion, revision history, and rollback.
+- Provider-neutral remote AgentBrief generation with a deterministic local baseline, an isolated provider connection, bounded input/output, and timeout/late-result discard.
 - A general effect-approval protocol bound to target, argument hash, risk, evidence, and expiry.
 - Typed tool result envelopes with bounded content, structured data, effect/evidence references, and expiring raw-payload references.
 - Reliable schedules, occurrences, leases, checkpoints, explicit `SKIP`/`RUN_ONCE`/`NEXT_WINDOW` missed-run behavior, Cron, and LongTask semantics.
@@ -35,13 +36,15 @@ The v0.4.0 sample exposes:
 - Chat with provider/model selection, streamed text, file/image attachment, speech input, TTS, Stop, and model-selected Phone Use.
 - Agent House editing plus skills and memory review.
 - Stats and Todo with typed unavailable states and governed durable changes.
-- State / Obsidian view for memory, skill, and persona candidates, evidence, effects, evaluations, promotion, and rollback.
+- State / Obsidian view for memory, skill, and persona candidates, evidence, effects, evaluations, promotion, rollback, and remote AgentBrief provenance.
 - Automation controls for Heartbeat, Dream, Proactive, Cron, and LongTask, including revision, next run, receipts, checkpoints, pause, durable Stop, delete, and manual run.
 - Permission disclosures and direct navigation to the relevant Android settings.
+- A persisted approval setting with No approval, Risk-based, and Strict modes.
 - Debug / Replay with stable events, approvals, occurrence receipts, self-check, deterministic trace evaluation, and redacted export.
 - Data & Retention controls for domain-scoped export, retention, exact-approved deletion, and credential-boundary disclosure.
 
 All background features default to off. Proactive work also obeys initiative level, quiet hours, and a daily activation cap.
+The sample approval mode defaults to **No approval**: tool and Phone Use effects execute without an app-level approval prompt, while Android platform permissions still apply. Settings can switch to Risk-based approval or Strict approval at any time. This is a sample product policy; the SDK continues to leave approval policy to the host.
 
 ## Architecture
 
@@ -109,7 +112,7 @@ The v0.4.0 coordinates use group `dev.androidagent.harness`.
 | `agent-sdk` | JAR | Lifecycle, events, cancellation, transactions, traces, replay, and House |
 | `agent-approval` | JAR | Effect intent, policy, exact approval token, and journal |
 | `context-engine` | JAR | CCP V2 selection, routing, evidence, and renderer |
-| `agent-state` | JAR | State Vault, candidates, evaluation, promotion, retention, and rollback |
+| `agent-state` | JAR | State Vault, AgentBrief, candidates, evaluation, promotion, retention, and rollback |
 | `agent-scheduling` | JAR | Schedule, occurrence, lease, checkpoint, Cron, and LongTask |
 | `agent-feedback` | JAR | Signal/outcome journals, Heartbeat, Dream, Proactive, Home Brief, Self Check |
 | `provider-openai` | JAR | OpenAI-compatible streaming and experimental Codex transports |
@@ -215,7 +218,7 @@ Phone Use is not a fixed chat mode and is not activated by keywords. The selecte
 
 The run is also bounded by wall-clock time, tool count, repeated failures, approval expiry, and user Stop.
 
-High-risk actions require a human-backed approval surface. Missing UI, denial, timeout, stale snapshot, changed target/arguments, or a mismatched token fails closed. Pressing Home is refused because it breaks the observed task chain.
+Approval is host-policy driven. In the sample, No approval is the default; Risk-based mode requires a human-backed surface for high-risk actions, and Strict mode requires it for every Phone Use action. Whenever policy requires approval, missing UI, denial, timeout, stale snapshot, changed target/arguments, or a mismatched token fails closed. Pressing Home is refused because it breaks the observed task chain.
 
 Visual observation is optional, host-enabled, redacted, and represented by an expiring raw-payload reference. It is not a silent screenshot fallback.
 

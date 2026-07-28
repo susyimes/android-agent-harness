@@ -15,6 +15,7 @@ import dev.androidagent.harness.scheduling.android.VisibleLongTaskRegistry
 class SampleApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        SampleRuntime.initializeApprovalMode(this)
         val schedules = SampleRuntime.schedules(this)
         val backend = AndroidSchedulerBackend(this)
         val runner = SamplePeriodicRunner(this)

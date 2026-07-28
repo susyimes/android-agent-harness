@@ -46,7 +46,6 @@ import dev.androidagent.harness.sdk.AgentSdk
 import dev.androidagent.harness.state.AgentApprovedStateContextSource
 import dev.androidagent.harness.state.AgentCandidateSource
 import dev.androidagent.harness.state.AgentCandidateStatus
-import dev.androidagent.harness.state.AgentVaultDocumentContextSource
 import dev.androidagent.harness.state.MemoryCandidate
 import dev.androidagent.harness.state.MemoryCandidateType
 import java.time.LocalDate
@@ -198,8 +197,12 @@ class SamplePeriodicRunner(
                     AgentApprovedStateContextSource(SampleRuntime.state(appContext))
                 ),
                 NamedContextSource(
+                    "remote-agent-brief",
+                    SampleRuntime.remoteAgentBriefSource(appContext, providerFactory)
+                ),
+                NamedContextSource(
                     "agent-state-documents",
-                    AgentVaultDocumentContextSource(SampleRuntime.state(appContext))
+                    SampleRuntime.stateDocumentContextSource(appContext)
                 ),
                 NamedContextSource(
                     "android-permissions",
@@ -220,6 +223,7 @@ class SamplePeriodicRunner(
                 budget = runBudget,
                 toolProfileId = "automation-read-only"
             ),
+            approvalCoordinator = SampleRuntime.approvalCoordinator(),
             traceSink = SampleRuntime.traceSink()
         )
         val handle = try {

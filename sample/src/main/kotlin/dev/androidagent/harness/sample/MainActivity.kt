@@ -81,7 +81,6 @@ import dev.androidagent.harness.sdk.android.AndroidPhoneAgent
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgentConfiguration
 import dev.androidagent.harness.context.NamedContextSource
 import dev.androidagent.harness.state.AgentApprovedStateContextSource
-import dev.androidagent.harness.state.AgentVaultDocumentContextSource
 import dev.androidagent.harness.voice.android.AndroidSpeechToTextEngine
 import dev.androidagent.harness.voice.android.AndroidTextToSpeechEngine
 import dev.androidagent.harness.voice.android.SpeechOutputListener
@@ -185,7 +184,8 @@ class MainActivity : Activity() {
                 serviceProvider = { HarnessAccessibilityService.connectedInstance() },
                 onWaitingChanged = ::onApprovalWaitingChanged
             ),
-            dialog = dialogGate
+            dialog = dialogGate,
+            approvalMode = SampleRuntime::approvalMode
         )
         genericApprovalUi = SampleApprovalUi(this) {
             onApprovalWaitingChanged(SampleRuntime.approvalBridge().pending().isNotEmpty())
@@ -1563,8 +1563,12 @@ class MainActivity : Activity() {
                 AgentApprovedStateContextSource(SampleRuntime.state(this))
             ),
             NamedContextSource(
+                "remote-agent-brief",
+                SampleRuntime.remoteAgentBriefSource(this, providerFactory)
+            ),
+            NamedContextSource(
                 "agent-state-documents",
-                AgentVaultDocumentContextSource(SampleRuntime.state(this))
+                SampleRuntime.stateDocumentContextSource(this)
             ),
             NamedContextSource(
                 "android-permissions",

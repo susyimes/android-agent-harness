@@ -20,7 +20,10 @@ import dev.androidagent.harness.deviceloop.android.OverlayApprovalGate
  */
 class PhoneApprovalGate(
     private val overlay: OverlayApprovalGate,
-    private val dialog: DialogApprovalGate
+    private val dialog: DialogApprovalGate,
+    private val approvalMode: () -> SampleApprovalMode = {
+        SampleApprovalMode.RISK_BASED
+    }
 ) : ApprovalGate {
 
     override fun decide(
@@ -28,6 +31,9 @@ class PhoneApprovalGate(
         action: String,
         arguments: Map<String, String>
     ): ApprovalDecision {
+        if (approvalMode() == SampleApprovalMode.NONE) {
+            return ApprovalDecision.APPROVED
+        }
         val delegate = if (overlay.isAvailable()) overlay else dialog
         return delegate.decide(node, action, arguments)
     }

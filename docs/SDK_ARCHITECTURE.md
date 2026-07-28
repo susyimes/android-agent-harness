@@ -81,6 +81,7 @@ Module: `agent-state`, with House compatibility in `agent-sdk`.
 Responsibilities:
 
 - State Vault documents, events, evidence, effects, briefs, and psyche observations;
+- deterministic AgentBrief snapshots plus optional provider-generated summaries with timeout fallback;
 - memory, skill, and persona candidate sinks;
 - dedupe, validation, evaluation, approval, promotion, revision, and rollback;
 - approved-only context views;
@@ -88,6 +89,13 @@ Responsibilities:
 - bounded observational retention and explicit deletion.
 
 The model cannot directly modify approved memory, enabled skill, or persona policy.
+
+`RemoteAgentBriefContextSource` runs before normal provider inference. It first
+captures a bounded, privacy-filtered State Vault snapshot and creates a
+deterministic rule summary. A fresh provider connection may replace only that
+summary. Tool requests, empty output, provider failure, or deadline expiry keep
+the rule summary. The provider worker has no State Vault reference, so a late
+response cannot persist or enter the current `EvidencePack`.
 
 ### 4. Periodic business and scheduling
 
@@ -129,11 +137,12 @@ Responsibilities:
 
 - classify effect requirements;
 - bind approval to run, call, target, argument hash, capability scope, and expiry;
-- fail closed on denial, timeout, unavailable UI, mismatch, or policy error;
+- when policy requires approval, fail closed on denial, timeout, unavailable UI, mismatch, or policy error;
 - keep a decision journal;
 - share one contract across Todo, schedules, State promotion/deletion, House reset, and Phone Use.
 
 `RouteGate` controls information flow. `ApprovalGate` authorizes one concrete side effect. They are intentionally different types.
+The SDK supplies a conservative default but treats the policy as host-owned. The sample persists three product modes and defaults to No approval; changing that sample setting does not weaken Android platform permission checks.
 
 ### 7. Android adapters
 

@@ -53,6 +53,7 @@ import dev.androidagent.harness.state.AgentAssetRevision
 import dev.androidagent.harness.state.AgentAssetRevisionStatus
 import dev.androidagent.harness.state.AgentCandidateSource
 import dev.androidagent.harness.state.AgentCandidateStatus
+import dev.androidagent.harness.state.AgentStateCollection
 import dev.androidagent.harness.state.AgentStateRetentionPolicy
 import dev.androidagent.harness.state.AgentStateSnapshot
 import dev.androidagent.harness.state.GovernedAgentStateMaintenance
@@ -394,13 +395,25 @@ class ProductCenterActivity : Activity() {
         renderRevisionHistory(snapshot)
         if (snapshot.briefs.isNotEmpty()) {
             addSectionLabel("Remote Brief Preview")
+            val briefDocuments = snapshot.documents
+                .filter { document -> document.collection == AgentStateCollection.BRIEFS }
+                .associateBy { document -> document.id }
             snapshot.briefs.takeLast(3).reversed().forEach { brief ->
+                val metadata = briefDocuments[brief.id]?.metadata.orEmpty()
+                val generation = when (metadata["remoteStatus"]) {
+                    "ENHANCED" -> "远端增强 · ${metadata["remoteProviderId"] ?: "provider"}"
+                    "TIMED_OUT" -> "规则降级 · 远端超时已丢弃"
+                    "FAILED" -> "规则降级 · 远端失败"
+                    "REJECTED" -> "规则降级 · 远端响应不可用"
+                    else -> "规则生成"
+                }
                 addInfoCard(
                     brief.title,
-                    "${brief.summary}\n" +
+                    "$generation\n${brief.summary}\n" +
                         "events=${brief.eventRefs.size} · evidence=${brief.evidenceRefs.size} · " +
                         "openLoops=${brief.openLoopRefs.size} · " +
-                        "pending=${brief.pendingCandidateRefs.size}"
+                        "pending=${brief.pendingCandidateRefs.size} · " +
+                        "latency=${metadata["remoteElapsedMillis"] ?: "0"}ms"
                 )
             }
         }
@@ -1005,10 +1018,11 @@ class ProductCenterActivity : Activity() {
 
     private fun renderPermissions(snapshots: List<PermissionSnapshot>) {
         content.removeAllViews()
+        val approvalMode = SampleRuntime.approvalMode()
         addInfoCard(
             "权限原则",
             "SDK AAR 不在 manifest 中强制扩权；sample 只声明自身展示的能力。撤销后 Adapter " +
-                "会立即返回 typed unavailable，高风险动作在无 UI 时 fail-closed。"
+                "会立即返回 typed unavailable；当前应用级审批模式为${approvalMode.title}。"
         )
         snapshots.forEach { snapshot ->
             val disclosure = when {
@@ -1017,7 +1031,11 @@ class ProductCenterActivity : Activity() {
                 snapshot.capabilityId.contains("accessibility") ->
                     "用于 Phone Use 的语义观察和单步操作；每次动作后重新观察。"
                 snapshot.capabilityId.contains("overlay") ->
-                    "用于高风险 Phone Use 审批 overlay；不用于悬浮广告或后台操作。"
+                    if (approvalMode == SampleApprovalMode.NONE) {
+                        "当前无审批模式不会使用；切换到风险或严格审批后用于 Phone Use 审批。"
+                    } else {
+                        "用于 Phone Use 审批 overlay；不用于悬浮广告或后台操作。"
+                    }
                 snapshot.capabilityId.contains("voice") ->
                     "仅在用户点按语音后使用；原始音频默认不持久化。"
                 snapshot.capabilityId.contains("location") ->

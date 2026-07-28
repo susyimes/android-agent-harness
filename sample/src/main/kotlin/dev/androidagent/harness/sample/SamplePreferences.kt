@@ -28,6 +28,13 @@ class SamplePreferences(context: Context) {
         preferences.edit().putBoolean(KEY_USAGE_STATS_ENABLED, enabled).apply()
     }
 
+    fun approvalMode(): SampleApprovalMode =
+        SampleApprovalMode.fromStorage(preferences.getString(KEY_APPROVAL_MODE, null))
+
+    fun setApprovalMode(mode: SampleApprovalMode) {
+        preferences.edit().putString(KEY_APPROVAL_MODE, mode.storageValue).apply()
+    }
+
     fun initiativeLevel(): String =
         preferences.getString(KEY_INITIATIVE_LEVEL, "OFF").orEmpty().ifBlank { "OFF" }
 
@@ -67,6 +74,7 @@ class SamplePreferences(context: Context) {
         const val PREFS_NAME = "agent_harness_app_preferences"
         const val KEY_LAST_SESSION = "last_session_id"
         const val KEY_USAGE_STATS_ENABLED = "usage_stats_enabled"
+        const val KEY_APPROVAL_MODE = "approval_mode"
         const val KEY_INITIATIVE_LEVEL = "initiative_level"
         const val KEY_PROACTIVE_QUIET_START = "proactive_quiet_start"
         const val KEY_PROACTIVE_QUIET_END = "proactive_quiet_end"

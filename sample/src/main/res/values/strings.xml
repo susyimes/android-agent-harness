@@ -37,9 +37,11 @@
     <string name="phone_use_permissions">权限</string>
 
     <string name="settings_title">设置</string>
-    <string name="settings_subtitle">账号、Phone Use 与本地数据</string>
+    <string name="settings_subtitle">账号、审批、Phone Use 与本地数据</string>
     <string name="settings_model_title">模型与账号</string>
     <string name="settings_configure_model">配置提供商或登录 Codex</string>
+    <string name="settings_approval_title">审批模式</string>
+    <string name="settings_configure_approval">调整审批模式</string>
     <string name="settings_accessibility_title">手机操作权限</string>
     <string name="settings_house_title">Agent House</string>
     <string name="settings_house_description">编辑身份与协作方式，审核 Agent 写入的技能草案和本地记忆；上下文会保留来源。</string>
@@ -71,7 +73,7 @@
     <string name="msg_turn_stopped">已停止本轮；已经执行的设备操作不会撤销，本轮内容不会加入后续对话。</string>
 
     <string name="accessibility_dialog_title">启用无障碍服务</string>
-    <string name="accessibility_dialog_message">模型只有在任务确实需要时才会进入 Phone Use，使用无障碍服务读取当前界面的语义节点并代表你点击或输入；高风险动作始终停下来等待你的批准。</string>
+    <string name="accessibility_dialog_message">模型只有在任务确实需要时才会进入 Phone Use，使用无障碍服务读取当前界面的语义节点并代表你点击或输入；是否需要操作前确认由“设置 → 审批模式”决定。</string>
 
     <string name="approval_title">批准高风险动作？</string>
     <string name="approval_action_tap">点击</string>

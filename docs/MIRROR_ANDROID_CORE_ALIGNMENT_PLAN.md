@@ -167,6 +167,7 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | 编排：Provider/Tool | 完成 | run-scoped Provider、capability、8/80 步、工具/时间/重复失败/input/output token 预算、Tool Envelope | 自定义 Provider 不上报 usage 时使用保守字符估算 |
 | 上下文引擎：CCP V2 | 局部 | `ContextNeedSpec`、命名 source 缺失检测、候选池、trust/privacy/risk/freshness、冲突、确定性压缩与预算审计、`EvidencePack`、真实 `RouteGate` 终止/继续、renderer | Direct Provider 的文本 policy marker 隔离仍是已知未修安全项；无内置向量数据库 |
 | 记忆/人格：House/State | 完成 | House 兼容层、State Vault、events/evidence/effects/brief/psyche、Android file adapter、迁移、retention | “Obsidian”是逻辑产品视图，不兼容外部 vault 格式 |
+| 记忆/人格：Remote AgentBrief | 基础完成 | 每轮规则基线、隔离 Provider 连接、隐私/字符预算、4 秒 sample 超时、迟到结果丢弃、State Vault provenance、CCP 当前 Brief 注入 | 当前远端输出是纯文本摘要；尚未实现 mirror-android 的完整 typed brief/local-model background refresh |
 | 记忆/人格：Memory | 完成 | Agent 默认只调用 `agent_memory_propose`；pending candidate、dedupe/conflict/eval/approval/promotion/rollback | 旧 direct append 仅在显式兼容 flag 下注册 |
 | 记忆/人格：Skill | 完成 | Agent 写 disabled House draft并同步 Skill Inbox；eval、审批、revision、启用和回滚 | 不执行任意 skill 脚本 |
 | 记忆/人格：Persona | 完成 | `agent_persona_propose`、Psyche、Persona Inbox、hash/eval/approval/promotion/rollback | Agent 提议不能直接改变主动性或权限 |
@@ -175,7 +176,7 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | 反馈/主动：Dream | 完成 | outcome/candidate reflection、共用 `AgentSdk`、仅产出 pending reflection candidate、过滤无建议输出 | 不静默晋升 durable asset |
 | 反馈/主动：Proactive | 完成 | 持久 Signal/Outcome journal、opportunity score、用户主动性档位、quiet hours、cooldown、单次/每日 cap、ActivationRequest | 默认 OFF |
 | Home Brief / Self Check | 完成 | 无 Provider 时本地聚合；Home 与 Debug 显示真实结果 | 不作为审批或权限来源 |
-| 审批：通用协议 | 局部 | target/argument hash/risk/evidence/expiry、one-use token、observer/journal、无 UI fail-closed | Schedule hash 尚未覆盖全部行为字段；Phone Agent legacy gate 尚未自动桥接 generic coordinator |
+| 审批：通用协议 | 局部 | target/argument hash/risk/evidence/expiry、one-use token、observer/journal、策略要求审批时无 UI fail-closed | Schedule hash 尚未覆盖全部行为字段；Phone Agent legacy gate 尚未自动桥接 generic coordinator |
 | Android：Permission | 完成 | runtime/special/service/manifest typed state、用途披露和设置导航 | AAR manifest 不自动扩权 |
 | Android：Stats/Todo | 完成 | UsageStats 聚合与真实零数据区分；Todo draft/commit/revision/effect/归档/删除 | Stats 默认关闭，raw timeline 不进 Prompt |
 | Android：House/Obsidian | 完成 | app-private House/State store、迁移、候选审查、导出/retention/delete/reset | 默认文件 store 不是加密数据库 |
@@ -183,7 +184,7 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | Android：后台承载 | 完成 | WorkManager unique occurrence、boot/package receiver、持久 lease/checkpoint、重复 completed occurrence 修复、visible LongTask foreground service 与持久 Stop | sample 不使用 AlarmManager |
 | Android：Phone Use | 完成 | 模型真实工具调用激活、strict snapshot state machine、Accessibility、稳定等待、finish evidence、overlay approval、optional visual | 无障碍和 visual 必须由用户/宿主开启 |
 | Streaming/多模态/语音 | 完成 | compatible SSE、原子且串行化的 late-delta fence、AttachmentRef、临时 visual/raw payload、STT/录音/TTS | 无捆绑本地大模型或第三方流式 ASR |
-| sample 产品 | 完成 | Home、Chat、House、Stats、Todo、State、Automation、Permissions、Debug、Data & Retention、approval、Stop | GitHub、Web、任意代码执行按范围明确排除 |
+| sample 产品 | 完成 | Home、Chat、House、Stats、Todo、State、Automation、Permissions、Debug、Data & Retention、三档 approval、Stop | 默认无审批；可在设置切换风险审批或严格审批；GitHub、Web、任意代码执行按范围明确排除 |
 
 当前仍明确不做的交付包括：Maven Central、生产签名密钥、外部 Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行 adapter，以及替宿主决定生产数据库/加密/备份策略。
 
@@ -1209,7 +1210,7 @@ data class ApprovalToken(
 | `EXTERNAL_WRITE` | 发消息、建日历、覆盖外部文件 | 人工审批，默认不可后台自动 |
 | `DEVICE_ACTION` | Phone Use 点击、输入、启动 App | 风险分类；高风险必须人工审批 |
 
-host 可以把默认策略收紧，但不能由 Prompt、House、skill、persona 或模型输出放宽。
+上表是 SDK 的保守策略建议，不是核心层硬编码。当前 sample 持久化三档 host policy 并默认选择无审批；切换到风险审批或严格审批后，凡策略判定 `REQUIRED` 的 effect 仍完整执行 token、过期和 fail-closed 流程。策略只能由宿主或用户设置调整，不能由 Prompt、House、skill、persona 或模型输出改变。
 
 ### 12.3 候选治理的审批
 
@@ -1231,7 +1232,7 @@ candidate
 
 - JVM SDK 定义 request、decision、token、policy 和 journal 接口。
 - Android 可选组件提供安全的 lifecycle-aware approval surface bridge。
-- sample 提供 approval card/overlay、风险文案、目标预览、approve/deny 和超时 UI。
+- sample 提供持久化的无审批、风险审批、严格审批三档模式，以及 approval card/overlay、风险文案、目标预览、approve/deny 和超时 UI；默认无审批是 sample 产品决定，不是 SDK 强制默认。
 - adapter 只验证 token 并执行；不能自己模拟用户点击。
 - 后台无可见 UI 时需要人工审批的 effect 进入 waiting state 或通知用户，不能降级成自动允许。
 
@@ -1673,7 +1674,7 @@ sample 是七层能力的 composition root 和参考产品，不是新的业务�
 - Agent 不能静默修改长期记忆、人格、已启用技能或治理规则。
 - 后台能力默认关闭。
 - 不可信文本只能作为 evidence。
-- 高风险 action fail-closed。
+- 策略要求审批的 action fail-closed。
 - Stop 是运行协议，不只是 UI 状态。
 
 ### 17.2 最小化
@@ -1964,7 +1965,7 @@ Device/审批：
 - 模型仍通过真实工具调用按需激活 Phone Use。
 - 默认 8/80 预算同时受时间、工具次数和重复失败限制。
 - visual、attachment、audio 数据临时、可关闭、可审计。
-- 高风险动作在无 UI、deny、timeout 或 token mismatch 时绝不执行。
+- 策略要求审批的动作在无 UI、deny、timeout 或 token mismatch 时绝不执行。
 - 没有本地模型或语音模块时核心链路仍完整运行。
 
 ### M16 — Sample 产品验收与发布
@@ -2011,6 +2012,7 @@ Device/审批：
 - [x] 记忆由 Agent 产出 pending candidate，不静默晋升。
 - [x] Persona/Psyche/Dream 的观察、提议和 approved policy 明确分层。
 - [x] candidate—validation—eval—approval—promotion—rollback 全链可证明。
+- [x] AgentBrief 具备规则基线、可选远端增强、超时/失败降级和迟到结果丢弃（基础纯文本版）。
 
 ### 周期业务/定时层
 
@@ -2030,7 +2032,7 @@ Device/审批：
 
 - [x] EffectIntent 覆盖 Todo、文件、通知、schedule、资产晋升和 Phone Use。
 - [ ] request 绑定目标、完整行为参数 hash、risk、expiry 和证据（Schedule 全字段 hash 待补）。
-- [x] deny、timeout、UI 不可用和 token mismatch 均 fail-closed。
+- [x] 策略要求审批时，deny、timeout、UI 不可用和 token mismatch 均 fail-closed。
 - [x] `RouteGate` 不被当作 effect approval。
 - [x] 模型文本和工具参数不能伪造用户批准。
 
@@ -2048,7 +2050,7 @@ Device/审批：
 
 - [x] 纯 JVM SDK 不依赖 Android；AAR 不强迫宿主声明无关敏感权限。
 - [x] Home、Chat、House、Obsidian、Automation、Permissions、Debug 页面覆盖真实状态。
-- [x] sample 有 approval、Stop、主动性、retention/export/delete 用户控制。
+- [x] sample 有默认无审批且可切换的三档 approval、Stop、主动性、retention/export/delete 用户控制。
 - [x] 后台能力默认关闭。
 - [x] secrets 不进入源码、House、State Vault、trace 或 Prompt。
 - [x] binary API、consumer smoke、unit、lint、instrumentation、replay、provenance gate 全通过。
