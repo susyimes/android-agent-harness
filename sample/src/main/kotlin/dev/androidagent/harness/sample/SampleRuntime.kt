@@ -23,15 +23,15 @@ import dev.androidagent.harness.permission.android.StandardAndroidPermissionSpec
 import dev.androidagent.harness.sdk.FileAgentSessionStore
 import dev.androidagent.harness.sdk.house.FileAgentHouseRepository
 import dev.androidagent.harness.state.AgentAssetGovernance
-import dev.androidagent.harness.feedback.InMemoryOutcomeJournal
-import dev.androidagent.harness.feedback.InMemorySignalJournal
+import dev.androidagent.harness.feedback.FileOutcomeJournal
+import dev.androidagent.harness.feedback.FileSignalJournal
 import dev.androidagent.harness.feedback.OutcomeJournal
 import dev.androidagent.harness.feedback.SignalJournal
 import dev.androidagent.harness.scheduling.DispatchReceipt
+import dev.androidagent.harness.scheduling.LongTaskPeriodicRunner
 import dev.androidagent.harness.scheduling.LongTaskCoordinator
 import dev.androidagent.harness.scheduling.LongTaskStatus
 import dev.androidagent.harness.scheduling.OccurrenceAuthorizationSnapshot
-import dev.androidagent.harness.scheduling.PeriodicRunner
 import dev.androidagent.harness.scheduling.ScheduleRepository
 import dev.androidagent.harness.scheduling.ScheduleSpec
 import dev.androidagent.harness.scheduling.android.AndroidRunCheckpointStore
@@ -79,8 +79,12 @@ object SampleRuntime {
     @Volatile
     private var longTasks: LongTaskCoordinator? = null
 
-    private val signalJournal = InMemorySignalJournal()
-    private val outcomeJournal = InMemoryOutcomeJournal()
+    @Volatile
+    private var signalJournal: FileSignalJournal? = null
+
+    @Volatile
+    private var outcomeJournal: FileOutcomeJournal? = null
+
     private val voiceSessions = InMemoryVoiceSessionRepository(persistenceEnabled = false)
     private val activeRuns = ConcurrentHashMap<String, AgentRunHandle>()
     private val traces = CopyOnWriteArrayList<AgentEvent>()
@@ -236,9 +240,9 @@ object SampleRuntime {
     fun longTasks(context: Context): LongTaskCoordinator {
         return longTasks ?: synchronized(this) {
             longTasks ?: LongTaskCoordinator(
-                runner = PeriodicRunner { trigger, control ->
+                runner = LongTaskPeriodicRunner { trigger, control, budget ->
                     SamplePeriodicRunner(context.applicationContext)
-                        .dispatchAgentBurst(trigger, control)
+                        .dispatchAgentBurst(trigger, control, budget)
                 },
                 checkpoints = checkpoints(context.applicationContext),
                 traceSink = traceSink()
@@ -265,9 +269,45 @@ object SampleRuntime {
             .count { checkpoint -> coordinator.stop(checkpoint.jobId, reason) }
     }
 
-    fun signals(): SignalJournal = signalJournal
+    fun disableScheduleForStop(
+        context: Context,
+        scheduleId: String
+    ): Boolean {
+        require(scheduleId.isNotBlank())
+        val repository = schedules(context)
+        repeat(MAX_SCHEDULE_STOP_CAS_ATTEMPTS) {
+            val current = repository.get(scheduleId) ?: return false
+            if (!current.enabled) return true
+            val disabled = current.copy(
+                revision = current.revision + 1L,
+                enabled = false
+            )
+            if (
+                runCatching {
+                    repository.put(disabled, expectedRevision = current.revision)
+                }.isSuccess
+            ) {
+                return true
+            }
+        }
+        return false
+    }
 
-    fun outcomes(): OutcomeJournal = outcomeJournal
+    fun signals(context: Context): SignalJournal {
+        return signalJournal ?: synchronized(this) {
+            signalJournal ?: FileSignalJournal(
+                File(context.applicationContext.filesDir, "agent-feedback")
+            ).also { created -> signalJournal = created }
+        }
+    }
+
+    fun outcomes(context: Context): OutcomeJournal {
+        return outcomeJournal ?: synchronized(this) {
+            outcomeJournal ?: FileOutcomeJournal(
+                File(context.applicationContext.filesDir, "agent-feedback")
+            ).also { created -> outcomeJournal = created }
+        }
+    }
 
     fun voiceSessions(): VoiceSessionRepository = voiceSessions
 
@@ -317,7 +357,11 @@ object SampleRuntime {
 
     fun approvalRecords() = approvalJournal.snapshot()
 
-    fun clearFeedback(): Int = signalJournal.clear() + outcomeJournal.clear()
+    fun clearFeedback(context: Context): Int {
+        val signals = signals(context) as FileSignalJournal
+        val outcomes = outcomes(context) as FileOutcomeJournal
+        return signals.clear() + outcomes.clear()
+    }
 
     fun clearOperationalJournals(): Int {
         val count = traces.size + occurrenceReceipts.size + approvalJournal.snapshot().size
@@ -329,4 +373,5 @@ object SampleRuntime {
 
     private const val MAX_TRACE_EVENTS = 500
     private const val MAX_OCCURRENCE_RECEIPTS = 200
+    private const val MAX_SCHEDULE_STOP_CAS_ATTEMPTS = 3
 }

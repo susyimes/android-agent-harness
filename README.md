@@ -11,14 +11,14 @@ The repository also ships an installable sample app. It is a reference compositi
 ## What is included
 
 - A cancellable and transactional run lifecycle with deadlines, per-session isolation, late-result fences, stable events, traces, and deterministic replay checks.
-- CCP V2 context compilation with `ContextNeedSpec`, source trust/privacy/risk, conflict resolution, token and item budgets, `EvidencePack`, `RouteGate`, and prompt rendering.
+- CCP V2 context compilation with `ContextNeedSpec`, named-source availability checks, source trust/privacy/risk, conflict resolution, deterministic audited compression, token and item budgets, `EvidencePack`, `RouteGate`, and prompt rendering.
 - A State Vault for memory, skill, and persona candidates with validation, evaluation, exact approval, promotion, revision history, and rollback.
 - A general effect-approval protocol bound to target, argument hash, risk, evidence, and expiry.
 - Typed tool result envelopes with bounded content, structured data, effect/evidence references, and expiring raw-payload references.
-- Reliable schedules, occurrences, leases, checkpoints, missed-run policy, Cron, and LongTask semantics.
+- Reliable schedules, occurrences, leases, checkpoints, explicit `SKIP`/`RUN_ONCE`/`NEXT_WINDOW` missed-run behavior, Cron, and LongTask semantics.
 - Heartbeat, Dream, Proactive, Home Brief, and Self Check with conservative local fallbacks and user-controlled initiative.
 - Android adapters for permissions, Stats, Todo, local documents, State/House, location, calendar, notifications, scheduling, accessibility Phone Use, visual observation, sensors, STT, and TTS.
-- True streaming for the OpenAI-compatible transport, file/image attachments, a global Stop control, and a strict Phone Use state machine.
+- True streaming for the OpenAI-compatible transport, serialized late-event fencing, file/image attachments, a global Stop control, and a strict Phone Use state machine.
 
 ## Sample app
 
@@ -36,7 +36,7 @@ The v0.4.0 sample exposes:
 - Agent House editing plus skills and memory review.
 - Stats and Todo with typed unavailable states and governed durable changes.
 - State / Obsidian view for memory, skill, and persona candidates, evidence, effects, evaluations, promotion, and rollback.
-- Automation controls for Heartbeat, Dream, Proactive, Cron, and LongTask, including revision, next run, receipts, checkpoints, pause, delete, and manual run.
+- Automation controls for Heartbeat, Dream, Proactive, Cron, and LongTask, including revision, next run, receipts, checkpoints, pause, durable Stop, delete, and manual run.
 - Permission disclosures and direct navigation to the relevant Android settings.
 - Debug / Replay with stable events, approvals, occurrence receipts, self-check, deterministic trace evaluation, and redacted export.
 - Data & Retention controls for domain-scoped export, retention, exact-approved deletion, and credential-boundary disclosure.
@@ -227,8 +227,10 @@ Visual observation is optional, host-enabled, redacted, and represented by an ex
 - Dream can create a pending reflection candidate but cannot promote it.
 - Workers dispatch typed occurrences into `AgentSdk`; they do not contain another model/tool loop.
 - Schedule revisions, unique occurrence ids, leases, execution windows, checkpoints, and cancellation fences prevent stale or duplicate work.
-- Boot/package-update restoration only re-enqueues schedules that remain enabled.
-- Visible LongTask work uses an optional foreground service with a notification Stop action.
+- Boot/package-update restoration only re-enqueues schedules that remain enabled, applies the configured missed-run policy, and repairs a recurring chain after a completed occurrence is replayed.
+- Each LongTask burst receives its declared `AgentRunBudget`; evidence and occurred-effect references are carried into the durable checkpoint.
+- Visible LongTask work uses an optional foreground service with a notification Stop action. Stop persists a disabled schedule revision, cancels WorkManager work, and fences late completion.
+- Proactive signal/outcome journals use bounded app-private atomic files, so cooldown and daily-cap evidence survives normal Android process death.
 
 ## Verification
 
@@ -257,7 +259,7 @@ The sample instrumentation suite checks navigation to every documented product s
 ## Storage and privacy
 
 - Provider secrets use Android Keystore-backed encryption in the sample.
-- Sessions, House, State, Todo, schedules, leases, and checkpoints use app-private file adapters; these adapters are not encrypted databases.
+- Sessions, House, State, Todo, schedules, leases, checkpoints, and feedback journals use app-private file adapters; these adapters are not encrypted databases.
 - Raw image/audio payloads are optional, bounded, and temporary.
 - Android backup is disabled for the sample.
 - Data & Retention exposes per-domain export, bounded retention, and explicit deletion.
@@ -273,6 +275,14 @@ A production host should replace file adapters when it needs database encryption
 - There is no bundled offline foundation model.
 - Artifacts are published to a repository-local Maven directory, not Maven Central.
 - Release APK signing remains a release-owner responsibility; debug APKs are for development and sideloading.
+
+## Known open review items
+
+The following security/approval items are intentionally not addressed by the current implementation pass:
+
+- Direct Provider composition still recognizes the textual `<policy-context` marker; hosts must not allow untrusted callers to construct policy-tagged `AgentContextItem` values.
+- Schedule approval hashing does not yet include every behavior-affecting `ScheduleSpec` field.
+- `AndroidPhoneAgent.request()` callers must currently supply the generic `AgentApprovalCoordinator` on the returned request, as the sample does; the legacy configuration gate is not bridged automatically.
 
 The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.4.0.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
 

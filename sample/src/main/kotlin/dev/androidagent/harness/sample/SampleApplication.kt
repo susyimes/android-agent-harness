@@ -47,7 +47,12 @@ class SampleApplication : Application() {
                 scheduleId,
                 reason
             )
-            stopped > 0 || backend.cancel(scheduleId)
+            val disabled = SampleRuntime.disableScheduleForStop(
+                this@SampleApplication,
+                scheduleId
+            )
+            val cancelled = backend.cancel(scheduleId)
+            stopped > 0 || disabled || cancelled
         }
     }
 

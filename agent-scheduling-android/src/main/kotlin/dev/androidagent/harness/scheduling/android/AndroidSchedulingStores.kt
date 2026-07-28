@@ -5,6 +5,7 @@ import android.annotation.TargetApi
 import android.content.Context
 import android.os.Build
 import android.system.Os
+import dev.androidagent.harness.scheduling.JobCompletionDispositionStore
 import dev.androidagent.harness.scheduling.JobLeaseStore
 import dev.androidagent.harness.scheduling.LeaseResult
 import dev.androidagent.harness.scheduling.LongTaskCheckpoint
@@ -153,7 +154,7 @@ class AndroidRunCheckpointStore(
 class AndroidJobLeaseStore(
     context: Context,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis
-) : JobLeaseStore {
+) : JobLeaseStore, JobCompletionDispositionStore {
     private val preferences = context.applicationContext.getSharedPreferences(
         "agent_job_leases",
         Context.MODE_PRIVATE
@@ -181,10 +182,28 @@ class AndroidJobLeaseStore(
 
     @Synchronized
     override fun release(jobId: String, occurrenceId: String, completed: Boolean) {
+        releaseWithDisposition(
+            jobId,
+            occurrenceId,
+            completed,
+            continueSchedule = true
+        )
+    }
+
+    @Synchronized
+    override fun releaseWithDisposition(
+        jobId: String,
+        occurrenceId: String,
+        completed: Boolean,
+        continueSchedule: Boolean
+    ) {
         val editor = preferences.edit()
         val key = key(jobId, occurrenceId)
         if (completed) {
-            editor.putString(key, "C:${nowEpochMillis()}")
+            editor.putString(
+                key,
+                "C:${nowEpochMillis()}:${if (continueSchedule) 1 else 0}"
+            )
         } else {
             editor.remove(key)
         }
@@ -192,11 +211,25 @@ class AndroidJobLeaseStore(
         compactCompleted()
     }
 
+    @Synchronized
+    override fun shouldContinueSchedule(
+        jobId: String,
+        occurrenceId: String
+    ): Boolean? {
+        val value = preferences.getString(key(jobId, occurrenceId), null)
+            ?.takeIf { raw -> raw.startsWith("C:") }
+            ?: return null
+        val parts = value.split(':')
+        return parts.getOrNull(2)?.let { flag -> flag != "0" } ?: true
+    }
+
     private fun compactCompleted() {
         val completed = preferences.all.mapNotNull { (key, raw) ->
             val value = raw as? String ?: return@mapNotNull null
-            value.removePrefix("C:").toLongOrNull()
-                ?.takeIf { value.startsWith("C:") }
+            value.takeIf { it.startsWith("C:") }
+                ?.split(':')
+                ?.getOrNull(1)
+                ?.toLongOrNull()
                 ?.let { timestamp -> key to timestamp }
         }.sortedByDescending(Pair<String, Long>::second)
         if (completed.size <= MAX_COMPLETED) return

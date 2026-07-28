@@ -8,6 +8,7 @@ public final class dev/androidagent/harness/context/CcpAgentContextProvider : de
 public final class dev/androidagent/harness/context/CcpV2ContextEngine {
 	public fun <init> (Ljava/util/List;Ldev/androidagent/harness/context/ContextNeedAnalyzer;Ldev/androidagent/harness/context/ContextRouteGate;Ldev/androidagent/harness/context/PromptBundleRenderer;)V
 	public synthetic fun <init> (Ljava/util/List;Ldev/androidagent/harness/context/ContextNeedAnalyzer;Ldev/androidagent/harness/context/ContextRouteGate;Ldev/androidagent/harness/context/PromptBundleRenderer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/List;Ldev/androidagent/harness/context/ContextNeedAnalyzer;Ldev/androidagent/harness/context/ContextRouteGate;Ldev/androidagent/harness/context/PromptBundleRenderer;Ldev/androidagent/harness/context/ContextCandidateCompressor;)V
 	public final fun compile (Ldev/androidagent/harness/context/ContextEngineRequest;)Ldev/androidagent/harness/context/ContextCompilation;
 }
 
@@ -56,6 +57,10 @@ public final class dev/androidagent/harness/context/ContextCandidate {
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 	public final fun tokenCost ()I
+}
+
+public abstract interface class dev/androidagent/harness/context/ContextCandidateCompressor {
+	public abstract fun compress (Ldev/androidagent/harness/context/ContextCandidate;I)Ldev/androidagent/harness/context/ContextCandidate;
 }
 
 public final class dev/androidagent/harness/context/ContextCompilation {
@@ -286,6 +291,16 @@ public final class dev/androidagent/harness/context/ContextTrust : java/lang/Enu
 public final class dev/androidagent/harness/context/DelimitedPromptBundleRenderer : dev/androidagent/harness/context/PromptBundleRenderer {
 	public fun <init> ()V
 	public fun render (Ldev/androidagent/harness/context/EvidencePack;)Ldev/androidagent/harness/context/PromptBundle;
+}
+
+public final class dev/androidagent/harness/context/DeterministicContextCandidateCompressor : dev/androidagent/harness/context/ContextCandidateCompressor {
+	public static final field APPROXIMATE_CHARS_PER_TOKEN I
+	public static final field CONTEXT_OVERHEAD_CHARS I
+	public static final field MINIMUM_BODY_CHARS I
+	public fun <init> ()V
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun compress (Ldev/androidagent/harness/context/ContextCandidate;I)Ldev/androidagent/harness/context/ContextCandidate;
 }
 
 public final class dev/androidagent/harness/context/DeterministicContextRouteGate : dev/androidagent/harness/context/ContextRouteGate {

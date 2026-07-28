@@ -9,6 +9,8 @@ import dev.androidagent.harness.sdk.TraceSink
 import java.io.Serializable
 import java.util.concurrent.ConcurrentHashMap
 
+private const val MAX_CHECKPOINT_REFS = 256
+
 enum class LongTaskStatus {
     READY,
     RUNNING,
@@ -71,6 +73,32 @@ data class LongTaskCheckpoint(
         require(effectRefs.none(String::isBlank))
         require(repeatedFailureKey == null || repeatedFailureKey.isNotBlank())
         require(repeatedFailureCount >= 0)
+    }
+}
+
+data class LongTaskBurstResult(
+    val receipt: DispatchReceipt,
+    val evidenceRefs: List<String> = emptyList(),
+    val effectRefs: List<String> = emptyList()
+) {
+    init {
+        require(evidenceRefs.none(String::isBlank))
+        require(effectRefs.none(String::isBlank))
+    }
+}
+
+fun interface LongTaskPeriodicRunner : PeriodicRunner {
+    fun dispatchLongTask(
+        trigger: OccurrenceTrigger,
+        control: RunControl,
+        budget: AgentRunBudget
+    ): LongTaskBurstResult
+
+    override fun dispatch(
+        trigger: OccurrenceTrigger,
+        control: RunControl
+    ): DispatchReceipt {
+        error("LongTaskPeriodicRunner requires an explicit burst budget.")
     }
 }
 
@@ -199,32 +227,51 @@ class LongTaskCoordinator(
             status = LongTaskStatus.RUNNING,
             updatedAtEpochMillis = now
         )
-        saveCheckpoint(running, current.revision)
-        val receipt = try {
-            runner.dispatch(
-                OccurrenceTrigger(
-                    scheduleId = spec.id,
-                    scheduleRevision = 1,
-                    targetType = ScheduleTargetType.LONG_TASK,
-                    occurrenceId = occurrenceId,
-                    plannedAtEpochMillis = now,
-                    actualAtEpochMillis = now,
-                    attempt = 1,
-                    reason = reason,
-                    authorization = authorization
-                ),
-                control
-            )
+        try {
+            saveCheckpoint(running, current.revision)
         } catch (error: RuntimeException) {
-            DispatchReceipt(
-                occurrenceId,
-                DispatchStatus.FAILED,
-                error.message ?: "LongTask runner failed.",
-                retryable = true
+            activeControls.remove(spec.id, control)
+            val latest = checkpoints.get(spec.id)
+            if (
+                latest != null &&
+                latest.revision > current.revision &&
+                (latest.status == LongTaskStatus.PAUSED ||
+                    latest.status in TERMINAL_STATUSES)
+            ) {
+                return latest
+            }
+            throw error
+        }
+        val trigger = OccurrenceTrigger(
+            scheduleId = spec.id,
+            scheduleRevision = 1,
+            targetType = ScheduleTargetType.LONG_TASK,
+            occurrenceId = occurrenceId,
+            plannedAtEpochMillis = now,
+            actualAtEpochMillis = now,
+            attempt = 1,
+            reason = reason,
+            authorization = authorization
+        )
+        val burstResult = try {
+            if (runner is LongTaskPeriodicRunner) {
+                runner.dispatchLongTask(trigger, control, spec.burstBudget)
+            } else {
+                LongTaskBurstResult(runner.dispatch(trigger, control))
+            }
+        } catch (error: RuntimeException) {
+            LongTaskBurstResult(
+                DispatchReceipt(
+                    occurrenceId,
+                    DispatchStatus.FAILED,
+                    error.message ?: "LongTask runner failed.",
+                    retryable = true
+                )
             )
         } finally {
             activeControls.remove(spec.id, control)
         }
+        val receipt = burstResult.receipt
         val latest = checkpoints.get(spec.id) ?: running
         if (latest.status == LongTaskStatus.CANCELLED) {
             return latest.copy(
@@ -237,6 +284,8 @@ class LongTaskCoordinator(
                     retryable = false
                 ),
                 nextAction = null,
+                evidenceRefs = mergeRefs(latest.evidenceRefs, burstResult.evidenceRefs),
+                effectRefs = mergeRefs(latest.effectRefs, burstResult.effectRefs),
                 updatedAtEpochMillis = clock.nowEpochMillis()
             ).also { value -> saveCheckpoint(value, latest.revision) }
         }
@@ -255,6 +304,8 @@ class LongTaskCoordinator(
                     ?: current.nextAction
                     ?: receipt.checkpointRef
                     ?: "Resume from burst $burst.",
+                evidenceRefs = mergeRefs(latest.evidenceRefs, burstResult.evidenceRefs),
+                effectRefs = mergeRefs(latest.effectRefs, burstResult.effectRefs),
                 updatedAtEpochMillis = clock.nowEpochMillis()
             ).also { value -> saveCheckpoint(value, latest.revision) }
         }
@@ -269,6 +320,8 @@ class LongTaskCoordinator(
                     retryable = false
                 ),
                 nextAction = null,
+                evidenceRefs = mergeRefs(latest.evidenceRefs, burstResult.evidenceRefs),
+                effectRefs = mergeRefs(latest.effectRefs, burstResult.effectRefs),
                 updatedAtEpochMillis = clock.nowEpochMillis()
             ).also { value -> saveCheckpoint(value, latest.revision) }
         }
@@ -303,6 +356,8 @@ class LongTaskCoordinator(
                         ?: "Resume from burst $burst."
                 else -> null
             },
+            evidenceRefs = mergeRefs(latest.evidenceRefs, burstResult.evidenceRefs),
+            effectRefs = mergeRefs(latest.effectRefs, burstResult.effectRefs),
             repeatedFailureKey = failureKey,
             repeatedFailureCount = repeated,
             lastReceipt = receipt,
@@ -405,6 +460,15 @@ class LongTaskCoordinator(
         } catch (_: RuntimeException) {
             // Checkpoint persistence is authoritative; trace delivery is observational.
         }
+    }
+
+    private fun mergeRefs(
+        existing: List<String>,
+        current: List<String>
+    ): List<String> {
+        return (existing + current)
+            .distinct()
+            .takeLast(MAX_CHECKPOINT_REFS)
     }
 
     private companion object {

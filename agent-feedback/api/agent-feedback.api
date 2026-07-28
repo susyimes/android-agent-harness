@@ -126,6 +126,10 @@ public final class dev/androidagent/harness/feedback/FeedbackFinding {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class dev/androidagent/harness/feedback/FeedbackJournalMaintenance {
+	public abstract fun clear ()I
+}
+
 public final class dev/androidagent/harness/feedback/FeedbackSignal : java/io/Serializable {
 	public fun <init> (Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;)V
 	public synthetic fun <init> (Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -192,6 +196,34 @@ public final class dev/androidagent/harness/feedback/FeedbackSignalType : java/l
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/FeedbackSignalType;
 	public static fun values ()[Ldev/androidagent/harness/feedback/FeedbackSignalType;
+}
+
+public final class dev/androidagent/harness/feedback/FileOutcomeJournal : dev/androidagent/harness/feedback/FeedbackJournalMaintenance, dev/androidagent/harness/feedback/OutcomeJournal {
+	public static final field Companion Ldev/androidagent/harness/feedback/FileOutcomeJournal$Companion;
+	public static final field DEFAULT_MAX_ENTRIES I
+	public static final field DEFAULT_RETENTION_MILLIS J
+	public fun <init> (Ljava/io/File;IJLdev/androidagent/harness/AgentClock;)V
+	public synthetic fun <init> (Ljava/io/File;IJLdev/androidagent/harness/AgentClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun append (Ldev/androidagent/harness/feedback/RunOutcomeRecord;)V
+	public fun clear ()I
+	public fun query (J)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/FileOutcomeJournal$Companion {
+}
+
+public final class dev/androidagent/harness/feedback/FileSignalJournal : dev/androidagent/harness/feedback/FeedbackJournalMaintenance, dev/androidagent/harness/feedback/SignalJournal {
+	public static final field Companion Ldev/androidagent/harness/feedback/FileSignalJournal$Companion;
+	public static final field DEFAULT_MAX_ENTRIES I
+	public static final field DEFAULT_RETENTION_MILLIS J
+	public fun <init> (Ljava/io/File;IJLdev/androidagent/harness/AgentClock;)V
+	public synthetic fun <init> (Ljava/io/File;IJLdev/androidagent/harness/AgentClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun append (Ldev/androidagent/harness/feedback/FeedbackSignal;)V
+	public fun clear ()I
+	public fun query (J)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/FileSignalJournal$Companion {
 }
 
 public final class dev/androidagent/harness/feedback/FindingSeverity : java/lang/Enum {

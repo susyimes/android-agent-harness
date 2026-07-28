@@ -95,6 +95,51 @@ class CcpV2ContextEngineTest {
     }
 
     @Test
+    fun missingRequestedSourceIsAuditedAndRoutesToAskUser() {
+        val engine = CcpV2ContextEngine(
+            listOf(NamedContextSource("available") { _, _ -> emptyList() })
+        )
+
+        val compiled = engine.compile(
+            request().copy(requestedSourceIds = setOf("missing"))
+        )
+
+        assertEquals(ContextRouteAction.ASK_USER, compiled.route.action)
+        assertTrue(
+            compiled.evidencePack.droppedCritical.any { dropped ->
+                dropped.sourceId == "missing" &&
+                    dropped.reason == ContextDropReason.SOURCE_FAILED
+            }
+        )
+    }
+
+    @Test
+    fun oversizedCandidateIsDeterministicallyCompressedAndAudited() {
+        val engine = engine(
+            candidate(
+                id = "compress-me",
+                body = "A".repeat(400),
+                trust = ContextTrust.APPLICATION_STATE,
+                estimatedTokens = 100
+            )
+        )
+
+        val compiled = engine.compile(
+            request(tokenBudget = 30, outputReserve = 10)
+        )
+        val item = compiled.evidencePack.items.single()
+
+        assertTrue("compressed=true" in item.selectionReason)
+        assertEquals(20, item.tokenCost)
+        assertTrue(item.body.length < 400)
+        assertEquals(
+            listOf("compress-me"),
+            compiled.promptBundle.budgetReport.compressedIds
+        )
+        assertEquals(20, compiled.promptBundle.budgetReport.usedTokens)
+    }
+
+    @Test
     fun externalTextStaysLabeledAsUntrustedData() {
         val legacy = LegacyContextSourceAdapter(
             listOf(

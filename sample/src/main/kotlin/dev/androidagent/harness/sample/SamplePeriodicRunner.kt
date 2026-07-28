@@ -3,6 +3,7 @@ package dev.androidagent.harness.sample
 
 import android.content.Context
 import dev.androidagent.harness.AgentHarnessConfig
+import dev.androidagent.harness.AgentHarnessTraceEvent
 import dev.androidagent.harness.AgentProviderFactory
 import dev.androidagent.harness.context.NamedContextSource
 import dev.androidagent.harness.context.ContextPrivacy
@@ -30,6 +31,7 @@ import dev.androidagent.harness.provider.openai.OpenAiCompatibleConfig
 import dev.androidagent.harness.provider.openai.OpenAiProviderFactories
 import dev.androidagent.harness.scheduling.DispatchReceipt
 import dev.androidagent.harness.scheduling.DispatchStatus
+import dev.androidagent.harness.scheduling.LongTaskBurstResult
 import dev.androidagent.harness.scheduling.LongTaskSpec
 import dev.androidagent.harness.scheduling.OccurrenceAuthorizationSnapshot
 import dev.androidagent.harness.scheduling.OccurrenceTrigger
@@ -68,7 +70,7 @@ class SamplePeriodicRunner(
         ) {
             dispatchLongTask(trigger, control)
         } else {
-            dispatchAgentRun(trigger, control)
+            dispatchAgentRun(trigger, control).receipt
         }
     }
 
@@ -97,12 +99,7 @@ class SamplePeriodicRunner(
             resumable = true,
             maxBursts = 8,
             maxRepeatedFailures = 3,
-            burstBudget = AgentRunBudget(
-                maxProviderSteps = 8,
-                maxToolCalls = 0,
-                maxWallClockMillis = 2 * 60_000L,
-                maxRepeatedFailures = 3
-            )
+            burstBudget = longTaskBurstBudget()
         )
         control.onCancel { reason -> coordinator.stop(spec.id, reason) }
         val checkpoint = coordinator.dispatchBurst(
@@ -133,49 +130,67 @@ class SamplePeriodicRunner(
 
     internal fun dispatchAgentBurst(
         trigger: OccurrenceTrigger,
-        control: RunControl
-    ): DispatchReceipt = dispatchAgentRun(trigger, control)
+        control: RunControl,
+        budget: AgentRunBudget
+    ): LongTaskBurstResult {
+        val execution = dispatchAgentRun(trigger, control, budget)
+        return LongTaskBurstResult(
+            receipt = execution.receipt,
+            evidenceRefs = execution.evidenceRefs,
+            effectRefs = execution.effectRefs
+        )
+    }
 
     private fun dispatchAgentRun(
         trigger: OccurrenceTrigger,
-        control: RunControl
-    ): DispatchReceipt {
+        control: RunControl,
+        budgetOverride: AgentRunBudget? = null
+    ): AgentRunExecution {
         if (
             trigger.targetType ==
             dev.androidagent.harness.scheduling.ScheduleTargetType.PROACTIVE &&
             SamplePreferences(appContext).initiativeLevel() == InitiativeLevel.OFF.name
         ) {
-            return receipt(
-                trigger,
-                DispatchStatus.SKIPPED_CONSTRAINT,
-                "Proactive initiative is off."
+            return AgentRunExecution(
+                receipt(
+                    trigger,
+                    DispatchStatus.SKIPPED_CONSTRAINT,
+                    "Proactive initiative is off."
+                )
             )
         }
         val profile = ProviderSettingsRepository(appContext).profile()
-        val providerFactory = providerFactory(profile) ?: return receipt(
-            trigger,
-            DispatchStatus.SKIPPED_AUTHORIZATION,
-            "Provider credential is unavailable."
+        val providerFactory = providerFactory(profile) ?: return AgentRunExecution(
+            receipt(
+                trigger,
+                DispatchStatus.SKIPPED_AUTHORIZATION,
+                "Provider credential is unavailable."
+            )
         )
         val preparation = prepareAutomation(trigger)
         if (preparation.skipReason != null) {
-            return receipt(
-                trigger,
-                DispatchStatus.SKIPPED_CONSTRAINT,
-                preparation.skipReason
+            return AgentRunExecution(
+                receipt(
+                    trigger,
+                    DispatchStatus.SKIPPED_CONSTRAINT,
+                    preparation.skipReason
+                )
             )
         }
         val sdk = AgentSdk(SampleRuntime.sessions(appContext))
         val runTrigger = trigger.targetType.toRunTrigger()
+        val runBudget = budgetOverride ?: defaultAutomationBudget()
         val request = AgentRunRequest(
             sessionId = "automation-${trigger.scheduleId}",
             userInput = preparation.prompt,
             providerFactory = providerFactory,
             harnessConfig = AgentHarnessConfig(
-                maxProviderSteps = 8,
-                maxToolCallsPerStep = 1,
-                maxToolCallsTotal = 0,
-                maxRepeatedFailures = 3
+                maxProviderSteps = runBudget.maxProviderSteps,
+                maxToolCallsPerStep = runBudget.maxToolCalls.coerceIn(1, 32),
+                maxToolCallsTotal = runBudget.maxToolCalls,
+                maxRepeatedFailures = runBudget.maxRepeatedFailures,
+                maxInputTokens = runBudget.maxInputTokens,
+                maxOutputTokens = runBudget.maxOutputTokens
             ),
             contextSources = listOf(
                 NamedContextSource(
@@ -202,12 +217,7 @@ class SamplePeriodicRunner(
             ),
             runPolicy = AgentRunPolicy(
                 trigger = runTrigger,
-                budget = AgentRunBudget(
-                    maxProviderSteps = 8,
-                    maxToolCalls = 0,
-                    maxWallClockMillis = 2 * 60_000L,
-                    maxRepeatedFailures = 3
-                ),
+                budget = runBudget,
                 toolProfileId = "automation-read-only"
             ),
             traceSink = SampleRuntime.traceSink()
@@ -216,17 +226,22 @@ class SamplePeriodicRunner(
             sdk.run(request)
         } catch (error: RuntimeException) {
             sdk.close()
-            return receipt(
-                trigger,
-                DispatchStatus.FAILED,
-                error.message ?: "Could not start scheduled Agent run.",
-                retryable = true
+            return AgentRunExecution(
+                receipt(
+                    trigger,
+                    DispatchStatus.FAILED,
+                    error.message ?: "Could not start scheduled Agent run.",
+                    retryable = true
+                )
             )
         }
         SampleRuntime.registerRun(handle)
         control.onCancel { reason -> handle.cancel(reason) }
         val outcome = try {
-            handle.await(130, TimeUnit.SECONDS)
+            handle.await(
+                runBudget.maxWallClockMillis + RUN_AWAIT_GRACE_MILLIS,
+                TimeUnit.MILLISECONDS
+            )
         } catch (error: RuntimeException) {
             handle.cancel("Scheduled wait failed.")
             AgentRunOutcome.Failure(
@@ -240,13 +255,26 @@ class SamplePeriodicRunner(
             SampleRuntime.unregisterRun(handle.runId)
             sdk.close()
         }
+        val evidenceRefs = (outcome as? AgentRunOutcome.Success)
+            ?.result
+            ?.trace
+            ?.evidenceRefs()
+            .orEmpty()
+        val effectRefs = (outcome as? AgentRunOutcome.Success)
+            ?.result
+            ?.trace
+            ?.effectRefs()
+            .orEmpty()
         val result = when (outcome) {
             is AgentRunOutcome.Success -> {
                 if (
                     trigger.targetType ==
                     dev.androidagent.harness.scheduling.ScheduleTargetType.LONG_TASK
                 ) {
-                    longTaskReceipt(trigger, outcome.result.output)
+                    longTaskReceipt(
+                        trigger,
+                        outcome.result.output
+                    )
                 } else {
                     receipt(
                         trigger,
@@ -279,7 +307,7 @@ class SamplePeriodicRunner(
         ) {
             createDreamCandidate(trigger, handle.runId, outcome.result.output)
         }
-        SampleRuntime.outcomes().append(
+        SampleRuntime.outcomes(appContext).append(
             RunOutcomeRecord(
                 id = UUID.randomUUID().toString(),
                 runId = handle.runId,
@@ -293,13 +321,15 @@ class SamplePeriodicRunner(
                     DispatchStatus.FAILED -> OutcomeStatus.FAILED
                     else -> OutcomeStatus.SKIPPED
                 },
+                effectRefs = effectRefs,
+                evidenceRefs = evidenceRefs,
                 errorCategory = result.status.takeIf {
                     it != DispatchStatus.COMPLETED
                 }?.name,
                 createdAtEpochMillis = System.currentTimeMillis()
             )
         )
-        return result
+        return AgentRunExecution(result, evidenceRefs, effectRefs)
     }
 
     private fun providerFactory(profile: ProviderProfile): AgentProviderFactory? {
@@ -368,7 +398,7 @@ class SamplePeriodicRunner(
                 } else {
                     0
                 }
-                val repeatedFailures = SampleRuntime.outcomes().query()
+                val repeatedFailures = SampleRuntime.outcomes(appContext).query()
                     .takeLast(20)
                     .count { value -> value.status == OutcomeStatus.FAILED }
                 val report = HeartbeatEngine().inspect(
@@ -385,7 +415,9 @@ class SamplePeriodicRunner(
                         )
                     )
                 )
-                report.activationSignals.forEach(SampleRuntime.signals()::append)
+                report.activationSignals.forEach(
+                    SampleRuntime.signals(appContext)::append
+                )
                 AutomationPreparation(
                     prompt = buildString {
                         appendLine(
@@ -401,7 +433,7 @@ class SamplePeriodicRunner(
             }
             dev.androidagent.harness.scheduling.ScheduleTargetType.DREAM -> {
                 val report = DreamEngine().reflect(
-                    outcomes = SampleRuntime.outcomes().query(),
+                    outcomes = SampleRuntime.outcomes(appContext).query(),
                     pendingCandidates = SampleRuntime.state(appContext).snapshot().candidates
                 )
                 AutomationPreparation(
@@ -437,8 +469,8 @@ class SamplePeriodicRunner(
                     preferences.proactiveDailyCap()
                 }
                 val decisions = ProactiveArbiter(
-                    SampleRuntime.signals(),
-                    SampleRuntime.outcomes()
+                    SampleRuntime.signals(appContext),
+                    SampleRuntime.outcomes(appContext)
                 ).evaluate(
                     ProactivePolicy(
                         initiative = level,
@@ -578,15 +610,52 @@ class SamplePeriodicRunner(
         checkpointRef = checkpointRef?.take(2_000)
     )
 
+    private fun List<AgentHarnessTraceEvent>.evidenceRefs(): List<String> {
+        return buildList {
+            filterIsInstance<AgentHarnessTraceEvent.ContextLoaded>()
+                .forEach { event -> addAll(event.itemIds) }
+            filterIsInstance<AgentHarnessTraceEvent.ToolExecuted>()
+                .forEach { event ->
+                    addAll(event.envelope?.evidence.orEmpty().map { value -> value.id })
+                }
+        }.distinct().take(MAX_RUN_REFS)
+    }
+
+    private fun List<AgentHarnessTraceEvent>.effectRefs(): List<String> {
+        return filterIsInstance<AgentHarnessTraceEvent.ToolExecuted>()
+            .mapNotNull { event -> event.envelope?.effect }
+            .filter { effect -> effect.occurred }
+            .map { effect -> effect.effectId }
+            .distinct()
+            .take(MAX_RUN_REFS)
+    }
+
     private data class AutomationPreparation(
         val prompt: String,
         val skipReason: String? = null
+    )
+
+    private data class AgentRunExecution(
+        val receipt: DispatchReceipt,
+        val evidenceRefs: List<String> = emptyList(),
+        val effectRefs: List<String> = emptyList()
     )
 
     companion object {
         private const val LONG_TASK_DEFAULT_LIFETIME_MILLIS = 7L * 24 * 60 * 60_000L
         private const val LONG_TASK_DONE = "[LONGTASK_DONE]"
         private const val LONG_TASK_CONTINUE = "[LONGTASK_CONTINUE]"
+        private const val RUN_AWAIT_GRACE_MILLIS = 5_000L
+        private const val MAX_RUN_REFS = 256
+
+        private fun defaultAutomationBudget() = AgentRunBudget(
+            maxProviderSteps = 8,
+            maxToolCalls = 0,
+            maxWallClockMillis = 2 * 60_000L,
+            maxRepeatedFailures = 3
+        )
+
+        private fun longTaskBurstBudget() = defaultAutomationBudget()
 
         fun longTaskScopeHash(
             scheduleId: String,

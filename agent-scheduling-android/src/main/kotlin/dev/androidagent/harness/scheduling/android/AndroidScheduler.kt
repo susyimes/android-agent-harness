@@ -16,8 +16,10 @@ import androidx.work.WorkerParameters
 import dev.androidagent.harness.scheduling.DispatchReceipt
 import dev.androidagent.harness.scheduling.DispatchStatus
 import dev.androidagent.harness.scheduling.DeliveryPolicy
+import dev.androidagent.harness.scheduling.JobCompletionDispositionStore
 import dev.androidagent.harness.scheduling.JobLeaseStore
 import dev.androidagent.harness.scheduling.LeaseResult
+import dev.androidagent.harness.scheduling.MissedRunPolicy
 import dev.androidagent.harness.scheduling.MutableRunControl
 import dev.androidagent.harness.scheduling.OccurrenceAuthorizationSnapshot
 import dev.androidagent.harness.scheduling.OccurrenceTrigger
@@ -48,6 +50,31 @@ object AndroidOccurrenceHostRegistry {
     var host: AndroidOccurrenceHost? = null
 }
 
+internal enum class OccurrenceCompletionAction {
+    RETRY,
+    RESCHEDULE,
+    STOP
+}
+
+internal object AndroidOccurrenceCompletionPolicy {
+    fun decide(
+        receipt: DispatchReceipt,
+        retryWindowOpen: Boolean
+    ): OccurrenceCompletionAction {
+        return when {
+            receipt.status == DispatchStatus.CANCELLED ->
+                OccurrenceCompletionAction.STOP
+
+            receipt.status == DispatchStatus.FAILED &&
+                receipt.retryable &&
+                retryWindowOpen ->
+                OccurrenceCompletionAction.RETRY
+
+            else -> OccurrenceCompletionAction.RESCHEDULE
+        }
+    }
+}
+
 class AndroidSchedulerBackend(
     context: Context,
     private val workManager: WorkManager = WorkManager.getInstance(context.applicationContext),
@@ -64,7 +91,16 @@ class AndroidSchedulerBackend(
                 "Schedule is disabled; existing work was cancelled."
             )
         }
-        return enqueueNext(spec, nowEpochMillis())
+        val now = nowEpochMillis()
+        val plan = ScheduleCalculator.recoveryPlan(spec, now)
+            ?: return ScheduleReceipt(
+                spec.id,
+                spec.revision,
+                true,
+                null,
+                "Schedule has no remaining occurrence."
+            )
+        return enqueue(spec, plan)
     }
 
     override fun cancel(scheduleId: String): Boolean {
@@ -81,17 +117,42 @@ class AndroidSchedulerBackend(
                 null,
                 "Schedule has no remaining occurrence."
             )
-        val occurrenceId = ScheduleCalculator.occurrenceId(spec, planned)
+        return enqueue(
+            spec,
+            ScheduleCalculator.EnqueuePlan(
+                occurrencePlannedAtEpochMillis = planned,
+                enqueueAtEpochMillis = planned,
+                recoveredMissedRun = false
+            )
+        )
+    }
+
+    private fun enqueue(
+        spec: ScheduleSpec,
+        plan: ScheduleCalculator.EnqueuePlan
+    ): ScheduleReceipt {
+        val occurrenceId = ScheduleCalculator.occurrenceId(
+            spec,
+            plan.occurrencePlannedAtEpochMillis
+        )
         val request = OneTimeWorkRequestBuilder<AgentOccurrenceWorker>()
             .setInputData(
                 Data.Builder()
                     .putString(KEY_SCHEDULE_ID, spec.id)
                     .putLong(KEY_SCHEDULE_REVISION, spec.revision)
                     .putString(KEY_OCCURRENCE_ID, occurrenceId)
-                    .putLong(KEY_PLANNED_AT, planned)
+                    .putLong(
+                        KEY_PLANNED_AT,
+                        plan.occurrencePlannedAtEpochMillis
+                    )
+                    .putLong(KEY_ENQUEUED_AT, plan.enqueueAtEpochMillis)
+                    .putBoolean(KEY_RECOVERED_MISSED_RUN, plan.recoveredMissedRun)
                     .build()
             )
-            .setInitialDelay((planned - nowEpochMillis()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
+            .setInitialDelay(
+                (plan.enqueueAtEpochMillis - nowEpochMillis()).coerceAtLeast(0),
+                TimeUnit.MILLISECONDS
+            )
             .setConstraints(spec.toWorkConstraints())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .addTag(scheduleTag(spec.id))
@@ -106,8 +167,12 @@ class AndroidSchedulerBackend(
             spec.id,
             spec.revision,
             true,
-            planned,
-            "Enqueued occurrence '$occurrenceId'."
+            plan.enqueueAtEpochMillis,
+            if (plan.recoveredMissedRun) {
+                "Enqueued recovered occurrence '$occurrenceId'."
+            } else {
+                "Enqueued occurrence '$occurrenceId'."
+            }
         )
     }
 
@@ -129,6 +194,8 @@ class AndroidSchedulerBackend(
         const val KEY_SCHEDULE_REVISION = "agent_schedule_revision"
         const val KEY_OCCURRENCE_ID = "agent_occurrence_id"
         const val KEY_PLANNED_AT = "agent_planned_at"
+        const val KEY_ENQUEUED_AT = "agent_enqueued_at"
+        const val KEY_RECOVERED_MISSED_RUN = "agent_recovered_missed_run"
 
         fun scheduleTag(id: String) = "agent-schedule:$id"
         fun occurrenceTag(id: String) = "agent-occurrence:$id"
@@ -156,8 +223,17 @@ class AgentOccurrenceWorker(
         val occurrenceId = inputData.getString(AndroidSchedulerBackend.KEY_OCCURRENCE_ID)
             ?: return Result.failure()
         val plannedAt = inputData.getLong(AndroidSchedulerBackend.KEY_PLANNED_AT, -1L)
+        val enqueuedAt = inputData.getLong(
+            AndroidSchedulerBackend.KEY_ENQUEUED_AT,
+            plannedAt
+        )
+        val recoveredMissedRun = inputData.getBoolean(
+            AndroidSchedulerBackend.KEY_RECOVERED_MISSED_RUN,
+            false
+        )
         val now = System.currentTimeMillis()
         val spec = host.schedules.get(scheduleId)
+        val executionWindowStart = if (recoveredMissedRun) enqueuedAt else plannedAt
         val preflight = when {
             spec == null || !spec.enabled -> DispatchReceipt(
                 occurrenceId,
@@ -169,7 +245,13 @@ class AgentOccurrenceWorker(
                 DispatchStatus.SKIPPED_REVISION_CHANGED,
                 "Schedule revision changed before dispatch."
             )
-            now > plannedAt + spec.executionWindowMillis -> DispatchReceipt(
+            recoveredMissedRun && spec.missedRunPolicy != MissedRunPolicy.RUN_ONCE ->
+                DispatchReceipt(
+                    occurrenceId,
+                    DispatchStatus.SKIPPED_REVISION_CHANGED,
+                    "Missed-run recovery policy changed before dispatch."
+                )
+            now > executionWindowStart + spec.executionWindowMillis -> DispatchReceipt(
                 occurrenceId,
                 DispatchStatus.EXPIRED,
                 "Occurrence execution window expired."
@@ -183,20 +265,44 @@ class AgentOccurrenceWorker(
         }
         if (preflight != null) {
             host.record(preflight)
-            spec?.takeIf(ScheduleSpec::enabled)?.let { value -> host.reschedule(value, now) }
+            when (preflight.status) {
+                DispatchStatus.SKIPPED_REVISION_CHANGED ->
+                    rescheduleCurrent(host, scheduleId, now)
+
+                DispatchStatus.EXPIRED,
+                DispatchStatus.SKIPPED_CONSTRAINT ->
+                    rescheduleCurrent(host, scheduleId, now, expectedRevision)
+
+                else -> Unit
+            }
             return Result.success()
         }
         val liveSpec = requireNotNull(spec)
         val leaseExpiry = now + liveSpec.executionWindowMillis
         when (host.leases.tryAcquire(scheduleId, occurrenceId, leaseExpiry)) {
-            is LeaseResult.Busy,
+            is LeaseResult.Busy -> {
+                val receipt = DispatchReceipt(
+                    occurrenceId,
+                    DispatchStatus.SKIPPED_DUPLICATE,
+                    "Occurrence already has an active lease."
+                )
+                host.record(receipt)
+                return Result.success()
+            }
             LeaseResult.DuplicateCompleted -> {
                 val receipt = DispatchReceipt(
                     occurrenceId,
                     DispatchStatus.SKIPPED_DUPLICATE,
-                    "Occurrence already has a lease or completed."
+                    "Occurrence was already completed."
                 )
                 host.record(receipt)
+                val shouldContinue =
+                    (host.leases as? JobCompletionDispositionStore)
+                        ?.shouldContinueSchedule(scheduleId, occurrenceId)
+                        ?: true
+                if (shouldContinue) {
+                    rescheduleCurrent(host, scheduleId, now, expectedRevision)
+                }
                 return Result.success()
             }
             is LeaseResult.Acquired -> Unit
@@ -222,7 +328,13 @@ class AgentOccurrenceWorker(
             }.exceptionOrNull()
             if (carrierError != null) {
                 control = null
-                host.leases.release(scheduleId, occurrenceId, completed = true)
+                releaseLease(
+                    host,
+                    scheduleId,
+                    occurrenceId,
+                    completed = true,
+                    continueSchedule = true
+                )
                 val receipt = DispatchReceipt(
                     occurrenceId,
                     DispatchStatus.FAILED,
@@ -230,7 +342,12 @@ class AgentOccurrenceWorker(
                     retryable = false
                 )
                 host.record(receipt)
-                host.reschedule(liveSpec, System.currentTimeMillis())
+                rescheduleCurrent(
+                    host,
+                    scheduleId,
+                    System.currentTimeMillis(),
+                    expectedRevision
+                )
                 return Result.success()
             }
         }
@@ -264,23 +381,69 @@ class AgentOccurrenceWorker(
                 )
             }
         }
-        val terminal = !receipt.retryable || receipt.status != DispatchStatus.FAILED
-        host.leases.release(scheduleId, occurrenceId, completed = terminal)
+        val completionAction = AndroidOccurrenceCompletionPolicy.decide(
+            receipt,
+            retryWindowOpen = System.currentTimeMillis() <=
+                executionWindowStart + liveSpec.executionWindowMillis
+        )
+        val terminal = completionAction != OccurrenceCompletionAction.RETRY
+        releaseLease(
+            host,
+            scheduleId,
+            occurrenceId,
+            completed = terminal,
+            continueSchedule = completionAction == OccurrenceCompletionAction.RESCHEDULE
+        )
         host.record(receipt)
-        return if (
-            receipt.status == DispatchStatus.FAILED &&
-            receipt.retryable &&
-            System.currentTimeMillis() <= plannedAt + liveSpec.executionWindowMillis
-        ) {
-            Result.retry()
-        } else {
-            host.reschedule(liveSpec, System.currentTimeMillis())
-            Result.success()
+        return when (completionAction) {
+            OccurrenceCompletionAction.RETRY -> Result.retry()
+            OccurrenceCompletionAction.STOP -> Result.success()
+            OccurrenceCompletionAction.RESCHEDULE -> {
+                rescheduleCurrent(
+                    host,
+                    scheduleId,
+                    System.currentTimeMillis(),
+                    expectedRevision
+                )
+                Result.success()
+            }
         }
     }
 
     override fun onStopped() {
         control?.cancel("WorkManager stopped the occurrence.")
         super.onStopped()
+    }
+
+    private fun rescheduleCurrent(
+        host: AndroidOccurrenceHost,
+        scheduleId: String,
+        afterEpochMillis: Long,
+        expectedRevision: Long? = null
+    ) {
+        val current = host.schedules.get(scheduleId) ?: return
+        if (!current.enabled) return
+        if (expectedRevision != null && current.revision != expectedRevision) return
+        host.reschedule(current, afterEpochMillis)
+    }
+
+    private fun releaseLease(
+        host: AndroidOccurrenceHost,
+        scheduleId: String,
+        occurrenceId: String,
+        completed: Boolean,
+        continueSchedule: Boolean
+    ) {
+        val dispositionStore = host.leases as? JobCompletionDispositionStore
+        if (dispositionStore != null) {
+            dispositionStore.releaseWithDisposition(
+                scheduleId,
+                occurrenceId,
+                completed,
+                continueSchedule
+            )
+        } else {
+            host.leases.release(scheduleId, occurrenceId, completed)
+        }
     }
 }

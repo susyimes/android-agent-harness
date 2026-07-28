@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class StreamingAndAttachmentTest {
     @Test
@@ -28,9 +30,58 @@ class StreamingAndAttachmentTest {
         )
 
         val traceSize = result.trace.size
-        provider.observer.onEvent(AgentProviderDisplayEvent.TextDelta("late"))
+        Thread {
+            provider.observer.onEvent(AgentProviderDisplayEvent.TextDelta("late"))
+        }.apply {
+            start()
+            join()
+        }
         assertEquals(traceSize, result.trace.size)
         assertFalse(result.session.messages.any { message -> message.content == "late" })
+    }
+
+    @Test
+    fun `concurrent streaming callbacks are serialized into a complete trace`() {
+        val eventCount = 400
+        val provider = object : AgentStreamingProvider {
+            override val id = "concurrent-streaming"
+            override val capabilities = AgentProviderCapabilities(streaming = true)
+
+            override fun respond(request: AgentProviderRequest): AgentProviderResponse {
+                error("Streaming path expected.")
+            }
+
+            override fun respondStreaming(
+                request: AgentProviderRequest,
+                observer: AgentProviderDisplayObserver
+            ): AgentProviderResponse {
+                val executor = Executors.newFixedThreadPool(4)
+                try {
+                    val futures = (0 until eventCount).map {
+                        executor.submit {
+                            observer.onEvent(AgentProviderDisplayEvent.TextDelta("x"))
+                        }
+                    }
+                    futures.forEach { future -> future.get(5, TimeUnit.SECONDS) }
+                } finally {
+                    executor.shutdownNow()
+                }
+                return AgentProviderResponse.FinalText("done")
+            }
+        }
+
+        val result = AgentHarnessRunner(provider = provider).run(
+            AgentHarnessRequest("concurrent-session", "hello")
+        )
+
+        assertEquals(
+            eventCount,
+            result.trace.count { event ->
+                event is AgentHarnessTraceEvent.ProviderDisplay &&
+                    event.event is AgentProviderDisplayEvent.TextDelta
+            }
+        )
+        assertEquals("done", result.output)
     }
 
     @Test

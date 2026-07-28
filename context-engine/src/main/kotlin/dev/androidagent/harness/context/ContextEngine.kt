@@ -55,6 +55,48 @@ fun interface PromptBundleRenderer {
     fun render(pack: EvidencePack): PromptBundle
 }
 
+fun interface ContextCandidateCompressor {
+    fun compress(candidate: ContextCandidate, tokenBudget: Int): ContextCandidate?
+}
+
+class DeterministicContextCandidateCompressor(
+    private val minimumTokenBudget: Int = 8
+) : ContextCandidateCompressor {
+    init {
+        require(minimumTokenBudget > 0)
+    }
+
+    override fun compress(
+        candidate: ContextCandidate,
+        tokenBudget: Int
+    ): ContextCandidate? {
+        if (candidate.critical) return null
+        if (tokenBudget < minimumTokenBudget) return null
+        if (candidate.tokenCost() <= tokenBudget) return candidate
+        val bodyBudgetChars = tokenBudget * APPROXIMATE_CHARS_PER_TOKEN -
+            candidate.title.length -
+            CONTEXT_OVERHEAD_CHARS
+        if (bodyBudgetChars < MINIMUM_BODY_CHARS) return null
+        val body = candidate.body.trim()
+        val compressedBody = if (body.length <= bodyBudgetChars) {
+            body
+        } else {
+            body.take(bodyBudgetChars - 1).trimEnd() + "…"
+        }
+        if (compressedBody.isBlank()) return null
+        return candidate.copy(
+            body = compressedBody,
+            estimatedTokens = tokenBudget
+        )
+    }
+
+    private companion object {
+        const val APPROXIMATE_CHARS_PER_TOKEN = 4
+        const val CONTEXT_OVERHEAD_CHARS = 3
+        const val MINIMUM_BODY_CHARS = 8
+    }
+}
+
 class DelimitedPromptBundleRenderer : PromptBundleRenderer {
     override fun render(pack: EvidencePack): PromptBundle {
         val items = pack.items.map { evidence ->
@@ -70,7 +112,9 @@ class DelimitedPromptBundleRenderer : PromptBundleRenderer {
             contextItems = items,
             budgetReport = PromptBudgetReport(
                 selectedIds = pack.items.map(EvidenceItem::id),
-                compressedIds = emptyList(),
+                compressedIds = pack.items
+                    .filter { item -> "compressed=true" in item.selectionReason }
+                    .map(EvidenceItem::id),
                 filteredIds = pack.dropped
                     .filter { dropped ->
                         dropped.reason in setOf(
@@ -143,6 +187,18 @@ class CcpV2ContextEngine(
     private val renderer: PromptBundleRenderer = DelimitedPromptBundleRenderer()
 ) {
     private val sources = sources.toList()
+    private var compressor: ContextCandidateCompressor =
+        DeterministicContextCandidateCompressor()
+
+    constructor(
+        sources: List<NamedContextSource>,
+        analyzer: ContextNeedAnalyzer,
+        routeGate: ContextRouteGate,
+        renderer: PromptBundleRenderer,
+        compressor: ContextCandidateCompressor
+    ) : this(sources, analyzer, routeGate, renderer) {
+        this.compressor = compressor
+    }
 
     init {
         val duplicateIds = sources.groupingBy(NamedContextSource::id)
@@ -161,10 +217,11 @@ class CcpV2ContextEngine(
         val filtered = filterCandidates(collected, request, need, dropped)
         val resolved = resolveDuplicatesAndConflicts(filtered, dropped)
         val selected = selectWithinBudget(resolved, need, dropped)
-        val usedTokens = selected.sumOf(ContextCandidate::tokenCost)
+        val usedTokens = selected.sumOf { value -> value.candidate.tokenCost() }
         val pack = EvidencePack(
             need = need,
-            items = selected.map { candidate ->
+            items = selected.map { selectedCandidate ->
+                val candidate = selectedCandidate.candidate
                 EvidenceItem(
                     id = candidate.id,
                     logicalId = candidate.logicalId,
@@ -178,7 +235,10 @@ class CcpV2ContextEngine(
                     createdAtEpochMillis = candidate.createdAtEpochMillis,
                     evidenceRefs = candidate.evidenceRefs,
                     tokenCost = candidate.tokenCost(),
-                    selectionReason = selectionReason(candidate),
+                    selectionReason = selectionReason(
+                        candidate,
+                        selectedCandidate.compressed
+                    ),
                     critical = candidate.critical
                 )
             },
@@ -200,6 +260,18 @@ class CcpV2ContextEngine(
         dropped: MutableList<DroppedContextCandidate>
     ): List<ContextCandidate> {
         val candidates = mutableListOf<ContextCandidate>()
+        val registeredSourceIds = sources.map(NamedContextSource::id).toSet()
+        (need.requestedSourceIds - registeredSourceIds)
+            .sorted()
+            .forEach { sourceId ->
+                dropped += DroppedContextCandidate(
+                    candidateId = "source:$sourceId",
+                    sourceId = sourceId,
+                    reason = ContextDropReason.SOURCE_FAILED,
+                    critical = true,
+                    detail = "Requested context source is not registered."
+                )
+            }
         sources.forEach { named ->
             if (need.requestedSourceIds.isNotEmpty() && named.id !in need.requestedSourceIds) {
                 return@forEach
@@ -294,24 +366,40 @@ class CcpV2ContextEngine(
         candidates: List<ContextCandidate>,
         need: ContextNeedSpec,
         dropped: MutableList<DroppedContextCandidate>
-    ): List<ContextCandidate> {
+    ): List<SelectedContextCandidate> {
         val ordered = candidates.sortedWith(candidateComparator().reversed())
-        val selected = mutableListOf<ContextCandidate>()
+        val selected = mutableListOf<SelectedContextCandidate>()
         var usedTokens = 0
         ordered.forEach { candidate ->
-            val reason = when {
-                selected.size >= need.maxItems -> ContextDropReason.ITEM_LIMIT
-                usedTokens + candidate.tokenCost() > need.inputTokenBudget ->
-                    ContextDropReason.TOKEN_BUDGET
-                else -> null
+            if (selected.size >= need.maxItems) {
+                dropped += candidate.drop(
+                    ContextDropReason.ITEM_LIMIT,
+                    "Candidate did not fit the item or token budget."
+                )
+                return@forEach
             }
-            if (reason == null) {
-                selected += candidate
+            val remainingTokens = need.inputTokenBudget - usedTokens
+            if (candidate.tokenCost() <= remainingTokens) {
+                selected += SelectedContextCandidate(candidate)
                 usedTokens += candidate.tokenCost()
+                return@forEach
+            }
+            val compressed = compressor.compress(candidate, remainingTokens)
+                ?.takeIf { value ->
+                    value.id == candidate.id &&
+                        value.sourceId == candidate.sourceId &&
+                        value.tokenCost() <= remainingTokens
+                }
+            if (compressed != null) {
+                selected += SelectedContextCandidate(
+                    candidate = compressed,
+                    compressed = true
+                )
+                usedTokens += compressed.tokenCost()
             } else {
                 dropped += candidate.drop(
-                    reason,
-                    "Candidate did not fit the item or token budget."
+                    ContextDropReason.TOKEN_BUDGET,
+                    "Candidate did not fit the token budget and could not be compressed."
                 )
             }
         }
@@ -329,12 +417,16 @@ class CcpV2ContextEngine(
         )
     }
 
-    private fun selectionReason(candidate: ContextCandidate): String {
+    private fun selectionReason(
+        candidate: ContextCandidate,
+        compressed: Boolean
+    ): String {
         return buildString {
             append("selected authority=").append(candidate.trust.name)
             append(" relevance=").append(candidate.relevance)
             append(" revision=").append(candidate.sourceRevision)
             if (candidate.critical) append(" critical=true")
+            if (compressed) append(" compressed=true")
         }
     }
 
@@ -350,4 +442,9 @@ class CcpV2ContextEngine(
             detail = detail
         )
     }
+
+    private data class SelectedContextCandidate(
+        val candidate: ContextCandidate,
+        val compressed: Boolean = false
+    )
 }

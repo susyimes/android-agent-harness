@@ -726,7 +726,7 @@ class ProductCenterActivity : Activity() {
                             add(Action("继续一轮") { runScheduleNow(schedule) })
                         }
                         if (!terminal) {
-                            add(Action("停止") { stopLongTask(checkpoint) })
+                            add(Action("停止") { stopLongTask(checkpoint, schedule) })
                         }
                     }
                 )
@@ -940,16 +940,29 @@ class ProductCenterActivity : Activity() {
         }
     }
 
-    private fun stopLongTask(checkpoint: LongTaskCheckpoint) {
+    private fun stopLongTask(
+        checkpoint: LongTaskCheckpoint,
+        schedule: ScheduleSpec?
+    ) {
         worker.execute {
             val stopped = SampleRuntime.longTasks(this).stop(
                 checkpoint.jobId,
                 "用户从 Automation 页面停止。"
             )
+            val disabled = schedule?.let { value ->
+                SampleRuntime.disableScheduleForStop(this, value.id)
+            } ?: false
+            val cancelled = schedule?.let { value ->
+                AndroidSchedulerBackend(this).cancel(value.id)
+            } ?: false
             runOnUiThreadSafe {
                 Toast.makeText(
                     this,
-                    if (stopped) "LongTask 已停止" else "LongTask 已是终态",
+                    if (stopped || disabled || cancelled) {
+                        "LongTask 已停止，后续调度已取消"
+                    } else {
+                        "LongTask 已是终态"
+                    },
                     Toast.LENGTH_SHORT
                 ).show()
                 render()
@@ -1184,8 +1197,8 @@ class ProductCenterActivity : Activity() {
                 traces = SampleRuntime.traceSnapshot().size,
                 approvals = SampleRuntime.approvalRecords().size,
                 occurrences = SampleRuntime.occurrenceSnapshot().size,
-                feedback = SampleRuntime.signals().query().size +
-                    SampleRuntime.outcomes().query().size
+                feedback = SampleRuntime.signals(this).query().size +
+                    SampleRuntime.outcomes(this).query().size
             )
             runOnUiThreadSafe { renderData(inventory) }
         }
@@ -1417,7 +1430,7 @@ class ProductCenterActivity : Activity() {
 
     private fun deleteOperationalDomain() = runDataMutation {
         val operational = SampleRuntime.clearOperationalJournals()
-        val feedback = SampleRuntime.clearFeedback()
+        val feedback = SampleRuntime.clearFeedback(this)
         val voice = SampleRuntime.voiceSessions().clear()
         "已清除 $operational 条运行日志、$feedback 条反馈、$voice 条语音文本"
     }

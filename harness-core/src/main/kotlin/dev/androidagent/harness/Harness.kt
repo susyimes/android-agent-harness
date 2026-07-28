@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 data class AgentHarnessConfig(
     val maxProviderSteps: Int = 4,
     val maxToolCallsPerStep: Int = 4,
@@ -244,41 +246,59 @@ class AgentOrchestrator(
                 next = estimatedInputTokens,
                 limit = config.maxInputTokens
             )
-            var acceptDisplayEvents = true
+            val acceptDisplayEvents = AtomicBoolean(true)
+            val displayEventLock = Any()
             var reportedInputTokens: Int? = null
             var reportedOutputTokens: Int? = null
             var streamedOutputChars = 0L
+            var displayEventFailure: RuntimeException? = null
+            val streamingCallThread = Thread.currentThread()
             val response = try {
                 if (provider is AgentStreamingProvider && provider.capabilities.streaming) {
                     provider.respondStreaming(
                         providerRequest,
                         AgentProviderDisplayObserver { displayEvent ->
-                            when (displayEvent) {
-                                is AgentProviderDisplayEvent.TextDelta -> {
-                                    streamedOutputChars += displayEvent.text.length
-                                    enforceTokenBudget(
-                                        label = "Output",
-                                        used = cumulativeOutputTokens,
-                                        next = estimateTokens(streamedOutputChars),
-                                        limit = config.maxOutputTokens
+                            synchronized(displayEventLock) {
+                                if (
+                                    !acceptDisplayEvents.get() ||
+                                    cancellationSignal.isCancellationRequested()
+                                ) {
+                                    return@AgentProviderDisplayObserver
+                                }
+                                try {
+                                    when (displayEvent) {
+                                        is AgentProviderDisplayEvent.TextDelta -> {
+                                            streamedOutputChars += displayEvent.text.length
+                                            enforceTokenBudget(
+                                                label = "Output",
+                                                used = cumulativeOutputTokens,
+                                                next = estimateTokens(streamedOutputChars),
+                                                limit = config.maxOutputTokens
+                                            )
+                                        }
+                                        is AgentProviderDisplayEvent.Usage -> {
+                                            reportedInputTokens = displayEvent.inputTokens
+                                                ?.also(::requireNonNegativeTokenUsage)
+                                            reportedOutputTokens = displayEvent.outputTokens
+                                                ?.also(::requireNonNegativeTokenUsage)
+                                        }
+                                        is AgentProviderDisplayEvent.ActionNarration,
+                                        is AgentProviderDisplayEvent.ToolStatus -> Unit
+                                    }
+                                    record(
+                                        trace,
+                                        AgentHarnessTraceEvent.ProviderDisplay(
+                                            step,
+                                            displayEvent
+                                        )
                                     )
+                                } catch (error: RuntimeException) {
+                                    displayEventFailure = error
+                                    acceptDisplayEvents.set(false)
+                                    if (Thread.currentThread() === streamingCallThread) {
+                                        throw error
+                                    }
                                 }
-                                is AgentProviderDisplayEvent.Usage -> {
-                                    reportedInputTokens = displayEvent.inputTokens
-                                        ?.also(::requireNonNegativeTokenUsage)
-                                    reportedOutputTokens = displayEvent.outputTokens
-                                        ?.also(::requireNonNegativeTokenUsage)
-                                }
-                                is AgentProviderDisplayEvent.ActionNarration,
-                                is AgentProviderDisplayEvent.ToolStatus -> Unit
-                            }
-                            if (acceptDisplayEvents &&
-                                !cancellationSignal.isCancellationRequested()
-                            ) {
-                                record(
-                                    trace,
-                                    AgentHarnessTraceEvent.ProviderDisplay(step, displayEvent)
-                                )
                             }
                         }
                     )
@@ -288,8 +308,11 @@ class AgentOrchestrator(
             } finally {
                 // An implementation that emits asynchronously after returning
                 // cannot mutate trace/session state with late deltas.
-                acceptDisplayEvents = false
+                synchronized(displayEventLock) {
+                    acceptDisplayEvents.set(false)
+                }
             }
+            displayEventFailure?.let { error -> throw error }
             ensureActive()
             val inputTokens = reportedInputTokens ?: estimatedInputTokens
             val outputTokens = reportedOutputTokens ?: estimateOutputTokens(

@@ -66,7 +66,8 @@ Responsibilities:
 - collect typed candidates from named sources;
 - apply trust, privacy, risk, capability, provenance, and freshness policy;
 - resolve superseded facts and conflicts;
-- select within token/item budgets;
+- select within token/item budgets and deterministically compress non-critical overflow;
+- treat a requested but unregistered source as critical unavailable evidence;
 - emit an `EvidencePack`;
 - decide information routing through `RouteGate`;
 - render host policy separately from untrusted context data.
@@ -97,9 +98,10 @@ Responsibilities:
 - schedule/cadence/revision contracts;
 - occurrence ids and authorization snapshots;
 - leases, execution windows, jitter, and missed-run policy;
-- Cron targets and LongTask checkpoint bursts;
+- explicit missed-run recovery semantics for skip, catch-up-once, and next-window;
+- Cron targets and LongTask checkpoint bursts with per-burst budget and evidence/effect refs;
 - WorkManager dispatch, boot/package-update restoration, and visible LongTask carrier;
-- Stop/no-hidden-reschedule semantics.
+- completed-occurrence chain repair and Stop/no-hidden-reschedule semantics.
 
 This layer decides when reliable work may be attempted, not what the Agent should believe.
 
@@ -110,6 +112,7 @@ Module: `agent-feedback`.
 Responsibilities:
 
 - signal and outcome journals;
+- bounded app-private file implementations for sample process-death recovery;
 - opportunity scoring and dedupe;
 - Heartbeat typed findings;
 - Dream reflection proposals;
@@ -207,10 +210,19 @@ provider calls device_observe
 | Schedules | app-private revisioned file | explicit approved delete |
 | Leases/checkpoints | app-private files | terminal/explicit maintenance |
 | Credentials | Android Keystore-backed sample repository | explicit provider-settings delete |
-| Trace/feedback journals | bounded process journals in sample | bounded by count; user can clear/export |
+| Trace journal | bounded process journal in sample | bounded by count; user can clear/export |
+| Signal/outcome journals | app-private atomic files | signals: 30 days/2,000; outcomes: 90 days/1,000; user can clear |
 | Image/audio raw data | ephemeral host-owned storage | TTL / immediate cleanup |
 
 Production hosts can replace stores without changing the orchestration contracts.
+
+## Known open review boundaries
+
+This revision deliberately leaves three approval/security composition items open:
+
+- Provider policy classification still accepts the textual `<policy-context` marker from direct callers.
+- Schedule approval hashing does not bind every behavior-affecting `ScheduleSpec` field.
+- The Android Phone Agent helper does not yet bridge its legacy approval gate into the generic run coordinator automatically.
 
 ## Compatibility gates
 

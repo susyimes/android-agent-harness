@@ -70,6 +70,86 @@ class SchedulingTest {
     }
 
     @Test
+    fun missedRunPoliciesChooseSkipCatchUpAndNextWindow() {
+        val interval = spec(
+            cadence = ScheduleCadence.interval(100L)
+        ).copy(validFromEpochMillis = 100L)
+
+        val skipped = ScheduleCalculator.recoveryPlan(
+            interval.copy(missedRunPolicy = MissedRunPolicy.SKIP),
+            450L
+        )!!
+        val recovered = ScheduleCalculator.recoveryPlan(
+            interval.copy(missedRunPolicy = MissedRunPolicy.RUN_ONCE),
+            450L
+        )!!
+
+        assertEquals(500L, skipped.occurrencePlannedAtEpochMillis)
+        assertEquals(500L, skipped.enqueueAtEpochMillis)
+        assertFalse(skipped.recoveredMissedRun)
+        assertEquals(400L, recovered.occurrencePlannedAtEpochMillis)
+        assertEquals(450L, recovered.enqueueAtEpochMillis)
+        assertTrue(recovered.recoveredMissedRun)
+
+        val zone = ZoneId.of("UTC")
+        val insideWindow = ZonedDateTime.of(
+            2026,
+            7,
+            28,
+            9,
+            30,
+            0,
+            0,
+            zone
+        ).toInstant().toEpochMilli()
+        val window = spec(
+            cadence = ScheduleCadence(
+                type = ScheduleCadenceType.WINDOW,
+                intervalMillis = 15 * 60_000L,
+                windowStartLocalTime = "09:00",
+                windowEndLocalTime = "10:00"
+            )
+        ).copy(
+            validFromEpochMillis = ZonedDateTime.of(
+                2026,
+                7,
+                27,
+                0,
+                0,
+                0,
+                0,
+                zone
+            ).toInstant().toEpochMilli(),
+            missedRunPolicy = MissedRunPolicy.NEXT_WINDOW
+        )
+
+        val nextWindow = ScheduleCalculator.recoveryPlan(window, insideWindow)!!
+
+        assertEquals(
+            "2026-07-29T09:00Z[UTC]",
+            ZonedDateTime.ofInstant(
+                java.time.Instant.ofEpochMilli(
+                    nextWindow.occurrencePlannedAtEpochMillis
+                ),
+                zone
+            ).toString()
+        )
+    }
+
+    @Test
+    fun expiredScheduleDoesNotRecoverMissedRun() {
+        val expired = spec(
+            cadence = ScheduleCadence.interval(100L)
+        ).copy(
+            validFromEpochMillis = 100L,
+            validUntilEpochMillis = 300L,
+            missedRunPolicy = MissedRunPolicy.RUN_ONCE
+        )
+
+        assertEquals(null, ScheduleCalculator.recoveryPlan(expired, 450L))
+    }
+
+    @Test
     fun leasePreventsConcurrentAndCompletedDuplicateOccurrence() {
         var now = 100L
         val store = InMemoryJobLeaseStore(dev.androidagent.harness.AgentClock { now })
@@ -78,6 +158,19 @@ class SchedulingTest {
         assertTrue(store.tryAcquire("job", "occ", 250L) is LeaseResult.Busy)
         store.release("job", "occ", completed = true)
         assertTrue(store.tryAcquire("job", "occ", 250L) is LeaseResult.DuplicateCompleted)
+        assertTrue(store.shouldContinueSchedule("job", "occ") == true)
+
+        assertTrue(store.tryAcquire("job", "stopped", 250L) is LeaseResult.Acquired)
+        store.releaseWithDisposition(
+            "job",
+            "stopped",
+            completed = true,
+            continueSchedule = false
+        )
+        assertTrue(
+            store.tryAcquire("job", "stopped", 250L) is LeaseResult.DuplicateCompleted
+        )
+        assertFalse(store.shouldContinueSchedule("job", "stopped")!!)
 
         assertTrue(store.tryAcquire("job", "new", 150L) is LeaseResult.Acquired)
         now = 151L

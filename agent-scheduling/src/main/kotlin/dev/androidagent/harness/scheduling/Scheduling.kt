@@ -288,11 +288,27 @@ interface JobLeaseStore {
     fun release(jobId: String, occurrenceId: String, completed: Boolean = false)
 }
 
+/**
+ * Optional durable completion metadata used to distinguish a completed
+ * occurrence that should repair its recurring chain from a user-stopped
+ * occurrence that must remain stopped after process death.
+ */
+interface JobCompletionDispositionStore {
+    fun releaseWithDisposition(
+        jobId: String,
+        occurrenceId: String,
+        completed: Boolean,
+        continueSchedule: Boolean
+    )
+
+    fun shouldContinueSchedule(jobId: String, occurrenceId: String): Boolean?
+}
+
 class InMemoryJobLeaseStore(
     private val clock: AgentClock = SystemAgentClock
-) : JobLeaseStore {
+) : JobLeaseStore, JobCompletionDispositionStore {
     private val leases = mutableMapOf<String, Lease>()
-    private val completed = mutableSetOf<String>()
+    private val completed = mutableMapOf<String, Boolean>()
 
     @Synchronized
     override fun tryAcquire(
@@ -314,15 +330,44 @@ class InMemoryJobLeaseStore(
 
     @Synchronized
     override fun release(jobId: String, occurrenceId: String, completed: Boolean) {
+        releaseWithDisposition(
+            jobId,
+            occurrenceId,
+            completed,
+            continueSchedule = true
+        )
+    }
+
+    @Synchronized
+    override fun releaseWithDisposition(
+        jobId: String,
+        occurrenceId: String,
+        completed: Boolean,
+        continueSchedule: Boolean
+    ) {
         val key = "$jobId:$occurrenceId"
         leases.remove(key)
-        if (completed) this.completed += key
+        if (completed) this.completed[key] = continueSchedule
+    }
+
+    @Synchronized
+    override fun shouldContinueSchedule(
+        jobId: String,
+        occurrenceId: String
+    ): Boolean? {
+        return completed["$jobId:$occurrenceId"]
     }
 
     private data class Lease(val expiresAtEpochMillis: Long)
 }
 
 object ScheduleCalculator {
+    data class EnqueuePlan(
+        val occurrencePlannedAtEpochMillis: Long,
+        val enqueueAtEpochMillis: Long,
+        val recoveredMissedRun: Boolean
+    )
+
     fun nextRunAt(
         spec: ScheduleSpec,
         afterEpochMillis: Long
@@ -359,6 +404,50 @@ object ScheduleCalculator {
         val jittered = applyDeterministicJitter(spec, next)
         return jittered.takeIf { value ->
             spec.validUntilEpochMillis == null || value <= spec.validUntilEpochMillis
+        }
+    }
+
+    /**
+     * Chooses the occurrence to enqueue when a durable schedule is initially
+     * registered or reconstructed after boot/package replacement.
+     *
+     * Normal worker continuation still uses [nextRunAt] so a recovered
+     * RUN_ONCE occurrence cannot recursively recover itself.
+     */
+    fun recoveryPlan(
+        spec: ScheduleSpec,
+        nowEpochMillis: Long
+    ): EnqueuePlan? {
+        if (!spec.enabled) return null
+        if (spec.validUntilEpochMillis?.let { nowEpochMillis > it } == true) return null
+        if (nowEpochMillis < spec.validFromEpochMillis) {
+            return nextRunAt(spec, nowEpochMillis - 1L)?.asNormalPlan()
+        }
+        return when (spec.missedRunPolicy) {
+            MissedRunPolicy.SKIP ->
+                nextRunAt(spec, nowEpochMillis)?.asNormalPlan()
+
+            MissedRunPolicy.RUN_ONCE -> {
+                val missed = previousRunAt(spec, nowEpochMillis)
+                when {
+                    missed == null -> nextRunAt(spec, nowEpochMillis)?.asNormalPlan()
+                    missed < nowEpochMillis -> EnqueuePlan(
+                        occurrencePlannedAtEpochMillis = missed,
+                        enqueueAtEpochMillis = nowEpochMillis,
+                        recoveredMissedRun = true
+                    )
+                    else -> missed.asNormalPlan()
+                }
+            }
+
+            MissedRunPolicy.NEXT_WINDOW -> {
+                val next = if (spec.cadence.type == ScheduleCadenceType.WINDOW) {
+                    nextWindowRecoveryAt(spec, nowEpochMillis)
+                } else {
+                    nextRunAt(spec, nowEpochMillis)
+                }
+                next?.asNormalPlan()
+            }
         }
     }
 
@@ -415,6 +504,136 @@ object ScheduleCalculator {
         }
         error("Window cadence could not find a run within one year.")
     }
+
+    private fun nextWindowRecoveryAt(spec: ScheduleSpec, nowEpochMillis: Long): Long? {
+        val zone = ZoneId.of(spec.timezone)
+        val now = Instant.ofEpochMilli(nowEpochMillis).atZone(zone)
+        val start = ZonedDateTime.of(
+            now.toLocalDate(),
+            LocalTime.parse(spec.cadence.windowStartLocalTime),
+            zone
+        ).toInstant().toEpochMilli()
+        val end = ZonedDateTime.of(
+            now.toLocalDate(),
+            LocalTime.parse(spec.cadence.windowEndLocalTime),
+            zone
+        ).toInstant().toEpochMilli()
+        val after = when {
+            nowEpochMillis < start -> nowEpochMillis
+            nowEpochMillis <= end -> end
+            else -> nowEpochMillis
+        }
+        return nextRunAt(spec, after)
+    }
+
+    private fun previousRunAt(spec: ScheduleSpec, upperEpochMillis: Long): Long? {
+        var cursor = minOf(
+            upperEpochMillis,
+            spec.validUntilEpochMillis ?: upperEpochMillis
+        )
+        while (cursor >= spec.validFromEpochMillis) {
+            val base = previousBaseRunAt(spec, cursor) ?: return null
+            val planned = applyDeterministicJitter(spec, base)
+            if (
+                planned <= upperEpochMillis &&
+                planned >= spec.validFromEpochMillis &&
+                (spec.validUntilEpochMillis == null ||
+                    planned <= spec.validUntilEpochMillis)
+            ) {
+                return planned
+            }
+            if (base == Long.MIN_VALUE) return null
+            cursor = base - 1L
+        }
+        return null
+    }
+
+    private fun previousBaseRunAt(spec: ScheduleSpec, upperEpochMillis: Long): Long? {
+        if (upperEpochMillis < spec.validFromEpochMillis) return null
+        val zone = ZoneId.of(spec.timezone)
+        return when (spec.cadence.type) {
+            ScheduleCadenceType.ONE_TIME ->
+                spec.cadence.oneTimeAtEpochMillis?.takeIf { value ->
+                    value in spec.validFromEpochMillis..upperEpochMillis
+                }
+
+            ScheduleCadenceType.INTERVAL -> {
+                val interval = requireNotNull(spec.cadence.intervalMillis)
+                val elapsed = upperEpochMillis - spec.validFromEpochMillis
+                spec.validFromEpochMillis + elapsed / interval * interval
+            }
+
+            ScheduleCadenceType.DAILY -> {
+                val upper = Instant.ofEpochMilli(upperEpochMillis).atZone(zone)
+                var candidate = ZonedDateTime.of(
+                    upper.toLocalDate(),
+                    LocalTime.parse(spec.cadence.localTime),
+                    zone
+                ).toInstant().toEpochMilli()
+                if (candidate > upperEpochMillis) {
+                    candidate = ZonedDateTime.of(
+                        upper.toLocalDate().minusDays(1),
+                        LocalTime.parse(spec.cadence.localTime),
+                        zone
+                    ).toInstant().toEpochMilli()
+                }
+                candidate.takeIf { value -> value >= spec.validFromEpochMillis }
+            }
+
+            ScheduleCadenceType.WEEKLY -> {
+                val upper = Instant.ofEpochMilli(upperEpochMillis).atZone(zone)
+                (0..7).firstNotNullOfOrNull { offset ->
+                    val date = upper.toLocalDate().minusDays(offset.toLong())
+                    if (date.dayOfWeek !in spec.cadence.weekdays) {
+                        null
+                    } else {
+                        ZonedDateTime.of(
+                            date,
+                            LocalTime.parse(spec.cadence.localTime),
+                            zone
+                        ).toInstant().toEpochMilli().takeIf { value ->
+                            value <= upperEpochMillis &&
+                                value >= spec.validFromEpochMillis
+                        }
+                    }
+                }
+            }
+
+            ScheduleCadenceType.WINDOW -> previousWindowBaseRunAt(
+                spec,
+                upperEpochMillis,
+                zone
+            )
+        }
+    }
+
+    private fun previousWindowBaseRunAt(
+        spec: ScheduleSpec,
+        upperEpochMillis: Long,
+        zone: ZoneId
+    ): Long? {
+        val cadence = spec.cadence
+        val interval = requireNotNull(cadence.intervalMillis)
+        val startTime = LocalTime.parse(cadence.windowStartLocalTime)
+        val endTime = LocalTime.parse(cadence.windowEndLocalTime)
+        val upper = Instant.ofEpochMilli(upperEpochMillis).atZone(zone)
+        for (offset in 0..366) {
+            val date = upper.toLocalDate().minusDays(offset.toLong())
+            val start = ZonedDateTime.of(date, startTime, zone).toInstant().toEpochMilli()
+            val end = ZonedDateTime.of(date, endTime, zone).toInstant().toEpochMilli()
+            val capped = minOf(upperEpochMillis, end)
+            if (capped < start) continue
+            val candidate = start + (capped - start) / interval * interval
+            if (candidate >= spec.validFromEpochMillis) return candidate
+        }
+        return null
+    }
+
+    private fun Long.asNormalPlan() = EnqueuePlan(
+        occurrencePlannedAtEpochMillis = this,
+        enqueueAtEpochMillis = this,
+        recoveredMissedRun = false
+    )
 
     private fun applyDeterministicJitter(spec: ScheduleSpec, planned: Long): Long {
         if (spec.maxJitterMillis == 0L) return planned

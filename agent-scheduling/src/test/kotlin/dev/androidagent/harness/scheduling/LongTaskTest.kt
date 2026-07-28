@@ -3,6 +3,7 @@ package dev.androidagent.harness.scheduling
 
 import dev.androidagent.harness.AgentClock
 import dev.androidagent.harness.sdk.AgentEvent
+import dev.androidagent.harness.sdk.AgentRunBudget
 import dev.androidagent.harness.sdk.TraceSink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -117,6 +118,48 @@ class LongTaskTest {
 
         assertEquals(LongTaskStatus.COMPLETED, completed.status)
         assertEquals(2, dispatchCount)
+    }
+
+    @Test
+    fun burstBudgetAndRunReferencesReachDurableCheckpoint() {
+        val store = InMemoryLongTaskCheckpointStore()
+        val budget = AgentRunBudget(
+            maxProviderSteps = 7,
+            maxToolCalls = 2,
+            maxWallClockMillis = 10_000L,
+            maxRepeatedFailures = 2
+        )
+        var observedBudget: AgentRunBudget? = null
+        val runner = LongTaskPeriodicRunner { trigger, _, receivedBudget ->
+            observedBudget = receivedBudget
+            LongTaskBurstResult(
+                receipt = DispatchReceipt(
+                    occurrenceId = trigger.occurrenceId,
+                    status = DispatchStatus.ACCEPTED,
+                    summary = "continue",
+                    checkpointRef = "next"
+                ),
+                evidenceRefs = listOf("evidence:one", "evidence:two"),
+                effectRefs = listOf("effect:one")
+            )
+        }
+        val coordinator = LongTaskCoordinator(runner, store, AgentClock { 100L })
+        val spec = LongTaskSpec(
+            id = "budgeted",
+            sessionId = "session",
+            goal = "Continue safely",
+            authorizationScopeHash = "scope",
+            deadlineEpochMillis = 1_000L,
+            resumable = true,
+            burstBudget = budget
+        )
+
+        val checkpoint = coordinator.dispatchBurst(spec, auth())
+
+        assertEquals(budget, observedBudget)
+        assertEquals(listOf("evidence:one", "evidence:two"), checkpoint.evidenceRefs)
+        assertEquals(listOf("effect:one"), checkpoint.effectRefs)
+        assertEquals("next", checkpoint.nextAction)
     }
 
     private fun auth() = OccurrenceAuthorizationSnapshot(

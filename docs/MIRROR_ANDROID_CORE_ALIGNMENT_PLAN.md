@@ -165,27 +165,29 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | 编排：run lifecycle | 完成 | `AgentSdk` 统一 USER/HEARTBEAT/DREAM/PROACTIVE/CRON/LONG_TASK；state、deadline、cancel、session fence、CAS transaction、late-result fence | 外部 effect 不能由 session transaction 自动回滚 |
 | 编排：事件与 trace | 完成 | 稳定 `AgentEvent`/`TraceSink`、审批等待状态、stream delta、脱敏组合 sink、确定性 replay | sample trace 是有界进程日志；生产持久化由宿主实现 |
 | 编排：Provider/Tool | 完成 | run-scoped Provider、capability、8/80 步、工具/时间/重复失败/input/output token 预算、Tool Envelope | 自定义 Provider 不上报 usage 时使用保守字符估算 |
-| 上下文引擎：CCP V2 | 完成 | `ContextNeedSpec`、候选池、trust/privacy/risk/freshness、冲突、预算、`EvidencePack`、真实 `RouteGate` 终止/继续、renderer | 无内置向量数据库；可由 `ContextSource` 替换 |
+| 上下文引擎：CCP V2 | 局部 | `ContextNeedSpec`、命名 source 缺失检测、候选池、trust/privacy/risk/freshness、冲突、确定性压缩与预算审计、`EvidencePack`、真实 `RouteGate` 终止/继续、renderer | Direct Provider 的文本 policy marker 隔离仍是已知未修安全项；无内置向量数据库 |
 | 记忆/人格：House/State | 完成 | House 兼容层、State Vault、events/evidence/effects/brief/psyche、Android file adapter、迁移、retention | “Obsidian”是逻辑产品视图，不兼容外部 vault 格式 |
 | 记忆/人格：Memory | 完成 | Agent 默认只调用 `agent_memory_propose`；pending candidate、dedupe/conflict/eval/approval/promotion/rollback | 旧 direct append 仅在显式兼容 flag 下注册 |
 | 记忆/人格：Skill | 完成 | Agent 写 disabled House draft并同步 Skill Inbox；eval、审批、revision、启用和回滚 | 不执行任意 skill 脚本 |
 | 记忆/人格：Persona | 完成 | `agent_persona_propose`、Psyche、Persona Inbox、hash/eval/approval/promotion/rollback | Agent 提议不能直接改变主动性或权限 |
-| 周期业务/定时 | 完成 | ScheduleSpec、occurrence、revision、lease、missed-run、Cron、LongTask coordinator/checkpoint | exact alarm backend 未绑定；当前可靠调度采用 WorkManager |
+| 周期业务/定时 | 完成 | ScheduleSpec、occurrence、revision、lease、`SKIP/RUN_ONCE/NEXT_WINDOW`、completed-chain repair、Cron、LongTask burst budget 与 checkpoint evidence/effect refs | exact alarm backend 未绑定；当前可靠调度采用 WorkManager |
 | 反馈/主动：Heartbeat | 完成 | typed Todo/permission/candidate/failure findings、signal、共用 `AgentSdk` | 通知是否展示由宿主产品策略决定 |
 | 反馈/主动：Dream | 完成 | outcome/candidate reflection、共用 `AgentSdk`、仅产出 pending reflection candidate、过滤无建议输出 | 不静默晋升 durable asset |
-| 反馈/主动：Proactive | 完成 | opportunity score、用户主动性档位、quiet hours、cooldown、单次/每日 cap、ActivationRequest | 默认 OFF |
+| 反馈/主动：Proactive | 完成 | 持久 Signal/Outcome journal、opportunity score、用户主动性档位、quiet hours、cooldown、单次/每日 cap、ActivationRequest | 默认 OFF |
 | Home Brief / Self Check | 完成 | 无 Provider 时本地聚合；Home 与 Debug 显示真实结果 | 不作为审批或权限来源 |
-| 审批：通用协议 | 完成 | target/argument hash/risk/evidence/expiry、one-use token、observer/journal、无 UI fail-closed | 状态 CAS 由具体 Todo/State/Schedule/House adapter 再校验 |
+| 审批：通用协议 | 局部 | target/argument hash/risk/evidence/expiry、one-use token、observer/journal、无 UI fail-closed | Schedule hash 尚未覆盖全部行为字段；Phone Agent legacy gate 尚未自动桥接 generic coordinator |
 | Android：Permission | 完成 | runtime/special/service/manifest typed state、用途披露和设置导航 | AAR manifest 不自动扩权 |
 | Android：Stats/Todo | 完成 | UsageStats 聚合与真实零数据区分；Todo draft/commit/revision/effect/归档/删除 | Stats 默认关闭，raw timeline 不进 Prompt |
 | Android：House/Obsidian | 完成 | app-private House/State store、迁移、候选审查、导出/retention/delete/reset | 默认文件 store 不是加密数据库 |
 | Android：其他数据源 | 宿主可选 | SAF document、coarse location、calendar、host-fed notification、experimental sensor typed adapters | 宿主选择后才授权；没有假授权或全量读取 |
-| Android：后台承载 | 完成 | WorkManager unique occurrence、boot/package receiver、持久 lease/checkpoint、visible LongTask foreground service 与 Stop | sample 不使用 AlarmManager |
+| Android：后台承载 | 完成 | WorkManager unique occurrence、boot/package receiver、持久 lease/checkpoint、重复 completed occurrence 修复、visible LongTask foreground service 与持久 Stop | sample 不使用 AlarmManager |
 | Android：Phone Use | 完成 | 模型真实工具调用激活、strict snapshot state machine、Accessibility、稳定等待、finish evidence、overlay approval、optional visual | 无障碍和 visual 必须由用户/宿主开启 |
-| Streaming/多模态/语音 | 完成 | compatible SSE、late-delta fence、AttachmentRef、临时 visual/raw payload、STT/录音/TTS | 无捆绑本地大模型或第三方流式 ASR |
+| Streaming/多模态/语音 | 完成 | compatible SSE、原子且串行化的 late-delta fence、AttachmentRef、临时 visual/raw payload、STT/录音/TTS | 无捆绑本地大模型或第三方流式 ASR |
 | sample 产品 | 完成 | Home、Chat、House、Stats、Todo、State、Automation、Permissions、Debug、Data & Retention、approval、Stop | GitHub、Web、任意代码执行按范围明确排除 |
 
 当前仍明确不做的交付包括：Maven Central、生产签名密钥、外部 Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行 adapter，以及替宿主决定生产数据库/加密/备份策略。
+
+本轮按产品优先级明确保留三项已知安全/审批缺口：Direct Provider 文本 policy marker、Schedule 全字段审批 hash、AndroidPhoneAgent legacy gate 与 generic coordinator 自动桥接。它们不计入本轮运行可靠性修复的完成项。
 
 ## 5. 七层目标架构
 
@@ -2000,7 +2002,7 @@ Device/审批：
 - [x] trust/risk/privacy/provenance/freshness 完整。
 - [x] EvidencePack、RouteGate、renderer 真实进入主链路。
 - [x] 选择、压缩和丢弃可审计。
-- [x] 外部工具/文件/屏幕文本不能进入 policy 区。
+- [ ] Direct Provider 调用下，外部工具/文件/屏幕文本不能通过文本 marker 进入 policy 区（已知未修安全项）。
 
 ### 记忆/人格层
 
@@ -2027,7 +2029,7 @@ Device/审批：
 ### 审批层
 
 - [x] EffectIntent 覆盖 Todo、文件、通知、schedule、资产晋升和 Phone Use。
-- [x] request 绑定目标、参数 hash、risk、expiry 和证据。
+- [ ] request 绑定目标、完整行为参数 hash、risk、expiry 和证据（Schedule 全字段 hash 待补）。
 - [x] deny、timeout、UI 不可用和 token mismatch 均 fail-closed。
 - [x] `RouteGate` 不被当作 effect approval。
 - [x] 模型文本和工具参数不能伪造用户批准。

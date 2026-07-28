@@ -56,11 +56,13 @@ public final class dev/androidagent/harness/scheduling/GovernedScheduleService$C
 	public final fun getSCHEDULE_CAPABILITY ()Ldev/androidagent/harness/AgentToolCapability;
 }
 
-public final class dev/androidagent/harness/scheduling/InMemoryJobLeaseStore : dev/androidagent/harness/scheduling/JobLeaseStore {
+public final class dev/androidagent/harness/scheduling/InMemoryJobLeaseStore : dev/androidagent/harness/scheduling/JobCompletionDispositionStore, dev/androidagent/harness/scheduling/JobLeaseStore {
 	public fun <init> ()V
 	public fun <init> (Ldev/androidagent/harness/AgentClock;)V
 	public synthetic fun <init> (Ldev/androidagent/harness/AgentClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun release (Ljava/lang/String;Ljava/lang/String;Z)V
+	public fun releaseWithDisposition (Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public fun shouldContinueSchedule (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Boolean;
 	public fun tryAcquire (Ljava/lang/String;Ljava/lang/String;J)Ldev/androidagent/harness/scheduling/LeaseResult;
 }
 
@@ -80,6 +82,11 @@ public final class dev/androidagent/harness/scheduling/InMemoryScheduleRepositor
 	public fun put (Ldev/androidagent/harness/scheduling/ScheduleSpec;Ljava/lang/Long;)V
 	public fun remove (Ljava/lang/String;J)Z
 	public fun removeAll (Ljava/util/Map;)Z
+}
+
+public abstract interface class dev/androidagent/harness/scheduling/JobCompletionDispositionStore {
+	public abstract fun releaseWithDisposition (Ljava/lang/String;Ljava/lang/String;ZZ)V
+	public abstract fun shouldContinueSchedule (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Boolean;
 }
 
 public abstract interface class dev/androidagent/harness/scheduling/JobLeaseStore {
@@ -120,6 +127,22 @@ public final class dev/androidagent/harness/scheduling/LeaseResult$Busy : dev/an
 public final class dev/androidagent/harness/scheduling/LeaseResult$DuplicateCompleted : dev/androidagent/harness/scheduling/LeaseResult {
 	public static final field INSTANCE Ldev/androidagent/harness/scheduling/LeaseResult$DuplicateCompleted;
 	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/scheduling/LongTaskBurstResult {
+	public fun <init> (Ldev/androidagent/harness/scheduling/DispatchReceipt;Ljava/util/List;Ljava/util/List;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/scheduling/DispatchReceipt;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/scheduling/DispatchReceipt;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ldev/androidagent/harness/scheduling/DispatchReceipt;Ljava/util/List;Ljava/util/List;)Ldev/androidagent/harness/scheduling/LongTaskBurstResult;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/scheduling/LongTaskBurstResult;Ldev/androidagent/harness/scheduling/DispatchReceipt;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/scheduling/LongTaskBurstResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEffectRefs ()Ljava/util/List;
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getReceipt ()Ldev/androidagent/harness/scheduling/DispatchReceipt;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -180,6 +203,15 @@ public final class dev/androidagent/harness/scheduling/LongTaskCoordinator {
 	public final fun resume (Ljava/lang/String;Ljava/lang/String;)Z
 	public final fun stop (Ljava/lang/String;Ljava/lang/String;)Z
 	public static synthetic fun stop$default (Ldev/androidagent/harness/scheduling/LongTaskCoordinator;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Z
+}
+
+public abstract interface class dev/androidagent/harness/scheduling/LongTaskPeriodicRunner : dev/androidagent/harness/scheduling/PeriodicRunner {
+	public fun dispatch (Ldev/androidagent/harness/scheduling/OccurrenceTrigger;Ldev/androidagent/harness/scheduling/RunControl;)Ldev/androidagent/harness/scheduling/DispatchReceipt;
+	public abstract fun dispatchLongTask (Ldev/androidagent/harness/scheduling/OccurrenceTrigger;Ldev/androidagent/harness/scheduling/RunControl;Ldev/androidagent/harness/sdk/AgentRunBudget;)Ldev/androidagent/harness/scheduling/LongTaskBurstResult;
+}
+
+public final class dev/androidagent/harness/scheduling/LongTaskPeriodicRunner$DefaultImpls {
+	public static fun dispatch (Ldev/androidagent/harness/scheduling/LongTaskPeriodicRunner;Ldev/androidagent/harness/scheduling/OccurrenceTrigger;Ldev/androidagent/harness/scheduling/RunControl;)Ldev/androidagent/harness/scheduling/DispatchReceipt;
 }
 
 public final class dev/androidagent/harness/scheduling/LongTaskSpec {
@@ -342,6 +374,22 @@ public final class dev/androidagent/harness/scheduling/ScheduleCalculator {
 	public static final field INSTANCE Ldev/androidagent/harness/scheduling/ScheduleCalculator;
 	public final fun nextRunAt (Ldev/androidagent/harness/scheduling/ScheduleSpec;J)Ljava/lang/Long;
 	public final fun occurrenceId (Ldev/androidagent/harness/scheduling/ScheduleSpec;J)Ljava/lang/String;
+	public final fun recoveryPlan (Ldev/androidagent/harness/scheduling/ScheduleSpec;J)Ldev/androidagent/harness/scheduling/ScheduleCalculator$EnqueuePlan;
+}
+
+public final class dev/androidagent/harness/scheduling/ScheduleCalculator$EnqueuePlan {
+	public fun <init> (JJZ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun component3 ()Z
+	public final fun copy (JJZ)Ldev/androidagent/harness/scheduling/ScheduleCalculator$EnqueuePlan;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/scheduling/ScheduleCalculator$EnqueuePlan;JJZILjava/lang/Object;)Ldev/androidagent/harness/scheduling/ScheduleCalculator$EnqueuePlan;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnqueueAtEpochMillis ()J
+	public final fun getOccurrencePlannedAtEpochMillis ()J
+	public final fun getRecoveredMissedRun ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class dev/androidagent/harness/scheduling/ScheduleConstraints : java/io/Serializable {

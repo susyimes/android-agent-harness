@@ -10,6 +10,7 @@ import dev.androidagent.harness.scheduling.ScheduleCadence
 import dev.androidagent.harness.scheduling.ScheduleSpec
 import dev.androidagent.harness.scheduling.ScheduleTargetType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -122,5 +123,34 @@ class AndroidSchedulingStoresTest {
         )
         assertEquals(1, checkpoints.clear())
         assertTrue(AndroidRunCheckpointStore(checkpointRoot).list().isEmpty())
+    }
+
+    @Test
+    fun cancelledOccurrenceStopsWhileRetryableFailureUsesOpenWindow() {
+        val cancelled = DispatchReceipt(
+            occurrenceId = "cancelled",
+            status = DispatchStatus.CANCELLED,
+            summary = "Stopped by user."
+        )
+        val retryable = DispatchReceipt(
+            occurrenceId = "retryable",
+            status = DispatchStatus.FAILED,
+            summary = "Temporary failure.",
+            retryable = true
+        )
+
+        assertEquals(
+            OccurrenceCompletionAction.STOP,
+            AndroidOccurrenceCompletionPolicy.decide(cancelled, retryWindowOpen = true)
+        )
+        assertEquals(
+            OccurrenceCompletionAction.RETRY,
+            AndroidOccurrenceCompletionPolicy.decide(retryable, retryWindowOpen = true)
+        )
+        assertEquals(
+            OccurrenceCompletionAction.RESCHEDULE,
+            AndroidOccurrenceCompletionPolicy.decide(retryable, retryWindowOpen = false)
+        )
+        assertFalse(cancelled.retryable)
     }
 }

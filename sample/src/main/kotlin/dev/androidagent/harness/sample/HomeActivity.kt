@@ -141,7 +141,7 @@ class HomeActivity : Activity() {
             val state = SampleRuntime.state(this).snapshot()
             val todos = SampleRuntime.todo(this).list()
             val schedules = SampleRuntime.schedules(this).list()
-            val outcomes = SampleRuntime.outcomes().query()
+            val outcomes = SampleRuntime.outcomes(this).query()
             val checkpoints = SampleRuntime.checkpoints(this).list()
             val stats = SampleRuntime.usageStats(this).snapshot()
             val accessibility = AccessibilityAvailability.isServiceEnabled(this)
