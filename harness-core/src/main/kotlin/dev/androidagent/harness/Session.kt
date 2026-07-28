@@ -37,6 +37,9 @@ class TransactionalAgentSessionStore(
 ) : AgentSessionStore {
     private var state = State.OPEN
     private var staged: AgentSession? = null
+    private var baseLoaded = false
+    private var base: AgentSession? = null
+    private var expectedRevision: Long? = null
 
     init {
         require(sessionId.isNotBlank()) { "Transactional session id must not be blank." }
@@ -49,13 +52,14 @@ class TransactionalAgentSessionStore(
             throw CancellationException("This Agent turn was discarded.")
         }
         check(state == State.OPEN) { "This Agent turn is already committed." }
-        return (staged ?: delegate.load(sessionId))?.snapshot()
+        return (staged ?: loadBase())?.snapshot()
     }
 
     @Synchronized
     override fun save(session: AgentSession) {
         requireSession(session.id)
         if (state == State.OPEN) {
+            loadBase()
             staged = session.snapshot()
         }
     }
@@ -65,7 +69,14 @@ class TransactionalAgentSessionStore(
         if (state != State.OPEN) {
             return false
         }
-        staged?.let(delegate::save)
+        staged?.let { session ->
+            val versioned = delegate as? AgentVersionedSessionStore
+            if (versioned == null) {
+                delegate.save(session)
+            } else {
+                versioned.saveVersioned(session, expectedRevision)
+            }
+        }
         staged = null
         state = State.COMMITTED
         return true
@@ -85,6 +96,21 @@ class TransactionalAgentSessionStore(
         require(candidate == sessionId) {
             "Transactional store for '$sessionId' cannot access session '$candidate'."
         }
+    }
+
+    private fun loadBase(): AgentSession? {
+        if (!baseLoaded) {
+            val versioned = delegate as? AgentVersionedSessionStore
+            if (versioned == null) {
+                base = delegate.load(sessionId)?.snapshot()
+            } else {
+                val loaded = versioned.loadVersioned(sessionId)
+                base = loaded?.session?.snapshot()
+                expectedRevision = loaded?.revision
+            }
+            baseLoaded = true
+        }
+        return base?.snapshot()
     }
 
     private fun AgentSession.snapshot(): AgentSession = copy(messages = messages.toList())

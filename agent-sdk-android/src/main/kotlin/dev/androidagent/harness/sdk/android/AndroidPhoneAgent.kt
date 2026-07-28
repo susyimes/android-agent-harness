@@ -16,6 +16,7 @@ import dev.androidagent.harness.deviceloop.DeviceFinishTool
 import dev.androidagent.harness.deviceloop.DeviceObserveTool
 import dev.androidagent.harness.deviceloop.DeviceSurface
 import dev.androidagent.harness.deviceloop.RiskPolicy
+import dev.androidagent.harness.deviceloop.StrictDeviceProtocol
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
 import dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService
 import dev.androidagent.harness.sdk.AgentRunListener
@@ -81,16 +82,18 @@ class AndroidPhoneAgent(
         additionalContextProviders: List<AgentContextProvider> = emptyList(),
         additionalTools: List<AgentTool> = emptyList()
     ): AgentRunRequest {
+        val protocol = StrictDeviceProtocol()
         val phoneTools = listOf(
-            DeviceObserveTool(surface),
+            DeviceObserveTool(surface, protocol),
             DeviceActTool(
                 surface = surface,
                 riskPolicy = configuration.riskPolicy,
                 approvalGate = configuration.approvalGate,
                 allowHome = configuration.allowHome,
-                stableTimeoutMs = configuration.stableTimeoutMs
+                stableTimeoutMs = configuration.stableTimeoutMs,
+                protocol = protocol
             ),
-            DeviceFinishTool(surface)
+            DeviceFinishTool(surface, protocol)
         )
         val tools = phoneTools + additionalTools
         val toolNames = tools.map { tool -> tool.spec.name }
@@ -164,8 +167,9 @@ class AndroidPhoneAgent(
                 "questions, writing, or reasoning, answer directly and do not call any device " +
                 "tool merely because it is available. If device operation is necessary, enter " +
                 "Phone Use by calling device_observe first, perform exactly one device_act per " +
-                "step, and observe again after every action. Refer to controls by the shown id " +
-                "and pass expected_label. $home" +
+                "step, and observe again after every action. Pass the exact snapshot_id from " +
+                "the latest observation to device_act and device_finish. Refer to controls by " +
+                "the shown id and pass expected_label. $home" +
                 "launch_app must include the app display name or package in the app argument. " +
                 "Finish with device_finish and evidence visible on screen. If a high-risk " +
                 "action is denied or times out, do not retry it."

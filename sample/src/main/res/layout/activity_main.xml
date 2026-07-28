@@ -306,7 +306,50 @@
                 android:text="@string/status_ready"
                 android:textColor="@color/textSecondary"
                 android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/toolDetailsButton"
+                android:layout_width="70dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="5dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:stateListAnimator="@null"
+                android:text="工具(0)"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/speakButton"
+                android:layout_width="54dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:stateListAnimator="@null"
+                android:text="朗读"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:textSize="11sp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/attachmentPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_surface_soft"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:paddingStart="12dp"
+            android:paddingTop="7dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="7dp"
+            android:textColor="@color/textSecondary"
+            android:textSize="11sp"
+            android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/inputContainer"
@@ -320,6 +363,33 @@
             android:paddingTop="5dp"
             android:paddingEnd="7dp"
             android:paddingBottom="5dp">
+
+            <Button
+                android:id="@+id/attachmentButton"
+                android:layout_width="38dp"
+                android:layout_height="42dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:stateListAnimator="@null"
+                android:text="＋"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/voiceButton"
+                android:layout_width="46dp"
+                android:layout_height="42dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:stateListAnimator="@null"
+                android:text="语音"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:textSize="10sp" />
 
             <EditText
                 android:id="@+id/inputField"

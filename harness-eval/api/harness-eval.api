@@ -1,0 +1,87 @@
+public final class dev/androidagent/harness/eval/EvalCase {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ldev/androidagent/harness/eval/EvalCase;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/eval/EvalCase;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/eval/EvalCase;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getExpectedOutputContains ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getUserInput ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/eval/EvalCaseResult {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;IZLjava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;IZLjava/util/List;)Ldev/androidagent/harness/eval/EvalCaseResult;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/eval/EvalCaseResult;Ljava/lang/String;Ljava/lang/String;IZLjava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/eval/EvalCaseResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCaseId ()Ljava/lang/String;
+	public final fun getMissingExpectations ()Ljava/util/List;
+	public final fun getOutput ()Ljava/lang/String;
+	public final fun getPassed ()Z
+	public final fun getProviderSteps ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/eval/EvalComparison {
+	public static final field BASELINE_HEADER Ljava/lang/String;
+	public static final field CANDIDATE_HEADER Ljava/lang/String;
+	public static final field CASE_HEADER Ljava/lang/String;
+	public static final field COLUMN_SEPARATOR Ljava/lang/String;
+	public static final field DELTA_HEADER Ljava/lang/String;
+	public fun <init> (Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;)Ldev/androidagent/harness/eval/EvalComparison;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/eval/EvalComparison;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/eval/EvalComparison;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBaseline ()Ljava/util/List;
+	public final fun getCandidate ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun improvements ()Ljava/util/List;
+	public final fun regressions ()Ljava/util/List;
+	public final fun renderReport ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public final fun verdict ()Ldev/androidagent/harness/eval/EvalVerdict;
+}
+
+public final class dev/androidagent/harness/eval/EvalRunner {
+	public static final field EVAL_EPOCH_MILLIS J
+	public fun <init> (Lkotlin/jvm/functions/Function1;Ljava/util/List;Ldev/androidagent/harness/AgentToolProfile;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function1;Ljava/util/List;Ldev/androidagent/harness/AgentToolProfile;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun compare (Ldev/androidagent/harness/eval/MarkdownWorkspace;Ljava/util/Map;Ljava/util/List;)Ldev/androidagent/harness/eval/EvalComparison;
+	public final fun runCases (Ldev/androidagent/harness/eval/MarkdownWorkspace;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/eval/EvalVerdict : java/lang/Enum {
+	public static final field PROMOTE Ldev/androidagent/harness/eval/EvalVerdict;
+	public static final field REJECT Ldev/androidagent/harness/eval/EvalVerdict;
+	public static final field UNCHANGED Ldev/androidagent/harness/eval/EvalVerdict;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/eval/EvalVerdict;
+	public static fun values ()[Ldev/androidagent/harness/eval/EvalVerdict;
+}
+
+public final class dev/androidagent/harness/eval/MarkdownWorkspace {
+	public static final field Companion Ldev/androidagent/harness/eval/MarkdownWorkspace$Companion;
+	public fun <init> (Ljava/util/Map;)V
+	public final fun content (Ljava/lang/String;)Ljava/lang/String;
+	public final fun fileNames ()Ljava/util/List;
+	public final fun toContextItems (Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;)Ljava/util/List;
+	public static synthetic fun toContextItems$default (Ldev/androidagent/harness/eval/MarkdownWorkspace;Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;ILjava/lang/Object;)Ljava/util/List;
+	public final fun withOverlay (Ljava/util/Map;)Ldev/androidagent/harness/eval/MarkdownWorkspace;
+}
+
+public final class dev/androidagent/harness/eval/MarkdownWorkspace$Companion {
+	public final fun load (Ljava/nio/file/Path;)Ldev/androidagent/harness/eval/MarkdownWorkspace;
+}
+

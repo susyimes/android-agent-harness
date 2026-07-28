@@ -1,0 +1,278 @@
+public final class dev/androidagent/harness/deviceloop/ApprovalDecision : java/lang/Enum {
+	public static final field APPROVED Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public static final field DENIED Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public static final field TIMEOUT Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public static fun values ()[Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+}
+
+public abstract interface class dev/androidagent/harness/deviceloop/ApprovalGate {
+	public static final field Companion Ldev/androidagent/harness/deviceloop/ApprovalGate$Companion;
+	public abstract fun decide (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ljava/util/Map;)Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public fun pauseMessage (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/ApprovalGate$Companion {
+	public final fun defaultPauseMessage (Ldev/androidagent/harness/deviceloop/DeviceNode;Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/ApprovalGate$DefaultImpls {
+	public static fun pauseMessage (Ldev/androidagent/harness/deviceloop/ApprovalGate;Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/ApprovalGateKt {
+	public static final fun errorType (Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+}
+
+public final class dev/androidagent/harness/deviceloop/ArgumentApprovalGate : dev/androidagent/harness/deviceloop/ApprovalGate {
+	public static final field INSTANCE Ldev/androidagent/harness/deviceloop/ArgumentApprovalGate;
+	public fun decide (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ljava/util/Map;)Ldev/androidagent/harness/deviceloop/ApprovalDecision;
+	public fun pauseMessage (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceActTool : dev/androidagent/harness/approval/AgentApprovalAwareTool {
+	public static final field ACTION_BACK Ljava/lang/String;
+	public static final field ACTION_HOME Ljava/lang/String;
+	public static final field ACTION_LAUNCH_APP Ljava/lang/String;
+	public static final field ACTION_LIST_WITHOUT_HOME Ljava/lang/String;
+	public static final field ACTION_LIST_WITH_HOME Ljava/lang/String;
+	public static final field ACTION_SCROLL_TO_TEXT Ljava/lang/String;
+	public static final field ACTION_SET_TEXT Ljava/lang/String;
+	public static final field ACTION_SWIPE Ljava/lang/String;
+	public static final field ACTION_TAP Ljava/lang/String;
+	public static final field ACTION_WAIT_STABLE Ljava/lang/String;
+	public static final field DEFAULT_MAX_SCROLLS I
+	public static final field DEFAULT_SCROLL_DIRECTION Ljava/lang/String;
+	public static final field DEFAULT_STABLE_TIMEOUT_MS J
+	public static final field DEFAULT_SWIPE_DISTANCE_PX I
+	public static final field DEFAULT_SWIPE_DURATION_MS I
+	public static final field DIRECTION_LIST Ljava/lang/String;
+	public static final field MAX_TARGET_LABEL_CHARS I
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/RiskPolicy;Ldev/androidagent/harness/deviceloop/ApprovalGate;ZJLdev/androidagent/harness/deviceloop/StrictDeviceProtocol;Ldev/androidagent/harness/approval/AgentApprovalCoordinator;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/RiskPolicy;Ldev/androidagent/harness/deviceloop/ApprovalGate;ZJLdev/androidagent/harness/deviceloop/StrictDeviceProtocol;Ldev/androidagent/harness/approval/AgentApprovalCoordinator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun bindApprovalCoordinator (Ldev/androidagent/harness/approval/AgentApprovalCoordinator;)Ldev/androidagent/harness/AgentTool;
+	public fun execute (Ldev/androidagent/harness/AgentToolInvocation;)Ldev/androidagent/harness/AgentToolResult;
+	public fun getSpec ()Ldev/androidagent/harness/AgentToolSpec;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceActionException : java/lang/RuntimeException {
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceErrorType;Ljava/lang/String;)V
+	public final fun getErrorType ()Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceErrorType : java/lang/Enum {
+	public static final field ACTION_FAILED Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field APP_NOT_FOUND Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field FOREGROUND_TIMEOUT Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field INVALID_ARGUMENT Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field NEEDS_CONFIRMATION Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field PERMISSION_NOT_GRANTED Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field PROTOCOL_VIOLATION Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field STALE_TARGET Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field TARGET_NOT_FOUND Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field UNSUPPORTED_ACTION Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static final field WAIT_TIMEOUT Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+	public static fun values ()[Ldev/androidagent/harness/deviceloop/DeviceErrorType;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceFinishTool : dev/androidagent/harness/AgentTool {
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/StrictDeviceProtocol;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/StrictDeviceProtocol;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun execute (Ldev/androidagent/harness/AgentToolInvocation;)Ldev/androidagent/harness/AgentToolResult;
+	public fun getSpec ()Ldev/androidagent/harness/AgentToolSpec;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceLoopProfile {
+	public static final field INSTANCE Ldev/androidagent/harness/deviceloop/DeviceLoopProfile;
+	public final fun profile ()Ldev/androidagent/harness/AgentToolProfile;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceNode {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZZ)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun component7 ()Z
+	public final fun component8 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZZ)Ldev/androidagent/harness/deviceloop/DeviceNode;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZZILjava/lang/Object;)Ldev/androidagent/harness/deviceloop/DeviceNode;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getClickable ()Z
+	public final fun getEditable ()Z
+	public final fun getEnabled ()Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getRole ()Ljava/lang/String;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getViewId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceObservationBinding {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;J)Ldev/androidagent/harness/deviceloop/DeviceObservationBinding;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/deviceloop/DeviceObservationBinding;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Ldev/androidagent/harness/deviceloop/DeviceObservationBinding;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getObservedAtEpochMillis ()J
+	public final fun getScreenId ()Ljava/lang/String;
+	public final fun getSnapshotId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceObserveTool : dev/androidagent/harness/AgentTool {
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/StrictDeviceProtocol;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ldev/androidagent/harness/deviceloop/StrictDeviceProtocol;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun execute (Ldev/androidagent/harness/AgentToolInvocation;)Ldev/androidagent/harness/AgentToolResult;
+	public fun getSpec ()Ldev/androidagent/harness/AgentToolSpec;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceProtocolErrorCode : java/lang/Enum {
+	public static final field CONSECUTIVE_ACTION Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static final field FINISH_WITHOUT_EVIDENCE Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static final field MISSING_SNAPSHOT Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static final field NO_OBSERVATION Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static final field STALE_SNAPSHOT Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static final field TERMINAL_STATE Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+	public static fun values ()[Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceProtocolException : java/lang/IllegalStateException {
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;Ljava/lang/String;)V
+	public final fun getCode ()Ldev/androidagent/harness/deviceloop/DeviceProtocolErrorCode;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceProtocolKt {
+	public static final fun snapshotBinding (Ldev/androidagent/harness/deviceloop/DeviceScreen;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceProtocolState : java/lang/Enum {
+	public static final field FINISHED Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static final field IDLE Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static final field NEEDS_OBSERVE Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static final field OBSERVED Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static final field STOPPED Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static final field WAITING_APPROVAL Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public static fun values ()[Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceProtocolTransition {
+	public fun <init> (Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ljava/lang/String;J)V
+	public final fun component1 ()Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public final fun component2 ()Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun copy (Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ljava/lang/String;J)Ldev/androidagent/harness/deviceloop/DeviceProtocolTransition;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/deviceloop/DeviceProtocolTransition;Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ldev/androidagent/harness/deviceloop/DeviceProtocolState;Ljava/lang/String;JILjava/lang/Object;)Ldev/androidagent/harness/deviceloop/DeviceProtocolTransition;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFrom ()Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public final fun getOccurredAtEpochMillis ()J
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getTo ()Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceScreen {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ldev/androidagent/harness/deviceloop/DeviceScreen;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/deviceloop/DeviceScreen;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/deviceloop/DeviceScreen;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getNodes ()Ljava/util/List;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/deviceloop/DeviceSurface {
+	public fun back ()V
+	public fun foregroundPackage ()Ljava/lang/String;
+	public fun home ()V
+	public fun launchApp (Ljava/lang/String;)Ljava/lang/String;
+	public fun scrollToText (Ljava/lang/String;Ljava/lang/String;I)Z
+	public abstract fun setText (Ljava/lang/String;Ljava/lang/String;)V
+	public abstract fun snapshot ()Ldev/androidagent/harness/deviceloop/DeviceScreen;
+	public fun swipe (Ljava/lang/String;II)V
+	public abstract fun tap (Ljava/lang/String;)V
+	public fun waitForStable (J)Z
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceSurface$DefaultImpls {
+	public static fun back (Ldev/androidagent/harness/deviceloop/DeviceSurface;)V
+	public static fun foregroundPackage (Ldev/androidagent/harness/deviceloop/DeviceSurface;)Ljava/lang/String;
+	public static fun home (Ldev/androidagent/harness/deviceloop/DeviceSurface;)V
+	public static fun launchApp (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ljava/lang/String;)Ljava/lang/String;
+	public static fun scrollToText (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ljava/lang/String;Ljava/lang/String;I)Z
+	public static fun swipe (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ljava/lang/String;II)V
+	public static fun waitForStable (Ldev/androidagent/harness/deviceloop/DeviceSurface;J)Z
+}
+
+public final class dev/androidagent/harness/deviceloop/FakeDevice : dev/androidagent/harness/deviceloop/DeviceSurface {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun actionLog ()Ljava/util/List;
+	public fun back ()V
+	public fun foregroundPackage ()Ljava/lang/String;
+	public final fun getCurrentScreenId ()Ljava/lang/String;
+	public fun home ()V
+	public fun launchApp (Ljava/lang/String;)Ljava/lang/String;
+	public fun scrollToText (Ljava/lang/String;Ljava/lang/String;I)Z
+	public fun setText (Ljava/lang/String;Ljava/lang/String;)V
+	public fun snapshot ()Ldev/androidagent/harness/deviceloop/DeviceScreen;
+	public fun swipe (Ljava/lang/String;II)V
+	public fun tap (Ljava/lang/String;)V
+	public fun waitForStable (J)Z
+}
+
+public final class dev/androidagent/harness/deviceloop/RiskPolicy {
+	public static final field Companion Ldev/androidagent/harness/deviceloop/RiskPolicy$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Set;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;)V
+	public synthetic fun <init> (Ljava/util/Set;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun isGenericConfirmLabel (Ljava/lang/String;)Z
+	public final fun isHighRisk (Ldev/androidagent/harness/deviceloop/DeviceNode;)Z
+	public final fun isHighRisk (Ldev/androidagent/harness/deviceloop/DeviceNode;Ldev/androidagent/harness/deviceloop/DeviceScreen;)Z
+}
+
+public final class dev/androidagent/harness/deviceloop/RiskPolicy$Companion {
+	public final fun getDEFAULT_GENERIC_CONFIRM_LABELS ()Ljava/util/Set;
+}
+
+public final class dev/androidagent/harness/deviceloop/StrictDeviceProtocol {
+	public fun <init> ()V
+	public fun <init> (Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun latestObservation ()Ldev/androidagent/harness/deviceloop/DeviceObservationBinding;
+	public final fun recordActionAttempt (Ljava/lang/String;)V
+	public final fun recordFinished ()V
+	public final fun recordObservation (Ldev/androidagent/harness/deviceloop/DeviceScreen;)Ldev/androidagent/harness/deviceloop/DeviceObservationBinding;
+	public final fun recordWaitingApproval (Ljava/lang/String;)V
+	public final fun requireAction (Ljava/lang/String;Ldev/androidagent/harness/deviceloop/DeviceScreen;)V
+	public final fun requireFinish (Ljava/lang/String;Ldev/androidagent/harness/deviceloop/DeviceScreen;Z)V
+	public final fun resumeObservedAfterApprovalDecision ()V
+	public final fun state ()Ldev/androidagent/harness/deviceloop/DeviceProtocolState;
+	public final fun stop (Ljava/lang/String;)V
+	public static synthetic fun stop$default (Ldev/androidagent/harness/deviceloop/StrictDeviceProtocol;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun transitions ()Ljava/util/List;
+}
+

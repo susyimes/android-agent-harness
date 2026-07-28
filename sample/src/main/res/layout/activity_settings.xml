@@ -207,10 +207,23 @@
                     android:textSize="13sp" />
 
                 <Button
-                    android:id="@+id/clearSessionsButton"
+                    android:id="@+id/settingsControlCenterButton"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
                     android:layout_marginTop="13dp"
+                    android:background="@drawable/bg_secondary_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="打开完整 Agent 控制中心"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:translationZ="0dp" />
+
+                <Button
+                    android:id="@+id/clearSessionsButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
                     android:background="@drawable/bg_secondary_button"
                     android:elevation="0dp"
                     android:stateListAnimator="@null"

@@ -4,13 +4,29 @@ package dev.androidagent.harness
 data class AgentHarnessConfig(
     val maxProviderSteps: Int = 4,
     val maxToolCallsPerStep: Int = 4,
-    val toolLoopActivation: AgentToolLoopActivation? = null
+    val toolLoopActivation: AgentToolLoopActivation? = null,
+    val maxToolCallsTotal: Int = 256,
+    val maxRepeatedFailures: Int = 8,
+    val maxInputTokens: Int? = null,
+    val maxOutputTokens: Int? = null
 ) {
     init {
         require(maxProviderSteps in 1..MAX_PROVIDER_STEPS) {
             "maxProviderSteps must be between 1 and $MAX_PROVIDER_STEPS."
         }
         require(maxToolCallsPerStep in 1..32) { "maxToolCallsPerStep must be between 1 and 32." }
+        require(maxToolCallsTotal in 0..10_000) {
+            "maxToolCallsTotal must be between 0 and 10000."
+        }
+        require(maxRepeatedFailures in 1..100) {
+            "maxRepeatedFailures must be between 1 and 100."
+        }
+        require(maxInputTokens == null || maxInputTokens > 0) {
+            "maxInputTokens must be positive."
+        }
+        require(maxOutputTokens == null || maxOutputTokens > 0) {
+            "maxOutputTokens must be positive."
+        }
         toolLoopActivation?.let { activation ->
             require(activation.maxProviderSteps >= maxProviderSteps) {
                 "Activated maxProviderSteps must be at least the initial maxProviderSteps."
@@ -67,13 +83,31 @@ sealed interface AgentHarnessTraceEvent {
         val toolNames: List<String>
     ) : AgentHarnessTraceEvent
 
+    data class ProviderCompleted(
+        val step: Int,
+        val responseKind: String
+    ) : AgentHarnessTraceEvent
+
+    data class ProviderDisplay(
+        val step: Int,
+        val event: AgentProviderDisplayEvent
+    ) : AgentHarnessTraceEvent
+
+    data class ToolRequested(
+        val step: Int,
+        val callId: String,
+        val toolName: String,
+        val arguments: Map<String, String> = emptyMap()
+    ) : AgentHarnessTraceEvent
+
     data class ToolExecuted(
         val step: Int,
         val callId: String,
         val toolName: String,
         val succeeded: Boolean,
         val content: String,
-        val arguments: Map<String, String> = emptyMap()
+        val arguments: Map<String, String> = emptyMap(),
+        val envelope: AgentToolResultEnvelope? = null
     ) : AgentHarnessTraceEvent
 
     data class ToolLoopActivated(
@@ -180,6 +214,11 @@ class AgentOrchestrator(
 
         var step = 1
         var toolLoopActivated = false
+        var totalToolCalls = 0
+        var repeatedFailureSignature: String? = null
+        var repeatedFailureCount = 0
+        var cumulativeInputTokens = 0
+        var cumulativeOutputTokens = 0
         while (step <= providerStepLimit(toolLoopActivated)) {
             ensureActive()
             record(
@@ -190,8 +229,97 @@ class AgentOrchestrator(
                 toolNames = tools.map { spec -> spec.name }
                 )
             )
-            val response = provider.respond(AgentProviderRequest(session, context, tools, step))
+            validateAttachments(request.attachments)
+            val providerRequest = AgentProviderRequest(
+                session = session,
+                context = context,
+                tools = tools,
+                providerStep = step,
+                attachments = if (step == 1) request.attachments else emptyList()
+            )
+            val estimatedInputTokens = estimateInputTokens(providerRequest)
+            enforceTokenBudget(
+                label = "Input",
+                used = cumulativeInputTokens,
+                next = estimatedInputTokens,
+                limit = config.maxInputTokens
+            )
+            var acceptDisplayEvents = true
+            var reportedInputTokens: Int? = null
+            var reportedOutputTokens: Int? = null
+            var streamedOutputChars = 0L
+            val response = try {
+                if (provider is AgentStreamingProvider && provider.capabilities.streaming) {
+                    provider.respondStreaming(
+                        providerRequest,
+                        AgentProviderDisplayObserver { displayEvent ->
+                            when (displayEvent) {
+                                is AgentProviderDisplayEvent.TextDelta -> {
+                                    streamedOutputChars += displayEvent.text.length
+                                    enforceTokenBudget(
+                                        label = "Output",
+                                        used = cumulativeOutputTokens,
+                                        next = estimateTokens(streamedOutputChars),
+                                        limit = config.maxOutputTokens
+                                    )
+                                }
+                                is AgentProviderDisplayEvent.Usage -> {
+                                    reportedInputTokens = displayEvent.inputTokens
+                                        ?.also(::requireNonNegativeTokenUsage)
+                                    reportedOutputTokens = displayEvent.outputTokens
+                                        ?.also(::requireNonNegativeTokenUsage)
+                                }
+                                is AgentProviderDisplayEvent.ActionNarration,
+                                is AgentProviderDisplayEvent.ToolStatus -> Unit
+                            }
+                            if (acceptDisplayEvents &&
+                                !cancellationSignal.isCancellationRequested()
+                            ) {
+                                record(
+                                    trace,
+                                    AgentHarnessTraceEvent.ProviderDisplay(step, displayEvent)
+                                )
+                            }
+                        }
+                    )
+                } else {
+                    provider.respond(providerRequest)
+                }
+            } finally {
+                // An implementation that emits asynchronously after returning
+                // cannot mutate trace/session state with late deltas.
+                acceptDisplayEvents = false
+            }
             ensureActive()
+            val inputTokens = reportedInputTokens ?: estimatedInputTokens
+            val outputTokens = reportedOutputTokens ?: estimateOutputTokens(
+                response,
+                streamedOutputChars
+            )
+            enforceTokenBudget(
+                label = "Input",
+                used = cumulativeInputTokens,
+                next = inputTokens,
+                limit = config.maxInputTokens
+            )
+            enforceTokenBudget(
+                label = "Output",
+                used = cumulativeOutputTokens,
+                next = outputTokens,
+                limit = config.maxOutputTokens
+            )
+            cumulativeInputTokens += inputTokens
+            cumulativeOutputTokens += outputTokens
+            record(
+                trace,
+                AgentHarnessTraceEvent.ProviderCompleted(
+                    step = step,
+                    responseKind = when (response) {
+                        is AgentProviderResponse.FinalText -> "final_text"
+                        is AgentProviderResponse.ToolRequests -> "tool_requests"
+                    }
+                )
+            )
             when (response) {
                 is AgentProviderResponse.FinalText -> {
                     ensureActive()
@@ -230,14 +358,59 @@ class AgentOrchestrator(
                             )
                         )
                     }
+                    val selectedCalls = selectToolCalls(response.calls, toolLoopActivated)
+                    if (totalToolCalls + selectedCalls.size > config.maxToolCallsTotal) {
+                        throw AgentHarnessLimitException(
+                            "Tool-call budget ${config.maxToolCallsTotal} was exhausted."
+                        )
+                    }
+                    totalToolCalls += selectedCalls.size
+                    selectedCalls.forEach { call ->
+                        record(
+                            trace,
+                            AgentHarnessTraceEvent.ToolRequested(
+                                step = step,
+                                callId = call.id,
+                                toolName = call.toolName,
+                                arguments = call.arguments.toMap()
+                            )
+                        )
+                    }
                     toolOrchestrator.execute(
-                        calls = selectToolCalls(response.calls, toolLoopActivated),
+                        calls = selectedCalls,
                         sessionId = session.id,
+                        runId = request.runId,
                         beforeEach = ::ensureActive
                     ).forEach { execution ->
                         ensureActive()
                         val call = execution.call
-                        val result = execution.result
+                        val result = execution.result.let { raw ->
+                            raw.copy(
+                                content = AgentToolResultEnvelope.boundedProviderContent(raw),
+                                envelope = AgentToolResultEnvelope.fromLegacy(
+                                    raw,
+                                    clock.nowEpochMillis()
+                                )
+                            )
+                        }
+                        if (result.isError) {
+                            val signature = "${call.toolName}:${result.content}"
+                            repeatedFailureCount = if (signature == repeatedFailureSignature) {
+                                repeatedFailureCount + 1
+                            } else {
+                                repeatedFailureSignature = signature
+                                1
+                            }
+                            if (repeatedFailureCount >= config.maxRepeatedFailures) {
+                                throw AgentHarnessLimitException(
+                                    "Tool '${call.toolName}' repeated the same failure " +
+                                        "$repeatedFailureCount times."
+                                )
+                            }
+                        } else {
+                            repeatedFailureSignature = null
+                            repeatedFailureCount = 0
+                        }
                         session = appendToolResult(session, call, result)
                         sessionStore.save(session)
                         record(
@@ -248,7 +421,8 @@ class AgentOrchestrator(
                                 toolName = call.toolName,
                                 succeeded = !result.isError,
                                 content = result.content,
-                                arguments = call.arguments.toMap()
+                                arguments = call.arguments.toMap(),
+                                envelope = result.envelope
                             )
                         )
                     }
@@ -271,6 +445,17 @@ class AgentOrchestrator(
         }
     }
 
+    private fun validateAttachments(attachments: List<AttachmentRef>) {
+        attachments.forEach { attachment ->
+            if (!provider.capabilities.accepts(attachment.mediaType)) {
+                throw AgentHarnessProtocolException(
+                    "Provider '${provider.id}' does not accept attachment media type " +
+                        "'${attachment.mediaType}'."
+                )
+            }
+        }
+    }
+
     private fun selectToolCalls(
         calls: List<AgentToolCall>,
         toolLoopActivated: Boolean
@@ -281,6 +466,68 @@ class AgentOrchestrator(
         }
         val activationCalls = calls.filter { call -> call.toolName in activation.toolNames }
         return (activationCalls.ifEmpty { calls }).take(activation.maxToolCallsPerStep)
+    }
+
+    private fun estimateInputTokens(request: AgentProviderRequest): Int {
+        val characters = request.session.messages.sumOf { message -> message.content.length.toLong() } +
+            request.context.sumOf { item ->
+                item.source.length.toLong() + item.content.length.toLong()
+            } +
+            request.tools.sumOf { tool ->
+                tool.name.length.toLong() +
+                    tool.description.length.toLong() +
+                    tool.arguments.sumOf(String::length).toLong()
+            } +
+            request.attachments.sumOf { attachment ->
+                attachment.byteSize +
+                    attachment.mediaType.length +
+                    attachment.displayName.orEmpty().length
+            }
+        return estimateTokens(characters)
+    }
+
+    private fun estimateOutputTokens(
+        response: AgentProviderResponse,
+        streamedOutputChars: Long
+    ): Int {
+        val responseCharacters = when (response) {
+            is AgentProviderResponse.FinalText -> response.content.length.toLong()
+            is AgentProviderResponse.ToolRequests -> response.calls.sumOf { call ->
+                call.toolName.length.toLong() +
+                    call.arguments.entries.sumOf { (name, value) ->
+                        name.length.toLong() + value.length.toLong()
+                    }
+            }
+        }
+        return estimateTokens(maxOf(streamedOutputChars, responseCharacters))
+    }
+
+    private fun estimateTokens(characters: Long): Int {
+        if (characters <= 0) return 0
+        return ((characters + 3L) / 4L)
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+    }
+
+    private fun enforceTokenBudget(
+        label: String,
+        used: Int,
+        next: Int,
+        limit: Int?
+    ) {
+        if (limit != null && used.toLong() + next > limit) {
+            throw AgentHarnessLimitException(
+                "$label token budget $limit was exhausted."
+            )
+        }
+    }
+
+    private fun requireNonNegativeTokenUsage(tokens: Int) {
+        if (tokens < 0) {
+            throw AgentHarnessProtocolException(
+                "Provider reported negative token usage."
+            )
+        }
     }
 
     private fun ensureActive() {

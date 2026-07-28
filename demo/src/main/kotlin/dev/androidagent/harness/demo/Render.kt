@@ -8,6 +8,9 @@ internal fun AgentHarnessTraceEvent.label(): String {
     return when (this) {
         is AgentHarnessTraceEvent.ContextLoaded -> "ContextLoaded"
         is AgentHarnessTraceEvent.ProviderInvoked -> "ProviderInvoked($step)"
+        is AgentHarnessTraceEvent.ProviderDisplay -> "ProviderDisplay($step)"
+        is AgentHarnessTraceEvent.ProviderCompleted -> "ProviderCompleted($step)"
+        is AgentHarnessTraceEvent.ToolRequested -> "ToolRequested($toolName)"
         is AgentHarnessTraceEvent.ToolLoopActivated -> "ToolLoopActivated($toolName)"
         is AgentHarnessTraceEvent.ToolExecuted -> "ToolExecuted($toolName)"
         is AgentHarnessTraceEvent.Completed -> "Completed($step)"

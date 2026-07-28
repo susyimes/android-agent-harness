@@ -44,6 +44,9 @@ class SettingsActivity : Activity() {
         findViewById<Button>(R.id.settingsHouseButton).setOnClickListener {
             startActivity(Intent(this, AgentHouseActivity::class.java))
         }
+        findViewById<Button>(R.id.settingsControlCenterButton).setOnClickListener {
+            startActivity(Intent(this, ProductCenterActivity::class.java))
+        }
         findViewById<Button>(R.id.clearSessionsButton).setOnClickListener {
             confirmClearSessions()
         }

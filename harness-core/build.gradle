@@ -16,6 +16,12 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     }
 }
 
+kotlin {
+    abiValidation {
+        enabled.set(true)
+    }
+}
+
 dependencies {
     testImplementation 'junit:junit:4.13.2'
 }

@@ -12,11 +12,21 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import dev.androidagent.harness.deviceloop.android.AccessibilityAvailability
 import dev.androidagent.harness.sdk.AgentSessionSummary
+import dev.androidagent.harness.data.android.ProductDataStatus
+import dev.androidagent.harness.data.android.TodoItem
+import dev.androidagent.harness.data.android.TodoMutationResult
+import dev.androidagent.harness.data.android.TodoState
+import dev.androidagent.harness.feedback.HomeBriefCompiler
+import dev.androidagent.harness.state.AgentCandidateStatus
+import dev.androidagent.harness.scheduling.LongTaskStatus
+import java.time.LocalDate
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.Executors
 
 class HomeActivity : Activity() {
@@ -25,9 +35,15 @@ class HomeActivity : Activity() {
 
     private lateinit var providerStatus: TextView
     private lateinit var runtimeStatus: TextView
+    private lateinit var briefText: TextView
+    private lateinit var statsSummary: TextView
+    private lateinit var todoSummary: TextView
+    private lateinit var agentSummary: TextView
+    private lateinit var todoQuickContainer: LinearLayout
     private lateinit var recentSessions: LinearLayout
     private lateinit var preferences: SamplePreferences
     private lateinit var providerSettings: ProviderSettingsRepository
+    private lateinit var approvalUi: SampleApprovalUi
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +54,13 @@ class HomeActivity : Activity() {
 
         providerStatus = findViewById(R.id.homeProviderStatus)
         runtimeStatus = findViewById(R.id.homeRuntimeStatus)
+        briefText = findViewById(R.id.homeBriefText)
+        statsSummary = findViewById(R.id.homeStatsSummary)
+        todoSummary = findViewById(R.id.homeTodoSummary)
+        agentSummary = findViewById(R.id.homeAgentSummary)
+        todoQuickContainer = findViewById(R.id.homeTodoQuickContainer)
         recentSessions = findViewById(R.id.recentSessionsContainer)
+        approvalUi = SampleApprovalUi(this, ::loadLocalState)
         findViewById<Button>(R.id.continueChatButton).setOnClickListener {
             openChat(preferences.lastSessionId())
         }
@@ -60,6 +82,23 @@ class HomeActivity : Activity() {
                 )
             }
         }
+        bindProductButton(R.id.homeStatsButton, "stats")
+        bindProductButton(R.id.homeTodoButton, "todo")
+        bindProductButton(R.id.homeStateButton, "state")
+        bindProductButton(R.id.homeAutomationButton, "automation")
+        bindProductButton(R.id.homePermissionsButton, "permissions")
+        bindProductButton(R.id.homeDebugButton, "debug")
+        bindProductButton(R.id.homeDataButton, "data")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        approvalUi.attach()
+    }
+
+    override fun onStop() {
+        approvalUi.detach()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -99,7 +138,27 @@ class HomeActivity : Activity() {
         diskExecutor.execute {
             val summaries = SampleRuntime.sessions(this).listSessions().take(5)
             val house = SampleRuntime.house(this).snapshot()
+            val state = SampleRuntime.state(this).snapshot()
+            val todos = SampleRuntime.todo(this).list()
+            val schedules = SampleRuntime.schedules(this).list()
+            val outcomes = SampleRuntime.outcomes().query()
+            val checkpoints = SampleRuntime.checkpoints(this).list()
+            val stats = SampleRuntime.usageStats(this).snapshot()
             val accessibility = AccessibilityAvailability.isServiceEnabled(this)
+            val overdue = todos.count { item ->
+                item.state == TodoState.COMMITTED &&
+                    item.dueDate?.let { value ->
+                        runCatching { LocalDate.parse(value).isBefore(LocalDate.now()) }
+                            .getOrDefault(false)
+                    } == true
+            }
+            val brief = HomeBriefCompiler().compile(
+                overdueTodoCount = overdue,
+                candidates = state.candidates,
+                enabledScheduleCount = schedules.count { schedule -> schedule.enabled },
+                outcomes = outcomes,
+                findings = emptyList()
+            )
             mainHandler.post {
                 if (isDestroyed || isFinishing) return@post
                 runtimeStatus.text = buildString {
@@ -110,8 +169,118 @@ class HomeActivity : Activity() {
                     append("${house.coreFiles.size} 个核心文件 · ")
                     append("${house.skills.count { skill -> skill.enabled }} 个技能启用 · ")
                     append("${house.dailyMemories.size} 篇每日记忆")
+                    append(" · ${checkpoints.count { it.status.name == "RUNNING" }} 个 LongTask 运行中")
                 }
+                briefText.text = buildString {
+                    appendLine("今日简报 · ${brief.summary}")
+                    append(
+                        if (brief.pendingCandidateCount == 0) {
+                            "没有待审候选"
+                        } else {
+                            "${brief.pendingCandidateCount} 个记忆 / 技能 / 人格候选等待处理"
+                        }
+                    )
+                    val activeRuns = SampleRuntime.activeRunSnapshot().size
+                    if (activeRuns > 0) append(" · $activeRuns 个 Agent 正在运行")
+                }
+                statsSummary.text = when (stats.availability.status) {
+                    ProductDataStatus.AVAILABLE ->
+                        "Stats · 前台 ${formatDuration(stats.totalForegroundMillis)} · " +
+                            "解锁 ${stats.unlockCount} 次" +
+                            if (stats.isRealZero) " · 今日真实零数据" else ""
+                    else ->
+                        "Stats · ${stats.availability.status} · ${stats.availability.reason}"
+                }
+                val committed = todos.filter { item -> item.state == TodoState.COMMITTED }
+                todoSummary.text = "Todo · ${committed.size} 个待办 · " +
+                    "$overdue 个逾期 · ${todos.count { it.state == TodoState.DRAFT }} 个草稿"
+                agentSummary.text = buildString {
+                    val pendingApprovals = SampleRuntime.approvalBridge().pending().size
+                    val pendingCandidates = state.candidates.count { candidate ->
+                        candidate.status in setOf(
+                            AgentCandidateStatus.PROPOSED,
+                            AgentCandidateStatus.VALIDATED,
+                            AgentCandidateStatus.EVALUATED,
+                            AgentCandidateStatus.WAITING_APPROVAL
+                        )
+                    }
+                    val activeLongTasks = checkpoints.count { checkpoint ->
+                        checkpoint.status in setOf(
+                            LongTaskStatus.READY,
+                            LongTaskStatus.RUNNING,
+                            LongTaskStatus.PAUSED
+                        )
+                    }
+                    append("Agent · $pendingCandidates 个候选 · $pendingApprovals 个待审批")
+                    append(" · $activeLongTasks 个 LongTask 可继续")
+                }
+                renderQuickTodos(committed.take(3))
                 renderRecentSessions(summaries)
+            }
+        }
+    }
+
+    private fun renderQuickTodos(items: List<TodoItem>) {
+        todoQuickContainer.removeAllViews()
+        if (items.isEmpty()) {
+            todoQuickContainer.addView(TextView(this).apply {
+                text = "今天没有可快速完成的 Todo。"
+                textSize = 12f
+                setTextColor(getColor(R.color.textSecondary))
+            })
+            return
+        }
+        items.forEachIndexed { index, item ->
+            todoQuickContainer.addView(
+                Button(this).apply {
+                    removeClippedShadow()
+                    text = "完成 · ${item.title}"
+                    gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    textSize = 12f
+                    minWidth = 0
+                    setTextColor(getColor(R.color.textPrimary))
+                    background = getDrawable(R.drawable.bg_secondary_button)
+                    setPadding(dp(13), 0, dp(13), 0)
+                    setOnClickListener { completeTodo(item) }
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(42)
+                ).apply {
+                    if (index > 0) topMargin = dp(7)
+                }
+            )
+        }
+    }
+
+    private fun completeTodo(item: TodoItem) {
+        diskExecutor.execute {
+            val message = runCatching {
+                SampleRuntime.todo(this).updateCommitted(
+                    id = item.id,
+                    expectedRevision = item.revision,
+                    title = item.title,
+                    note = item.note,
+                    tags = item.tags,
+                    dueDate = item.dueDate,
+                    completed = true,
+                    runId = "home-${UUID.randomUUID()}",
+                    sessionId = "home",
+                    approvals = SampleRuntime.approvalCoordinator()
+                )
+            }.fold(
+                onSuccess = { result ->
+                    when (result) {
+                        is TodoMutationResult.Applied -> "Todo 已完成"
+                        is TodoMutationResult.Rejected -> "未完成：${result.reason}"
+                    }
+                },
+                onFailure = { error -> "完成失败：${error.message}" }
+            )
+            mainHandler.post {
+                if (isDestroyed || isFinishing) return@post
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                loadLocalState()
             }
         }
     }
@@ -163,7 +332,24 @@ class HomeActivity : Activity() {
         )
     }
 
+    private fun bindProductButton(id: Int, section: String) {
+        findViewById<Button>(id).apply {
+            removeClippedShadow()
+            setOnClickListener {
+                startActivity(
+                    Intent(this@HomeActivity, ProductCenterActivity::class.java)
+                        .putExtra(ProductCenterActivity.EXTRA_SECTION, section)
+                )
+            }
+        }
+    }
+
     private fun formatTime(epochMillis: Long): String {
         return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(epochMillis))
+    }
+
+    private fun formatDuration(millis: Long): String {
+        val minutes = millis / 60_000
+        return if (minutes < 60) "${minutes} 分钟" else "${minutes / 60}小时${minutes % 60}分"
     }
 }

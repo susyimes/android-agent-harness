@@ -4,10 +4,23 @@ package dev.androidagent.harness.deviceloop
 import dev.androidagent.harness.AgentTool
 import dev.androidagent.harness.AgentToolArgumentSchema
 import dev.androidagent.harness.AgentToolArgumentType
+import dev.androidagent.harness.AgentToolCapability
+import dev.androidagent.harness.AgentToolEffectRecord
+import dev.androidagent.harness.AgentToolIdempotency
 import dev.androidagent.harness.AgentToolInvocation
 import dev.androidagent.harness.AgentToolProfile
 import dev.androidagent.harness.AgentToolResult
+import dev.androidagent.harness.AgentToolResultEnvelope
+import dev.androidagent.harness.AgentToolResultStatus
+import dev.androidagent.harness.AgentToolRisk
+import dev.androidagent.harness.AgentToolSideEffect
 import dev.androidagent.harness.AgentToolSpec
+import dev.androidagent.harness.approval.AgentApprovalAwareTool
+import dev.androidagent.harness.approval.AgentApprovalCoordinator
+import dev.androidagent.harness.approval.AgentApprovalDecision as EffectApprovalDecision
+import dev.androidagent.harness.approval.AgentEffectAuthorization
+import dev.androidagent.harness.approval.AgentEffectHasher
+import dev.androidagent.harness.approval.AgentEffectIntent
 import java.util.Locale
 
 /**
@@ -24,7 +37,8 @@ import java.util.Locale
  * stack trace.
  */
 class DeviceObserveTool(
-    private val surface: DeviceSurface
+    private val surface: DeviceSurface,
+    private val protocol: StrictDeviceProtocol? = null
 ) : AgentTool {
     override val spec = AgentToolSpec(
         name = "device_observe",
@@ -47,7 +61,15 @@ class DeviceObserveTool(
                 "Could not observe the device: ${failed.readableMessage()}"
             )
         }
-        return AgentToolResult.success(DeviceText.renderScreen(screen))
+        val binding = try {
+            protocol?.recordObservation(screen)
+        } catch (error: DeviceProtocolException) {
+            return DeviceText.protocolFailure(error)
+        }
+        val rendered = DeviceText.renderScreen(screen)
+        return AgentToolResult.success(
+            if (binding == null) rendered else "snapshot_id=${binding.snapshotId}\n$rendered"
+        )
     }
 }
 
@@ -90,8 +112,10 @@ class DeviceActTool(
     private val riskPolicy: RiskPolicy,
     private val approvalGate: ApprovalGate = ArgumentApprovalGate,
     private val allowHome: Boolean = false,
-    private val stableTimeoutMs: Long = DEFAULT_STABLE_TIMEOUT_MS
-) : AgentTool {
+    private val stableTimeoutMs: Long = DEFAULT_STABLE_TIMEOUT_MS,
+    private val protocol: StrictDeviceProtocol? = null,
+    private val effectApprovals: AgentApprovalCoordinator? = null
+) : AgentApprovalAwareTool {
     override val spec = AgentToolSpec(
         name = "device_act",
         description = buildString {
@@ -117,7 +141,7 @@ class DeviceActTool(
             "max_scrolls",
             "app",
             "timeout_ms"
-        ),
+        ) + if (protocol == null) emptySet() else setOf("snapshot_id"),
         argumentSchemas = mapOf(
             "action" to AgentToolArgumentSchema(
                 description = "Exactly one device action to perform.",
@@ -159,21 +183,67 @@ class DeviceActTool(
             "timeout_ms" to AgentToolArgumentSchema(
                 type = AgentToolArgumentType.INTEGER
             )
+        ) + if (protocol == null) {
+            emptyMap()
+        } else {
+            mapOf(
+                "snapshot_id" to AgentToolArgumentSchema(
+                    description = "Exact snapshot_id returned by the latest device_observe."
+                )
+            )
+        },
+        capability = AgentToolCapability(
+            sideEffect = AgentToolSideEffect.DEVICE_ACTION,
+            risk = AgentToolRisk.CONTEXTUAL,
+            dataScopes = setOf("android-device"),
+            requiresForeground = true,
+            idempotency = AgentToolIdempotency.UNKNOWN,
+            supportsCancellation = true,
+            targetArgumentNames = setOf("action", "node", "app", "expected_label")
         )
+    )
+
+    override fun bindApprovalCoordinator(
+        approvals: AgentApprovalCoordinator
+    ): AgentTool = DeviceActTool(
+        surface = surface,
+        riskPolicy = riskPolicy,
+        approvalGate = approvalGate,
+        allowHome = allowHome,
+        stableTimeoutMs = stableTimeoutMs,
+        protocol = protocol,
+        effectApprovals = approvals
     )
 
     override fun execute(invocation: AgentToolInvocation): AgentToolResult {
         val arguments = invocation.arguments
         val action = arguments.getValue("action").trim()
-        return try {
+        if (protocol != null) {
+            val currentScreen = try {
+                surface.snapshot()
+            } catch (structured: DeviceActionException) {
+                return DeviceText.failure(structured.errorType, structured.readableMessage())
+            } catch (failed: RuntimeException) {
+                return DeviceText.failure(
+                    DeviceErrorType.ACTION_FAILED,
+                    "Could not validate the current device snapshot: ${failed.readableMessage()}"
+                )
+            }
+            try {
+                protocol.requireAction(arguments["snapshot_id"], currentScreen)
+            } catch (error: DeviceProtocolException) {
+                return DeviceText.protocolFailure(error)
+            }
+        }
+        val result = try {
             when (action) {
-                ACTION_TAP, ACTION_SET_TEXT -> nodeAction(action, arguments)
-                ACTION_BACK -> backAction()
-                ACTION_HOME -> homeAction()
-                ACTION_SWIPE -> swipeAction(arguments)
-                ACTION_SCROLL_TO_TEXT -> scrollAction(arguments)
-                ACTION_LAUNCH_APP -> launchAction(arguments)
-                ACTION_WAIT_STABLE -> waitAction(arguments)
+                ACTION_TAP, ACTION_SET_TEXT -> nodeAction(invocation, action, arguments)
+                ACTION_BACK -> backAction(invocation)
+                ACTION_HOME -> homeAction(invocation)
+                ACTION_SWIPE -> swipeAction(invocation, arguments)
+                ACTION_SCROLL_TO_TEXT -> scrollAction(invocation, arguments)
+                ACTION_LAUNCH_APP -> launchAction(invocation, arguments)
+                ACTION_WAIT_STABLE -> waitAction(invocation, arguments)
                 else -> DeviceText.failure(
                     DeviceErrorType.UNSUPPORTED_ACTION,
                     "Unknown action '$action'. Use one of: ${
@@ -197,10 +267,30 @@ class DeviceActTool(
                 "Action '$action' failed: ${failed.readableMessage()}"
             )
         }
+        if (protocol != null && !isApprovalPause(result)) {
+            protocol.recordActionAttempt("device_act:$action")
+        }
+        return result
+    }
+
+    private fun isApprovalPause(result: AgentToolResult): Boolean {
+        return (
+            result.content.contains(DeviceErrorType.NEEDS_CONFIRMATION.name) ||
+                result.content.contains("DENIED_BY_USER") ||
+                result.content.contains("APPROVAL_TIMEOUT") ||
+                result.content.contains("APPROVAL_DENIED") ||
+                result.content.contains("APPROVAL_UNAVAILABLE") ||
+                result.content.contains("APPROVAL_TOKEN_MISMATCH") ||
+                result.content.contains("PAUSED_HIGH_RISK")
+            )
     }
 
     /** tap and set_text: resolve the node, guard it, then act. */
-    private fun nodeAction(action: String, arguments: Map<String, String>): AgentToolResult {
+    private fun nodeAction(
+        invocation: AgentToolInvocation,
+        action: String,
+        arguments: Map<String, String>
+    ): AgentToolResult {
         val nodeId = arguments["node"]
             ?: return DeviceText.failure(
                 DeviceErrorType.INVALID_ARGUMENT,
@@ -232,22 +322,229 @@ class DeviceActTool(
                     "acting on it would silently do nothing. Satisfy its precondition first."
             )
         }
-        if (riskPolicy.isHighRisk(node, screen)) {
-            val decision = approvalGate.decide(node, action, arguments)
-            if (decision != ApprovalDecision.APPROVED) {
-                // A governed pause, not a malfunction: reported as a non-error result
-                // classified as DeviceErrorType.NEEDS_CONFIRMATION.
-                return AgentToolResult.success(approvalGate.pauseMessage(node, action, decision))
-            }
+        val risk = if (riskPolicy.isHighRisk(node, screen)) {
+            AgentToolRisk.HIGH
+        } else {
+            AgentToolRisk.LOW
         }
+        val authorization = authorizeAction(
+            invocation = invocation,
+            action = action,
+            risk = risk,
+            targetRef = "node:${node.id}:${node.label.take(MAX_TARGET_LABEL_CHARS)}",
+            legacyNode = node,
+            expectedScreen = screen
+        )
+        authorization.rejection?.let { rejection -> return rejection }
 
         when (action) {
             ACTION_TAP -> surface.tap(nodeId)
             else -> surface.setText(nodeId, requireNotNull(text))
         }
         settle()
-        return AgentToolResult.success("OK: $action $nodeId -> screen=${surface.snapshot().id}")
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success(
+                "OK: $action $nodeId -> screen=${surface.snapshot().id}"
+            ),
+            occurred = true
+        )
     }
+
+    private fun authorizeAction(
+        invocation: AgentToolInvocation,
+        action: String,
+        risk: AgentToolRisk,
+        targetRef: String,
+        legacyNode: DeviceNode? = null,
+        expectedScreen: DeviceScreen? = null
+    ): DeviceAuthorization {
+        val intent = AgentEffectIntent(
+            runId = invocation.runId,
+            sessionId = invocation.sessionId,
+            toolCallId = invocation.callId,
+            toolName = spec.name,
+            capability = spec.capability.copy(risk = risk),
+            targetRef = targetRef,
+            argumentHash = AgentEffectHasher.hash(spec.name, invocation.arguments),
+            summary = "Perform Android '$action' on $targetRef.",
+            evidenceRefs = invocation.arguments["snapshot_id"]
+                ?.takeIf(String::isNotBlank)
+                ?.let { snapshotId -> listOf("device-snapshot:$snapshotId") }
+                .orEmpty()
+        )
+        val approvals = effectApprovals
+        if (approvals != null) {
+            val waitFailure = enterApprovalWait(action)
+            if (waitFailure != null) {
+                return DeviceAuthorization(
+                    intent,
+                    recordEffect(intent, waitFailure, occurred = false)
+                )
+            }
+            val authorization = try {
+                approvals.authorize(intent)
+            } finally {
+                leaveApprovalWait()
+            }
+            when (authorization) {
+                is AgentEffectAuthorization.Rejected -> {
+                    val status = when (authorization.decision) {
+                        EffectApprovalDecision.DENIED,
+                        EffectApprovalDecision.TIMEOUT -> AgentToolResultStatus.DENIED
+                        EffectApprovalDecision.UNAVAILABLE -> AgentToolResultStatus.UNAVAILABLE
+                        EffectApprovalDecision.APPROVED ->
+                            error("Approved authorization cannot be rejected.")
+                    }
+                    val summary =
+                        "APPROVAL_${authorization.decision.name}: ${authorization.message}"
+                    val rejection = AgentToolResult.failure(
+                        summary,
+                        AgentToolResultEnvelope(
+                            status = status,
+                            summary = summary,
+                            createdAtEpochMillis = approvals.nowEpochMillis()
+                        )
+                    )
+                    return DeviceAuthorization(
+                        intent,
+                        recordEffect(intent, rejection, occurred = false)
+                    )
+                }
+                is AgentEffectAuthorization.Allowed -> {
+                    val token = authorization.token
+                    if (token != null && !approvals.consume(token, intent)) {
+                        val summary =
+                            "APPROVAL_TOKEN_MISMATCH: approval expired, changed, or was already consumed."
+                        val rejection = AgentToolResult.failure(
+                            summary,
+                            AgentToolResultEnvelope(
+                                status = AgentToolResultStatus.DENIED,
+                                summary = summary,
+                                createdAtEpochMillis = approvals.nowEpochMillis()
+                            )
+                        )
+                        return DeviceAuthorization(
+                            intent,
+                            recordEffect(intent, rejection, occurred = false)
+                        )
+                    }
+                }
+            }
+        } else if (risk == AgentToolRisk.HIGH && legacyNode != null) {
+            val waitFailure = enterApprovalWait(action)
+            if (waitFailure != null) {
+                return DeviceAuthorization(
+                    intent,
+                    recordEffect(intent, waitFailure, occurred = false)
+                )
+            }
+            val decision = try {
+                approvalGate.decide(legacyNode, action, invocation.arguments)
+            } finally {
+                leaveApprovalWait()
+            }
+            if (decision != ApprovalDecision.APPROVED) {
+                val pause = AgentToolResult.success(
+                    approvalGate.pauseMessage(legacyNode, action, decision)
+                )
+                return DeviceAuthorization(
+                    intent,
+                    recordEffect(intent, pause, occurred = false)
+                )
+            }
+        }
+
+        val revalidation = revalidateAfterApproval(
+            invocation.arguments["snapshot_id"],
+            expectedScreen
+        )
+        return DeviceAuthorization(
+            intent,
+            revalidation?.let { failure ->
+                recordEffect(intent, failure, occurred = false)
+            }
+        )
+    }
+
+    private fun enterApprovalWait(action: String): AgentToolResult? {
+        val controller = protocol ?: return null
+        return try {
+            controller.recordWaitingApproval("device_act:$action")
+            null
+        } catch (error: DeviceProtocolException) {
+            DeviceText.protocolFailure(error)
+        } catch (error: IllegalStateException) {
+            DeviceText.failure(
+                DeviceErrorType.PROTOCOL_VIOLATION,
+                error.message ?: "Phone Use could not enter approval state."
+            )
+        }
+    }
+
+    private fun leaveApprovalWait() {
+        val controller = protocol ?: return
+        if (controller.state() == DeviceProtocolState.WAITING_APPROVAL) {
+            controller.resumeObservedAfterApprovalDecision()
+        }
+    }
+
+    private fun revalidateAfterApproval(
+        snapshotId: String?,
+        expectedScreen: DeviceScreen?
+    ): AgentToolResult? {
+        if (expectedScreen == null && protocol == null) return null
+        val fresh = try {
+            surface.snapshot()
+        } catch (structured: DeviceActionException) {
+            return DeviceText.failure(structured.errorType, structured.readableMessage())
+        } catch (failed: RuntimeException) {
+            return DeviceText.failure(
+                DeviceErrorType.ACTION_FAILED,
+                "Could not revalidate the approved device target: ${failed.readableMessage()}"
+            )
+        }
+        if (
+            expectedScreen != null &&
+            snapshotBinding(expectedScreen) != snapshotBinding(fresh)
+        ) {
+            return DeviceText.failure(
+                DeviceErrorType.STALE_TARGET,
+                "The device screen changed while approval was pending; observe again before acting."
+            )
+        }
+        val controller = protocol ?: return null
+        return try {
+            controller.requireAction(snapshotId, fresh)
+            null
+        } catch (error: DeviceProtocolException) {
+            DeviceText.protocolFailure(error)
+        }
+    }
+
+    private fun recordEffect(
+        intent: AgentEffectIntent,
+        result: AgentToolResult,
+        occurred: Boolean
+    ): AgentToolResult {
+        val now = effectApprovals?.nowEpochMillis() ?: System.currentTimeMillis()
+        val envelope = AgentToolResultEnvelope.fromLegacy(result, now).copy(
+            effect = AgentToolEffectRecord(
+                effectId = "device-effect:${intent.runId}:${intent.toolCallId}",
+                sideEffect = AgentToolSideEffect.DEVICE_ACTION,
+                targetRef = intent.targetRef,
+                argumentHash = intent.argumentHash,
+                idempotencyKey = null,
+                occurred = occurred
+            )
+        )
+        return result.copy(envelope = envelope)
+    }
+
+    private data class DeviceAuthorization(
+        val intent: AgentEffectIntent,
+        val rejection: AgentToolResult?
+    )
 
     /**
      * STALE-TARGET GUARD.
@@ -287,27 +584,52 @@ class DeviceActTool(
         )
     }
 
-    private fun backAction(): AgentToolResult {
+    private fun backAction(invocation: AgentToolInvocation): AgentToolResult {
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_BACK,
+            AgentToolRisk.LOW,
+            "device:back"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         surface.back()
         settle()
-        return AgentToolResult.success("OK: $ACTION_BACK -> screen=${surface.snapshot().id}")
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success("OK: $ACTION_BACK -> screen=${surface.snapshot().id}"),
+            occurred = true
+        )
     }
 
-    private fun homeAction(): AgentToolResult {
+    private fun homeAction(invocation: AgentToolInvocation): AgentToolResult {
         if (!allowHome) {
             return DeviceText.failure(
                 DeviceErrorType.UNSUPPORTED_ACTION,
                 "Action '$ACTION_HOME' is refused: leaving the app breaks the task chain and " +
                     "invalidates every node id you observed; use $ACTION_BACK or in-app " +
-                    "navigation instead. Do not retry '$ACTION_HOME'."
+                "navigation instead. Do not retry '$ACTION_HOME'."
             )
         }
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_HOME,
+            AgentToolRisk.HIGH,
+            "device:home"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         surface.home()
         settle()
-        return AgentToolResult.success("OK: $ACTION_HOME -> screen=${surface.snapshot().id}")
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success("OK: $ACTION_HOME -> screen=${surface.snapshot().id}"),
+            occurred = true
+        )
     }
 
-    private fun swipeAction(arguments: Map<String, String>): AgentToolResult {
+    private fun swipeAction(
+        invocation: AgentToolInvocation,
+        arguments: Map<String, String>
+    ): AgentToolResult {
         val direction = arguments["direction"]
             ?: return DeviceText.failure(
                 DeviceErrorType.INVALID_ARGUMENT,
@@ -320,15 +642,29 @@ class DeviceActTool(
         val durationMs = positiveInt(arguments, "duration_ms", DEFAULT_SWIPE_DURATION_MS)
             ?: return invalidNumber(arguments, "duration_ms", "milliseconds")
 
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_SWIPE,
+            AgentToolRisk.LOW,
+            "device:swipe:$normalizedDirection"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         surface.swipe(normalizedDirection, distancePx, durationMs)
         settle()
-        return AgentToolResult.success(
-            "OK: $ACTION_SWIPE $normalizedDirection ${distancePx}px/${durationMs}ms " +
-                "-> screen=${surface.snapshot().id}"
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success(
+                "OK: $ACTION_SWIPE $normalizedDirection ${distancePx}px/${durationMs}ms " +
+                    "-> screen=${surface.snapshot().id}"
+            ),
+            occurred = true
         )
     }
 
-    private fun scrollAction(arguments: Map<String, String>): AgentToolResult {
+    private fun scrollAction(
+        invocation: AgentToolInvocation,
+        arguments: Map<String, String>
+    ): AgentToolResult {
         val text = arguments["text"]
             ?: return DeviceText.failure(
                 DeviceErrorType.INVALID_ARGUMENT,
@@ -345,22 +681,40 @@ class DeviceActTool(
         val maxScrolls = positiveInt(arguments, "max_scrolls", DEFAULT_MAX_SCROLLS)
             ?: return invalidNumber(arguments, "max_scrolls", "scroll attempts")
 
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_SCROLL_TO_TEXT,
+            AgentToolRisk.LOW,
+            "device:scroll:$direction"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         val found = surface.scrollToText(text, direction, maxScrolls)
         settle()
         val screen = surface.snapshot()
         if (!found) {
-            return DeviceText.targetNotFound(
-                "Did not find '$text' after $maxScrolls $direction scroll attempts; " +
-                    "screen '${screen.id}' does not contain it.",
-                screen
+            return recordEffect(
+                authorization.intent,
+                DeviceText.targetNotFound(
+                    "Did not find '$text' after $maxScrolls $direction scroll attempts; " +
+                        "screen '${screen.id}' does not contain it.",
+                    screen
+                ),
+                occurred = true
             )
         }
-        return AgentToolResult.success(
-            "OK: $ACTION_SCROLL_TO_TEXT '$text' $direction -> screen=${screen.id}"
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success(
+                "OK: $ACTION_SCROLL_TO_TEXT '$text' $direction -> screen=${screen.id}"
+            ),
+            occurred = true
         )
     }
 
-    private fun launchAction(arguments: Map<String, String>): AgentToolResult {
+    private fun launchAction(
+        invocation: AgentToolInvocation,
+        arguments: Map<String, String>
+    ): AgentToolResult {
         val app = arguments["app"]
             ?: return DeviceText.failure(
                 DeviceErrorType.INVALID_ARGUMENT,
@@ -372,37 +726,70 @@ class DeviceActTool(
                 "Argument 'app' must not be blank for $ACTION_LAUNCH_APP."
             )
         }
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_LAUNCH_APP,
+            AgentToolRisk.LOW,
+            "app:${app.trim().take(MAX_TARGET_LABEL_CHARS)}"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         val reached = surface.launchApp(app.trim())
         settle()
         val screen = surface.snapshot()
         // Launching by package is exact, so landing elsewhere means the app never
         // reached the foreground (disambiguation dialog, crash, permission screen).
         if (looksLikePackage(app) && !reached.equals(app.trim(), ignoreCase = true)) {
-            return DeviceText.failure(
-                DeviceErrorType.FOREGROUND_TIMEOUT,
-                "$ACTION_LAUNCH_APP '${app.trim()}' ended up in package '$reached' on screen " +
-                    "'${screen.id}'. Observe the screen before assuming the app is open."
+            return recordEffect(
+                authorization.intent,
+                DeviceText.failure(
+                    DeviceErrorType.FOREGROUND_TIMEOUT,
+                    "$ACTION_LAUNCH_APP '${app.trim()}' ended up in package '$reached' on screen " +
+                        "'${screen.id}'. Observe the screen before assuming the app is open."
+                ),
+                occurred = true
             )
         }
-        return AgentToolResult.success(
-            "OK: $ACTION_LAUNCH_APP ${app.trim()} -> package=$reached screen=${screen.id}"
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success(
+                "OK: $ACTION_LAUNCH_APP ${app.trim()} -> package=$reached screen=${screen.id}"
+            ),
+            occurred = true
         )
     }
 
-    private fun waitAction(arguments: Map<String, String>): AgentToolResult {
+    private fun waitAction(
+        invocation: AgentToolInvocation,
+        arguments: Map<String, String>
+    ): AgentToolResult {
         val timeoutMs = positiveLong(arguments, "timeout_ms", stableTimeoutMs)
             ?: return invalidNumber(arguments, "timeout_ms", "milliseconds")
+        val authorization = authorizeAction(
+            invocation,
+            ACTION_WAIT_STABLE,
+            AgentToolRisk.LOW,
+            "device:wait-stable"
+        )
+        authorization.rejection?.let { rejection -> return rejection }
         val stable = surface.waitForStable(timeoutMs)
         val screen = surface.snapshot()
         if (!stable) {
-            return DeviceText.failure(
-                DeviceErrorType.WAIT_TIMEOUT,
-                "Screen '${screen.id}' was still changing after ${timeoutMs}ms. " +
-                    "Observe again before acting on any node id."
+            return recordEffect(
+                authorization.intent,
+                DeviceText.failure(
+                    DeviceErrorType.WAIT_TIMEOUT,
+                    "Screen '${screen.id}' was still changing after ${timeoutMs}ms. " +
+                        "Observe again before acting on any node id."
+                ),
+                occurred = true
             )
         }
-        return AgentToolResult.success(
-            "OK: $ACTION_WAIT_STABLE ${timeoutMs}ms -> screen=${screen.id}"
+        return recordEffect(
+            authorization.intent,
+            AgentToolResult.success(
+                "OK: $ACTION_WAIT_STABLE ${timeoutMs}ms -> screen=${screen.id}"
+            ),
+            occurred = true
         )
     }
 
@@ -488,6 +875,7 @@ class DeviceActTool(
         const val DEFAULT_SWIPE_DURATION_MS = 300
         const val DEFAULT_SCROLL_DIRECTION = "down"
         const val DEFAULT_MAX_SCROLLS = 8
+        const val MAX_TARGET_LABEL_CHARS = 120
     }
 }
 
@@ -510,7 +898,8 @@ class DeviceActTool(
  * simple; it accepts a summary and echoes it.
  */
 class DeviceFinishTool(
-    private val surface: DeviceSurface? = null
+    private val surface: DeviceSurface? = null,
+    private val protocol: StrictDeviceProtocol? = null
 ) : AgentTool {
     override val spec = AgentToolSpec(
         name = "device_finish",
@@ -524,7 +913,12 @@ class DeviceFinishTool(
         } else {
             setOf("summary", "evidence")
         },
-        optionalArguments = if (surface == null) emptySet() else setOf("expected_app")
+        optionalArguments = if (surface == null) {
+            emptySet()
+        } else {
+            setOf("expected_app") +
+                if (protocol == null) emptySet() else setOf("snapshot_id")
+        }
     )
 
     override fun execute(invocation: AgentToolInvocation): AgentToolResult {
@@ -561,7 +955,19 @@ class DeviceFinishTool(
         if (appFailure != null) {
             return appFailure
         }
-        if (!evidenceIsVisible(evidence, screen)) {
+        val evidenceVisible = evidenceIsVisible(evidence, screen)
+        if (protocol != null) {
+            try {
+                protocol.requireFinish(
+                    snapshotId = invocation.arguments["snapshot_id"],
+                    currentScreen = screen,
+                    evidenceVisible = evidenceVisible
+                )
+            } catch (error: DeviceProtocolException) {
+                return DeviceText.protocolFailure(error)
+            }
+        }
+        if (!evidenceVisible) {
             return DeviceText.failure(
                 DeviceErrorType.ACTION_FAILED,
                 "Evidence '${evidence.trim()}' is not visible on screen '${screen.id}', so the " +
@@ -570,6 +976,7 @@ class DeviceFinishTool(
                 listOf("current screen:") + DeviceText.renderScreen(screen).lines()
             )
         }
+        protocol?.recordFinished()
         return AgentToolResult.success(
             "FINISHED: $summary (evidence '${evidence.trim()}' verified on screen '${screen.id}')"
         )

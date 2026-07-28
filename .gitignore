@@ -1,5 +1,6 @@
 .gradle/
 .gradle-user-home/
+.kotlin/
 .idea/
 **/build/
 captures/
@@ -10,4 +11,3 @@ secrets.properties
 *.keystore
 *.p12
 *.pem
-

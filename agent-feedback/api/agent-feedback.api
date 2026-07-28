@@ -1,0 +1,464 @@
+public final class dev/androidagent/harness/feedback/ActivationDecision {
+	public fun <init> (Ldev/androidagent/harness/feedback/Opportunity;ILdev/androidagent/harness/feedback/ActivationDisposition;Ljava/lang/String;Ldev/androidagent/harness/feedback/ActivationRequest;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/feedback/Opportunity;ILdev/androidagent/harness/feedback/ActivationDisposition;Ljava/lang/String;Ldev/androidagent/harness/feedback/ActivationRequest;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/feedback/Opportunity;
+	public final fun component2 ()I
+	public final fun component3 ()Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ldev/androidagent/harness/feedback/ActivationRequest;
+	public final fun copy (Ldev/androidagent/harness/feedback/Opportunity;ILdev/androidagent/harness/feedback/ActivationDisposition;Ljava/lang/String;Ldev/androidagent/harness/feedback/ActivationRequest;)Ldev/androidagent/harness/feedback/ActivationDecision;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/ActivationDecision;Ldev/androidagent/harness/feedback/Opportunity;ILdev/androidagent/harness/feedback/ActivationDisposition;Ljava/lang/String;Ldev/androidagent/harness/feedback/ActivationRequest;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/ActivationDecision;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDisposition ()Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public final fun getOpportunity ()Ldev/androidagent/harness/feedback/Opportunity;
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getRequest ()Ldev/androidagent/harness/feedback/ActivationRequest;
+	public final fun getScore ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/ActivationDisposition : java/lang/Enum {
+	public static final field ACTIVATE Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public static final field DEFER Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public static final field SUPPRESS Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/ActivationDisposition;
+	public static fun values ()[Ldev/androidagent/harness/feedback/ActivationDisposition;
+}
+
+public final class dev/androidagent/harness/feedback/ActivationRequest : java/io/Serializable {
+	public fun <init> (Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;Ldev/androidagent/harness/sdk/AgentRunBudget;Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ldev/androidagent/harness/sdk/AgentRunBudget;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()J
+	public final fun copy (Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;Ldev/androidagent/harness/sdk/AgentRunBudget;Ljava/lang/String;Ljava/lang/String;J)Ldev/androidagent/harness/feedback/ActivationRequest;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/ActivationRequest;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;Ldev/androidagent/harness/sdk/AgentRunBudget;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Ldev/androidagent/harness/feedback/ActivationRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContextPolicyId ()Ljava/lang/String;
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getExpiresAtEpochMillis ()J
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getSuggestedBudget ()Ldev/androidagent/harness/sdk/AgentRunBudget;
+	public final fun getToolProfileId ()Ljava/lang/String;
+	public final fun getTriggerType ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/AgentSelfCheck {
+	public fun <init> ()V
+	public final fun run (ZZIIIZ)Ldev/androidagent/harness/feedback/SelfCheckReport;
+}
+
+public final class dev/androidagent/harness/feedback/DreamEngine {
+	public fun <init> ()V
+	public final fun reflect (Ljava/util/List;Ljava/util/List;)Ldev/androidagent/harness/feedback/DreamReport;
+}
+
+public final class dev/androidagent/harness/feedback/DreamProposal {
+	public fun <init> (Ldev/androidagent/harness/feedback/DreamProposalType;Ljava/lang/String;Ljava/util/List;Z)V
+	public synthetic fun <init> (Ldev/androidagent/harness/feedback/DreamProposalType;Ljava/lang/String;Ljava/util/List;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/feedback/DreamProposalType;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Z
+	public final fun copy (Ldev/androidagent/harness/feedback/DreamProposalType;Ljava/lang/String;Ljava/util/List;Z)Ldev/androidagent/harness/feedback/DreamProposal;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/DreamProposal;Ldev/androidagent/harness/feedback/DreamProposalType;Ljava/lang/String;Ljava/util/List;ZILjava/lang/Object;)Ldev/androidagent/harness/feedback/DreamProposal;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getRequiresCandidateReview ()Z
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getType ()Ldev/androidagent/harness/feedback/DreamProposalType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/DreamProposalType : java/lang/Enum {
+	public static final field EXPERIENCE Ldev/androidagent/harness/feedback/DreamProposalType;
+	public static final field MEMORY Ldev/androidagent/harness/feedback/DreamProposalType;
+	public static final field PERSONA Ldev/androidagent/harness/feedback/DreamProposalType;
+	public static final field TODO_DRAFT Ldev/androidagent/harness/feedback/DreamProposalType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/DreamProposalType;
+	public static fun values ()[Ldev/androidagent/harness/feedback/DreamProposalType;
+}
+
+public final class dev/androidagent/harness/feedback/DreamReport {
+	public fun <init> (Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;)Ldev/androidagent/harness/feedback/DreamReport;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/DreamReport;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/DreamReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCollectedEvidenceRefs ()Ljava/util/List;
+	public final fun getConflicts ()Ljava/util/List;
+	public final fun getPatterns ()Ljava/util/List;
+	public final fun getProposals ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/FeedbackFinding {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/FindingSeverity;Ljava/util/List;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ldev/androidagent/harness/feedback/FindingSeverity;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/FindingSeverity;Ljava/util/List;Z)Ldev/androidagent/harness/feedback/FeedbackFinding;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/FeedbackFinding;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/FindingSeverity;Ljava/util/List;ZILjava/lang/Object;)Ldev/androidagent/harness/feedback/FeedbackFinding;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getNotificationCandidate ()Z
+	public final fun getSeverity ()Ldev/androidagent/harness/feedback/FindingSeverity;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/FeedbackSignal : java/io/Serializable {
+	public fun <init> (Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;)V
+	public synthetic fun <init> (Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public final fun component3 ()Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()I
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/util/Map;
+	public final fun component8 ()J
+	public final fun component9 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;)Ldev/androidagent/harness/feedback/FeedbackSignal;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/FeedbackSignal;Ljava/lang/String;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ldev/androidagent/harness/feedback/FeedbackSignalSource;Ljava/lang/String;ILjava/util/List;Ljava/util/Map;JLjava/lang/Long;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/FeedbackSignal;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttributes ()Ljava/util/Map;
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getExpiresAtEpochMillis ()Ljava/lang/Long;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getImportance ()I
+	public final fun getSource ()Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getType ()Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/FeedbackSignalSource : java/lang/Enum {
+	public static final field ANDROID Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static final field HOST Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static final field PRODUCT Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static final field RUN Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static final field SAFETY Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static final field USER Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+	public static fun values ()[Ldev/androidagent/harness/feedback/FeedbackSignalSource;
+}
+
+public final class dev/androidagent/harness/feedback/FeedbackSignalType : java/lang/Enum {
+	public static final field ACTIVATION_EMITTED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field APPROVAL_DENIED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field BATTERY_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field CANDIDATE_BACKLOG Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field FOREGROUND_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field NETWORK_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field PERMISSION_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field REPEATED_FAILURE Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field RISK_ESCALATED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field RUN_CANCELLED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field RUN_COMPLETED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field RUN_EXPIRED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field RUN_FAILED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field SCHEDULE_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field STATS_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field TODO_CHANGED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field TYPED_SKIP Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field USER_ACCEPTED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field USER_CORRECTED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field USER_DISMISSED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field USER_EDITED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static final field USER_REJECTED Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public static fun values ()[Ldev/androidagent/harness/feedback/FeedbackSignalType;
+}
+
+public final class dev/androidagent/harness/feedback/FindingSeverity : java/lang/Enum {
+	public static final field ACTIONABLE Ldev/androidagent/harness/feedback/FindingSeverity;
+	public static final field INFO Ldev/androidagent/harness/feedback/FindingSeverity;
+	public static final field QUIET Ldev/androidagent/harness/feedback/FindingSeverity;
+	public static final field URGENT Ldev/androidagent/harness/feedback/FindingSeverity;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/FindingSeverity;
+	public static fun values ()[Ldev/androidagent/harness/feedback/FindingSeverity;
+}
+
+public final class dev/androidagent/harness/feedback/HeartbeatEngine {
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun inspect (Ldev/androidagent/harness/feedback/HeartbeatInput;)Ldev/androidagent/harness/feedback/HeartbeatReport;
+}
+
+public final class dev/androidagent/harness/feedback/HeartbeatInput {
+	public fun <init> (IIIILjava/util/List;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (IIIILjava/util/List;)Ldev/androidagent/harness/feedback/HeartbeatInput;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/HeartbeatInput;IIIILjava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/HeartbeatInput;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getOverdueTodoCount ()I
+	public final fun getPendingCandidateCount ()I
+	public final fun getPermissionProblemCount ()I
+	public final fun getRepeatedFailureCount ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/HeartbeatReport {
+	public fun <init> (Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;)Ldev/androidagent/harness/feedback/HeartbeatReport;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/HeartbeatReport;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/HeartbeatReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActivationSignals ()Ljava/util/List;
+	public final fun getFindings ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/HomeBrief {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;IIILdev/androidagent/harness/feedback/OutcomeStatus;Ljava/util/List;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public final fun component7 ()Ljava/util/List;
+	public final fun component8 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;IIILdev/androidagent/harness/feedback/OutcomeStatus;Ljava/util/List;J)Ldev/androidagent/harness/feedback/HomeBrief;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/HomeBrief;Ljava/lang/String;Ljava/lang/String;IIILdev/androidagent/harness/feedback/OutcomeStatus;Ljava/util/List;JILjava/lang/Object;)Ldev/androidagent/harness/feedback/HomeBrief;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabledScheduleCount ()I
+	public final fun getFindings ()Ljava/util/List;
+	public final fun getGeneratedAtEpochMillis ()J
+	public final fun getLastOutcome ()Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public final fun getOverdueTodoCount ()I
+	public final fun getPendingCandidateCount ()I
+	public final fun getSummary ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/HomeBriefCompiler {
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/AgentClock;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun compile (ILjava/util/List;ILjava/util/List;Ljava/util/List;)Ldev/androidagent/harness/feedback/HomeBrief;
+}
+
+public final class dev/androidagent/harness/feedback/InMemoryOutcomeJournal : dev/androidagent/harness/feedback/OutcomeJournal {
+	public fun <init> ()V
+	public fun append (Ldev/androidagent/harness/feedback/RunOutcomeRecord;)V
+	public final fun clear ()I
+	public fun query (J)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/InMemorySignalJournal : dev/androidagent/harness/feedback/SignalJournal {
+	public fun <init> ()V
+	public fun append (Ldev/androidagent/harness/feedback/FeedbackSignal;)V
+	public final fun clear ()I
+	public fun query (J)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/InitiativeLevel : java/lang/Enum {
+	public static final field BALANCED Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public static final field HIGH Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public static final field LOW Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public static final field OFF Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public static fun values ()[Ldev/androidagent/harness/feedback/InitiativeLevel;
+}
+
+public final class dev/androidagent/harness/feedback/Opportunity {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;IDIJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()I
+	public final fun component6 ()D
+	public final fun component7 ()I
+	public final fun component8 ()J
+	public final fun component9 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;IDIJJ)Ldev/androidagent/harness/feedback/Opportunity;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/Opportunity;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/util/List;IDIJJILjava/lang/Object;)Ldev/androidagent/harness/feedback/Opportunity;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfidence ()D
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getExpiresAtEpochMillis ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getImportance ()I
+	public final fun getNoisePenalty ()I
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getTrigger ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/feedback/OpportunityDetector {
+	public abstract fun detect (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+}
+
+public abstract interface class dev/androidagent/harness/feedback/OutcomeJournal {
+	public abstract fun append (Ldev/androidagent/harness/feedback/RunOutcomeRecord;)V
+	public abstract fun query (J)Ljava/util/List;
+	public static synthetic fun query$default (Ldev/androidagent/harness/feedback/OutcomeJournal;JILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/OutcomeJournal$DefaultImpls {
+	public static synthetic fun query$default (Ldev/androidagent/harness/feedback/OutcomeJournal;JILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/OutcomeStatus : java/lang/Enum {
+	public static final field CANCELLED Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static final field COMPLETED Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static final field EXPIRED Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static final field FAILED Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static final field SKIPPED Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public static fun values ()[Ldev/androidagent/harness/feedback/OutcomeStatus;
+}
+
+public final class dev/androidagent/harness/feedback/ProactiveArbiter {
+	public fun <init> (Ldev/androidagent/harness/feedback/SignalJournal;Ldev/androidagent/harness/feedback/OutcomeJournal;Ldev/androidagent/harness/feedback/OpportunityDetector;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/feedback/SignalJournal;Ldev/androidagent/harness/feedback/OutcomeJournal;Ldev/androidagent/harness/feedback/OpportunityDetector;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun evaluate (Ldev/androidagent/harness/feedback/ProactivePolicy;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/ProactivePolicy {
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/feedback/InitiativeLevel;IIJLdev/androidagent/harness/feedback/QuietHours;Ljava/util/Set;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/feedback/InitiativeLevel;IIJLdev/androidagent/harness/feedback/QuietHours;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()J
+	public final fun component5 ()Ldev/androidagent/harness/feedback/QuietHours;
+	public final fun component6 ()Ljava/util/Set;
+	public final fun copy (Ldev/androidagent/harness/feedback/InitiativeLevel;IIJLdev/androidagent/harness/feedback/QuietHours;Ljava/util/Set;)Ldev/androidagent/harness/feedback/ProactivePolicy;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/ProactivePolicy;Ldev/androidagent/harness/feedback/InitiativeLevel;IIJLdev/androidagent/harness/feedback/QuietHours;Ljava/util/Set;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/ProactivePolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowedTriggers ()Ljava/util/Set;
+	public final fun getCooldownMillis ()J
+	public final fun getDailyActivationCap ()I
+	public final fun getInitiative ()Ldev/androidagent/harness/feedback/InitiativeLevel;
+	public final fun getMinimumScore ()I
+	public final fun getQuietHours ()Ldev/androidagent/harness/feedback/QuietHours;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/QuietHours {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun contains (J)Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/feedback/QuietHours;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/QuietHours;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/QuietHours;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()Ljava/lang/String;
+	public final fun getStart ()Ljava/lang/String;
+	public final fun getTimezone ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/RuleBasedOpportunityDetector : dev/androidagent/harness/feedback/OpportunityDetector {
+	public fun <init> ()V
+	public fun detect (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/RunOutcomeRecord : java/io/Serializable {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/OutcomeStatus;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ljava/util/List;Ljava/util/List;IILjava/lang/String;J)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/OutcomeStatus;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ljava/util/List;Ljava/util/List;IILjava/lang/String;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()I
+	public final fun component11 ()I
+	public final fun component12 ()Ljava/lang/String;
+	public final fun component13 ()J
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public final fun component7 ()Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/OutcomeStatus;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ljava/util/List;Ljava/util/List;IILjava/lang/String;J)Ldev/androidagent/harness/feedback/RunOutcomeRecord;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/RunOutcomeRecord;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/sdk/AgentRunTrigger;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/feedback/OutcomeStatus;Ldev/androidagent/harness/feedback/FeedbackSignalType;Ljava/util/List;Ljava/util/List;IILjava/lang/String;JILjava/lang/Object;)Ldev/androidagent/harness/feedback/RunOutcomeRecord;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getEffectRefs ()Ljava/util/List;
+	public final fun getErrorCategory ()Ljava/lang/String;
+	public final fun getEvidenceRefs ()Ljava/util/List;
+	public final fun getGoalSummary ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getProviderSteps ()I
+	public final fun getResultSummary ()Ljava/lang/String;
+	public final fun getRunId ()Ljava/lang/String;
+	public final fun getStatus ()Ldev/androidagent/harness/feedback/OutcomeStatus;
+	public final fun getToolCalls ()I
+	public final fun getTrigger ()Ldev/androidagent/harness/sdk/AgentRunTrigger;
+	public final fun getUserFeedback ()Ldev/androidagent/harness/feedback/FeedbackSignalType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/feedback/SelfCheckReport {
+	public fun <init> (ZLjava/util/Map;Ljava/util/List;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (ZLjava/util/Map;Ljava/util/List;)Ldev/androidagent/harness/feedback/SelfCheckReport;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/feedback/SelfCheckReport;ZLjava/util/Map;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/feedback/SelfCheckReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChecks ()Ljava/util/Map;
+	public final fun getDiagnostics ()Ljava/util/List;
+	public final fun getHealthy ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/feedback/SignalJournal {
+	public abstract fun append (Ldev/androidagent/harness/feedback/FeedbackSignal;)V
+	public abstract fun query (J)Ljava/util/List;
+	public static synthetic fun query$default (Ldev/androidagent/harness/feedback/SignalJournal;JILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/feedback/SignalJournal$DefaultImpls {
+	public static synthetic fun query$default (Ldev/androidagent/harness/feedback/SignalJournal;JILjava/lang/Object;)Ljava/util/List;
+}
+

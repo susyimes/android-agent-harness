@@ -45,6 +45,12 @@ class AgentHouseActivity : Activity() {
         entries = findViewById(R.id.houseEntries)
         findViewById<Button>(R.id.houseBackButton).setOnClickListener { finish() }
         findViewById<Button>(R.id.renameHouseButton).setOnClickListener { showRenameDialog() }
+        findViewById<Button>(R.id.houseReviewButton).setOnClickListener {
+            startActivity(
+                Intent(this, ProductCenterActivity::class.java)
+                    .putExtra(ProductCenterActivity.EXTRA_SECTION, "state")
+            )
+        }
     }
 
     override fun onResume() {
@@ -74,11 +80,11 @@ class AgentHouseActivity : Activity() {
         addSection("Core Files", "身份、边界与长期上下文")
         snapshot.coreFiles.forEach(::addCoreFile)
 
-        addSection("Skills", "由 Agent 写成停用草案；你启用后才进入模型上下文")
+        addSection("Skills", "Agent 草案先进入候选评估；批准晋升后才能作为已启用资产")
         if (snapshot.skills.isEmpty()) addEmpty("还没有技能草案。Agent 会在确有复用价值时创建。")
         snapshot.skills.forEach(::addSkill)
 
-        addSection("Memory", "由 Agent 追加，并保持 Agent 来源而非用户事实")
+        addSection("Legacy Journal", "兼容旧版每日记忆；新记忆只进入 State 候选审核")
         if (snapshot.dailyMemories.isEmpty()) addEmpty("还没有每日记忆。Agent 会按需沉淀长期有用的信息。")
         snapshot.dailyMemories.forEach(::addMemory)
     }
@@ -131,14 +137,25 @@ class AgentHouseActivity : Activity() {
                     }
                 },
                 badge = if (skill.enabled) "已审核启用" else "待审核",
-                primaryAction = (if (skill.enabled) "停用" else "启用") to {
-                    onDisk(
-                        { repository.setSkillEnabled(skill.id, !skill.enabled) },
-                        { loadHouse() }
-                    )
+                primaryAction = (if (skill.enabled) "停用" else "审核") to {
+                    if (skill.enabled) {
+                        onDisk(
+                            { repository.setSkillEnabled(skill.id, false) },
+                            { loadHouse() }
+                        )
+                    } else {
+                        startActivity(
+                            Intent(this, ProductCenterActivity::class.java)
+                                .putExtra(ProductCenterActivity.EXTRA_SECTION, "state")
+                        )
+                    }
                 },
-                secondaryAction = "编辑" to {
-                    openEditor(AgentHouseEditorActivity.TYPE_SKILL, skill.id, skill.name)
+                secondaryAction = "查看" to {
+                    showReadOnlyAsset(
+                        title = skill.name,
+                        metadata = "${skill.reviewStatus} · ${skill.origin} · ${skill.source}",
+                        content = skill.content
+                    )
                 },
                 destructiveAction = "删除" to { confirmDeleteSkill(skill) }
             ),
@@ -163,8 +180,12 @@ class AgentHouseActivity : Activity() {
                 } else {
                     "用户"
                 },
-                primaryAction = "编辑" to {
-                    openEditor(AgentHouseEditorActivity.TYPE_MEMORY, memory.date, memory.date)
+                primaryAction = "查看" to {
+                    showReadOnlyAsset(
+                        title = memory.date,
+                        metadata = "${memory.reviewStatus} · ${memory.origin} · ${memory.source}",
+                        content = memory.content
+                    )
                 },
                 destructiveAction = "删除" to { confirmDeleteMemory(memory) }
             ),
@@ -288,6 +309,25 @@ class AgentHouseActivity : Activity() {
                 )
             }
             .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showReadOnlyAsset(
+        title: String,
+        metadata: String,
+        content: String
+    ) {
+        val view = TextView(this).apply {
+            text = "$metadata\n\n$content"
+            textSize = 13f
+            setTextColor(getColor(R.color.textPrimary))
+            setTextIsSelectable(true)
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(view)
+            .setPositiveButton("关闭", null)
             .show()
     }
 

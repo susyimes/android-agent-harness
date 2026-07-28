@@ -1,61 +1,60 @@
 # SDK quickstart
 
-The SDK has two layers:
+Android Agent Harness v0.4.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, or voice capabilities it needs.
 
-- `agent-sdk` is a pure JVM host facade over the bounded harness runtime. It also contains optional file-backed session and Agent House adapters.
-- `agent-sdk-android` is an optional Android composition. It adds model-routed, accessibility-backed Phone Use, but does not own authentication, UI, secret storage, or service enablement.
+The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
-Provider and capability adapters stay separate so an application only ships what it uses.
+The JVM artifacts require JDK 17. Every Android AAR and the sample use
+`minSdk 29` (Android 10) and compile against API 36.
 
-## Artifacts
+## 1. Publish or resolve the artifacts
 
-The v0.3.0 coordinates use group `dev.androidagent.harness` and version `0.3.0`.
-
-| Artifact | Packaging | Purpose |
-| --- | --- | --- |
-| `harness-core` | JAR | Low-level contracts and synchronous bounded runtime |
-| `agent-sdk` | JAR | Host lifecycle, events, cancellation, concurrency, transactions |
-| `provider-openai` | JAR | Compatible chat-completions and experimental Codex transports |
-| `device-loop` | JAR | Host-neutral observe/act/finish capability |
-| `device-loop-android` | AAR | Accessibility-backed Android device surface |
-| `agent-sdk-android` | AAR | Safe model-routed Phone Use composition |
-
-Build all publications into the repository-local Maven directory:
+The repository uses group `dev.androidagent.harness` and version `0.4.0`.
 
 ```sh
 ./gradlew publishSdk
 ```
 
-For a Gradle consumer using that directory:
+This writes JARs, AARs, sources, Gradle metadata, and POM files under `build/sdk-repository`.
 
 ```groovy
 repositories {
     maven { url = uri("../android-agent-harness/build/sdk-repository") }
-    mavenCentral()
     google()
+    mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.3.0"
-    implementation "dev.androidagent.harness:provider-openai:0.3.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.4.0"
+    implementation "dev.androidagent.harness:context-engine:0.4.0"
+    implementation "dev.androidagent.harness:agent-state:0.4.0"
+    implementation "dev.androidagent.harness:provider-openai:0.4.0"
 }
 ```
 
-Use `agent-sdk-android` as well when the host enables Phone Use. It carries the SDK and Android device-loop API transitively.
+Optional artifacts:
 
-## Run one turn
+| Artifact | Use it when the host needs |
+| --- | --- |
+| `agent-approval` | General durable/external/device effect approval |
+| `agent-scheduling` | Schedule, occurrence, lease, Cron, or LongTask semantics |
+| `agent-feedback` | Heartbeat, Dream, Proactive, Home Brief, or Self Check |
+| `harness-eval` | Baseline/candidate evaluation |
+| `device-loop` | A strict platform-neutral device protocol |
+| `agent-sdk-android` | Android Phone Use composition |
+| `agent-permission-android` | Android capability and permission snapshots |
+| `agent-data-android` | Stats, Todo, State/House, file, location, calendar, notification data |
+| `agent-scheduling-android` | WorkManager, Receiver, foreground carrier, and Android stores |
+| `agent-voice-android` | STT, ephemeral audio, TTS, and transcript contracts |
+| `device-loop-android` | Accessibility, visual observation, sensors, and overlay approval |
 
-The host owns the SDK lifetime and supplies a new provider connection factory rather than a singleton network client:
+The Android AAR manifests stay minimal. The host declares only the services and permissions it actually enables.
+
+## 2. Run one bounded turn
+
+The host owns the SDK lifetime and supplies a provider factory. The factory must create a run-scoped connection; do not share a mutable streaming connection across concurrent runs.
 
 ```kotlin
-import dev.androidagent.harness.provider.openai.OpenAiCompatibleConfig
-import dev.androidagent.harness.provider.openai.OpenAiProviderFactories
-import dev.androidagent.harness.sdk.AgentRunEvent
-import dev.androidagent.harness.sdk.AgentRunListener
-import dev.androidagent.harness.sdk.AgentRunOutcome
-import dev.androidagent.harness.sdk.AgentRunRequest
-import dev.androidagent.harness.sdk.AgentSdk
-
 val providerFactory = OpenAiProviderFactories.compatible(
     OpenAiCompatibleConfig(
         baseUrl = "https://example.invalid/v1",
@@ -65,18 +64,14 @@ val providerFactory = OpenAiProviderFactories.compatible(
     )
 )
 
-val sdk = AgentSdk()
+val sdk = AgentSdk(sessionStore)
 val handle = sdk.run(
     AgentRunRequest(
         sessionId = "chat-1",
         userInput = "Summarize the task",
         providerFactory = providerFactory,
         listener = AgentRunListener { event ->
-            when (event) {
-                is AgentRunEvent.Started -> showRunning(event.runId)
-                is AgentRunEvent.Trace -> appendTrace(event.event)
-                is AgentRunEvent.Finished -> renderOutcome(event.outcome)
-            }
+            mainDispatcher.execute { render(event) }
         }
     )
 )
@@ -85,16 +80,39 @@ when (val outcome = handle.await()) {
     is AgentRunOutcome.Success -> showAnswer(outcome.result.output)
     is AgentRunOutcome.Failure -> showError(outcome.error)
     is AgentRunOutcome.Cancelled -> showStopped(outcome.reason)
+    is AgentRunOutcome.Expired -> showExpired(outcome.reason)
 }
 ```
 
-Callbacks are synchronous and may arrive from the caller or SDK worker thread. A UI host must marshal them onto its UI dispatcher. Listener exceptions are isolated and never change the Agent result.
+Listener callbacks are synchronous and may arrive on the caller or SDK worker thread. Listener failures are isolated from the run result.
 
-Close `AgentSdk` with the application/component that owns it. Closing cancels all active runs.
+Close the `AgentSdk` instance with the application or component that owns it. Closing cancels active runs.
 
-## Stop semantics
+## 3. Define the run policy
 
-Bind the host Stop control to the returned handle:
+`AgentRunPolicy` is host-owned and records why a run exists and which bounded authority it has.
+
+```kotlin
+val policy = AgentRunPolicy(
+    trigger = AgentRunTrigger.USER,
+    budget = AgentRunBudget(
+        maxProviderSteps = 8,
+        maxToolCalls = 24,
+        maxWallClockMillis = 2 * 60_000L,
+        maxRepeatedFailures = 3,
+        maxInputTokens = 16_000,
+        maxOutputTokens = 4_000
+    ),
+    toolProfileId = "chat-safe",
+    contextPolicyId = "ccp-v2",
+    writePolicyId = "candidate-only",
+    approvalPolicyId = "conservative"
+)
+```
+
+The run ends when any active bound is exceeded. The sample uses an 8-step normal ceiling and expands to at most 80 provider steps only after a real device tool call activates Phone Use.
+
+## 4. Stop and deadline semantics
 
 ```kotlin
 stopButton.setOnClickListener {
@@ -102,137 +120,199 @@ stopButton.setOnClickListener {
 }
 ```
 
-The first accepted call returns `true`; later calls return `false`. Cancellation:
+The first accepted cancellation returns `true`; later calls return `false`. Cancellation:
 
-1. marks the run terminal immediately for the host;
-2. invokes the turn-scoped provider transport's cancel hook;
-3. interrupts the worker and checks an independent cancellation signal after provider I/O and before each tool execution;
-4. discards the staged conversation turn;
-5. ignores any late provider result or event.
+1. publishes a terminal host outcome;
+2. invokes the provider cancel hook;
+3. interrupts the worker;
+4. checks the independent cancellation signal after provider I/O and before every SDK-controlled effect;
+5. rejects late streaming deltas and results;
+6. discards the staged conversation turn.
 
-A provider factory should make its cancel hook idempotent. Uncooperative custom providers cannot be forcibly killed by the JVM, but late returns cannot commit session state or begin another SDK-controlled tool action.
+An effect that already occurred outside the session transaction is recorded but cannot be magically rolled back.
 
-## Sessions and persistence
+## 5. Compile context through CCP V2
 
-Pass a host-owned `AgentSessionStore` to `AgentSdk` for durable history. Only one run may use a session id at a time; a concurrent attempt throws `AgentSessionBusyException`.
-
-Each run sees a transactional view:
-
-- success commits the complete user/tool/assistant turn;
-- provider failure, protocol failure, limit exhaustion, and cancellation preserve the last committed session;
-- a durable-store commit failure completes as `AgentRunErrorKind.PERSISTENCE` and releases the session instead of stranding the handle;
-- external side effects already performed by a tool are not a database transaction and cannot be rolled back.
-
-For a small single-process app, the bundled file catalog is enough to make that contract concrete:
+Register sources by stable id and pass request-specific options:
 
 ```kotlin
-val sessionStore = FileAgentSessionStore(File(appDataDirectory, "agent-sessions"))
-val sdk = AgentSdk(sessionStore)
-
-val recent = sdk.listSessions()
-sdk.deleteSession(recent.first().id)
-// sdk.clearSessions()
-```
-
-`FileAgentSessionStore` hashes arbitrary session ids before using them as file names, bounds decoded input, and replaces complete files atomically where the file system supports it. It is synchronized for one process and intentionally does **not** encrypt message content. Point it at an app-private directory, and replace it with a product database when you need encryption, schema migration, retention, cross-process locking, search, or backup policy.
-
-The management calls refuse to delete an active session, preserving the same per-session concurrency fence as `run`.
-
-## Agent House context
-
-`FileAgentHouseRepository` is a portable local workspace for eight generic core files, Agent-written skill drafts, and dated memories:
-
-```kotlin
-val house = FileAgentHouseRepository(File(appDataDirectory, "agent-house"))
-house.renameHouse("My Agent")
-
-val houseContext = AgentHouseContextProvider(house)
-val houseWriteTools = AgentHouseWriteTools(house).tools()
-sdk.run(
-    request.copy(
-        contextProviders = listOf(houseContext),
-        tools = request.tools + houseWriteTools
-    )
-)
-```
-
-`agent_memory_append` performs an idempotent append and records the memory as Agent-trust context rather than silently turning it into a user fact. `agent_skill_write` creates or revises only a disabled Agent draft; the host or user must enable it before it appears in later model context. Both reject credential-like content.
-
-The context adapter uses logical ids rather than storage paths, includes enabled skills only, orders content deterministically, preserves application/user/Agent provenance, and applies per-item plus total character budgets. House text cannot grant a tool or approval: the host's context policy, tool profile, risk policy, and approval gate remain authoritative.
-
-## Tools and typed arguments
-
-Tool code still receives `Map<String, String>`, keeping the core independent of a JSON library. Non-string provider values are normalized: scalar values become text and arrays/objects become JSON text.
-
-Describe provider-facing types with `AgentToolArgumentSchema`:
-
-```kotlin
-val spec = AgentToolSpec(
-    name = "set_volume",
-    description = "Sets media volume.",
-    requiredArguments = setOf("level"),
-    argumentSchemas = mapOf(
-        "level" to AgentToolArgumentSchema(
-            type = AgentToolArgumentType.INTEGER,
-            description = "Volume from 0 through 100."
-        )
-    )
-)
-```
-
-Both bundled model transports render string, integer, number, boolean, array, nested object, enum, required-property, and additional-property metadata.
-
-## Provider presets and credentials
-
-`OpenAiEndpointPresets.KIMI_PLAN` and `OpenAiEndpointPresets.ARK_PLAN` expose reusable endpoint/model defaults. Ark includes every Plan model currently supported by the sample. Presets are not allow-lists: a host may pass a newer model id directly through `OpenAiCompatibleConfig`.
-
-Credentials remain host data. Load them from environment variables, Android Keystore-backed storage, or another product-owned secret service, and do not put them in logs or persisted Agent context.
-
-`OpenAiProviderFactories.codex` wraps the experimental Responses adapter. The Android sample's browser/device login remains an isolated example rather than part of the SDK contract because third-party Android Codex login is not a documented official integration surface. A production host must own credential acquisition, refresh, logout, and policy review.
-
-## Android Phone Use
-
-`AndroidPhoneAgent` exposes normal host tools and the three device tools to the provider together. It does not classify the user's text. The model's first actual `device_observe`, `device_act`, or `device_finish` call activates a sticky Phone Use loop:
-
-```kotlin
-val request = AndroidPhoneAgent(
-    surface = deviceSurface,
-    configuration = AndroidPhoneAgentConfiguration(
-        riskPolicy = productRiskPolicy,
-        approvalGate = humanApprovalGate
-    )
-).request(
-    sessionId = sessionId,
-    userInput = userInput,
+val request = AgentRunRequest(
+    sessionId = "chat-1",
+    userInput = "What needs attention today?",
     providerFactory = providerFactory,
-    additionalTools = normalHostTools
+    contextSources = listOf(
+        NamedContextSource("approved-state", approvedStateSource),
+        NamedContextSource("todo", todoSource),
+        NamedContextSource("permissions", permissionSource)
+    ),
+    contextEngineOptions = AgentContextEngineOptions(
+        requestedSourceIds = setOf("approved-state", "todo", "permissions"),
+        requiredCapabilities = setOf("todo-read"),
+        privacyCeiling = ContextPrivacy.INTERNAL,
+        tokenBudget = 6_000,
+        outputReserve = 1_500
+    )
 )
 ```
 
-The initial budget defaults to 8 steps and 4 calls per step. A direct model answer never activates Phone Use. After a device-tool call, the ceiling expands to 80 and execution tightens to one selected call per step, with device calls preferred whenever a provider returns mixed calls. `AgentHarnessTraceEvent.ToolLoopActivated` makes this transition visible to the host.
+The engine:
 
-`AndroidPhoneAgentConfiguration` deliberately requires both:
+- derives a `ContextNeedSpec`;
+- collects typed candidates;
+- filters by requested source, capability, privacy, and validity;
+- resolves logical duplicates and conflicts by authority and revision;
+- selects within item and token budgets;
+- emits an auditable `EvidencePack`;
+- asks `RouteGate` whether to continue, ask the user, answer locally, or block;
+- renders host-policy context separately from untrusted data.
 
-- a `RiskPolicy` defining what the product considers high risk;
-- a real human-backed `ApprovalGate`.
+`RouteGate` is not an effect approval gate.
 
-There is no allow-all production default. The activated composition defaults to one action per provider step, an 80-step ceiling, Home disabled, and a semantic accessibility snapshot rather than screenshots.
+## 6. Register typed tools and approvals
 
-The host must also:
+A tool declares capability independently from model input:
 
-- declare and explain its accessibility service;
-- let the user enable it manually in Android settings;
-- display provider/data disclosure before enabling Phone Use;
-- surface the approval UI over the app being controlled;
-- disable sending when the selected provider is not ready;
-- use `AndroidPhoneAgent.isAvailable()` to render permission status. A host may still start a normal model turn while unavailable; an attempted device tool receives a structured permission failure.
+```kotlin
+val capability = AgentToolCapability(
+    sideEffect = AgentToolSideEffect.LOCAL_DURABLE_WRITE,
+    risk = AgentToolRisk.MEDIUM,
+    dataScopes = setOf("todo"),
+    idempotency = AgentToolIdempotency.IDEMPOTENT_WITH_KEY,
+    targetArgumentNames = setOf("todo_id")
+)
+```
 
-Use `AndroidPhoneAgent.fromHarnessAccessibilityService(...)` with the bundled service, or construct `AndroidPhoneAgent` with a product-owned `DeviceSurface`.
+For a mutating call, construct an `AgentEffectIntent` from the exact target and canonical argument hash, then ask `AgentApprovalCoordinator` before execution. The returned token is valid only for the bound run, call, hash, side-effect scope, and expiry.
 
-## Verification
+The conservative default policy is:
+
+- no effect, local read, and local draft write: no runtime approval;
+- local durable write, external write, and device action: explicit approval;
+- policy errors or missing approval UI: deny.
+
+Tool output is normalized to `AgentToolResultEnvelope`. Keep provider-visible summaries bounded; place large or sensitive bytes behind an opaque `AgentRawPayloadStore` reference with a TTL.
+
+## 7. Persist sessions and traces
+
+```kotlin
+val sessions = FileAgentSessionStore(File(appDataDir, "agent-sessions"))
+val traces = TraceSink { event -> auditJournal.append(event) }
+val sdk = AgentSdk(sessions)
+```
+
+Only one run may use a session id at a time. Successful runs commit the staged user/tool/assistant turn transactionally. Failure, cancellation, expiry, and limit exits do not commit it.
+
+`AgentEvent` includes lifecycle transitions, context/route decisions, provider start/delta/complete, tool and approval events, device activation, checkpoints, candidates, and terminal state. It never exposes hidden model reasoning.
+
+Use `AgentTraceReplayEvaluator` to check an exported event list without re-running a provider or effect.
+
+## 8. Govern memory, skill, and persona state
+
+Use `AgentStateVault` as the durable state boundary. Models write through candidate sinks:
+
+- `MemoryCandidateSink`;
+- `SkillDraftSink`;
+- `PersonaProposalSink`.
+
+A durable asset change follows:
+
+```text
+candidate
+  → validation and dedupe
+  → evaluation
+  → exact candidate hash approval
+  → promoted revision
+  → optional governed rollback revision
+```
+
+Unapproved candidates and experimental revisions never enter `AgentApprovedStateContextSource`.
+
+`AgentStateMaintenance` provides export, bounded observational retention, and explicit domain deletion. Automatic retention does not remove durable documents, candidates, evaluations, effects, or revision history.
+
+The legacy Agent House file adapter remains available. `AgentHouseStateMigrator` proposes existing Agent memory as candidates rather than silently treating it as approved State.
+
+## 9. Schedule reliable work
+
+`ScheduleSpec` describes cadence, timezone, constraints, execution window, missed-run policy, revision, delivery policy, reason, and policy ids. `GovernedScheduleService` applies or deletes an exact revision through the approval protocol.
+
+`agent-scheduling-android` maps one occurrence to one unique WorkManager job. At dispatch it rechecks:
+
+- schedule existence, enabled state, and revision;
+- execution window and runtime constraints;
+- occurrence lease and duplicate-completion state;
+- current permission/credential/policy authorization snapshot.
+
+The Worker calls a host `PeriodicRunner`; the sample implementation enters `AgentSdk`. It never embeds another Agent loop.
+
+Cron is a scheduled run target. LongTask uses bounded bursts and durable checkpoints. Stop cancels the current run, marks the checkpoint terminal, and prevents a hidden re-enqueue for that occurrence.
+
+## 10. Feedback and proactive policy
+
+`agent-feedback` is side-effect free. It produces typed signals, findings, opportunities, activation requests, and local summaries.
+
+- Heartbeat inspects typed Todo, permission, candidate, and failure counts.
+- Dream reflects on bounded outcome/candidate history and may emit a pending reflection candidate.
+- Proactive scores evidence-backed opportunities and applies initiative, quiet hours, and daily cap.
+- Home Brief and Self Check have deterministic local fallbacks.
+
+The host may notify or start a run only after its own delivery and approval policy permits it.
+
+## 11. Strict Phone Use
+
+`StrictDeviceProtocol` enforces:
+
+```text
+observe(snapshot)
+  → exactly one validated action
+  → observe(snapshot)
+  → action or finish(with visible evidence)
+```
+
+An action invalidates the snapshot even when the platform reports failure. Stale ids, action-before-observe, consecutive actions, and finish-without-evidence are protocol errors.
+
+`AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. High-risk operations use the same approval protocol and a human-backed Android surface.
+
+## 12. Streaming, attachments, and voice
+
+The OpenAI-compatible transport supports true SSE deltas. The SDK emits bounded `ProviderDelta` events and accepts only one terminal response.
+
+`AttachmentRef` carries an opaque id, media type, display metadata, and provider payload. The host owns file selection, temporary access, size limits, and cleanup.
+
+`agent-voice-android` provides:
+
+- Android speech-to-text;
+- ephemeral audio recording;
+- a streaming transcription port;
+- Android text-to-speech;
+- an optional transcript repository.
+
+Raw audio is not persisted by default.
+
+## 13. Data and deletion
+
+Use separate storage domains for sessions, House, State, Todo, schedules/checkpoints, credentials, and operational journals. Deleting one domain must not silently delete another.
+
+The sample demonstrates:
+
+- explicit export initiated by the user;
+- bounded retention for observational State;
+- exact revision/hash approval for Todo, State, House, and schedule deletion/reset;
+- cancellation of future WorkManager work;
+- separate credential deletion in provider settings.
+
+## 14. Verification
 
 ```sh
+# Unit, ABI, independent Maven consumer, AAR lint/publication, and audit gate
 ./gradlew checkSdk
+
+# Full repository and sample build gate
+./gradlew checkM0
+
+# Connected-device UI/navigation gate
+./gradlew checkConnectedSample
 ```
 
-This runs core/SDK/provider/device tests, Android unit tests and release lint, the independent consumer smoke test against the locally published Maven coordinates, the provenance audit, and local JAR/AAR publication. `checkM0` additionally builds, tests, and lints the installable sample.
+Kotlin 2.2.21 exposes the ABI tasks as `checkLegacyAbi` / `updateLegacyAbi`; `checkSdkAbi` aggregates the committed baselines. Android AAR compatibility is checked through a separate Maven-coordinate consumer because this Kotlin version produces no useful Android ABI dump.
+
+Never run `updateLegacyAbi` merely to make a compatibility failure disappear. Review the API diff and versioning impact first.

@@ -50,11 +50,16 @@ data class AgentSession(
 
 data class AgentHarnessRequest(
     val sessionId: String,
-    val userInput: String
+    val userInput: String,
+    val runId: String = sessionId,
+    val attachments: List<AttachmentRef> = emptyList()
 ) {
     init {
         require(sessionId.isNotBlank()) { "Session id must not be blank." }
         require(userInput.isNotBlank()) { "User input must not be blank." }
+        require(runId.isNotBlank()) { "Run id must not be blank." }
+        require(attachments.map { attachment -> attachment.id }.distinct().size == attachments.size) {
+            "Attachment ids must be unique within a run."
+        }
     }
 }
-

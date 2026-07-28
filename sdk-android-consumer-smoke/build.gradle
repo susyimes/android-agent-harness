@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'dev.androidagent.harness.consumer.android'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 29
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation "dev.androidagent.harness:agent-sdk-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:agent-permission-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:agent-data-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:agent-scheduling-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:agent-voice-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:device-loop-android:${rootProject.version}"
+    testImplementation 'junit:junit:4.13.2'
+}
+
+tasks.named('preBuild') {
+    dependsOn rootProject.tasks.named('publishJvmSdk')
+    dependsOn ':device-loop-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':agent-sdk-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':agent-permission-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':agent-data-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':agent-scheduling-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':agent-voice-android:publishSdkPublicationToSdkLocalRepository'
+}

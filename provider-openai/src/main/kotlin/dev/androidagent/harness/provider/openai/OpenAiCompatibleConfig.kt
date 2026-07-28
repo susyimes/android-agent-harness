@@ -48,6 +48,9 @@ data class OpenAiCompatibleConfig(
     val requestTimeout: Duration = Duration.ofSeconds(60),
     val parallelToolCalls: Boolean? = null,
     val historyCharBudget: Int? = null,
+    val streamingEnabled: Boolean = false,
+    val acceptedAttachmentMediaTypes: Set<String> = DEFAULT_ATTACHMENT_MEDIA_TYPES,
+    val maxAttachmentBytes: Int = DEFAULT_MAX_ATTACHMENT_BYTES,
     val extraHeaders: Map<String, String> = emptyMap(),
     val extraBodyFields: Map<String, Any?> = emptyMap()
 ) {
@@ -59,6 +62,12 @@ data class OpenAiCompatibleConfig(
         }
         require(historyCharBudget == null || historyCharBudget > 0) {
             "History char budget must be positive when set."
+        }
+        require(acceptedAttachmentMediaTypes.none(String::isBlank)) {
+            "Accepted attachment media types must not be blank."
+        }
+        require(maxAttachmentBytes in 1..MAX_ALLOWED_ATTACHMENT_BYTES) {
+            "Attachment byte limit must be between 1 and $MAX_ALLOWED_ATTACHMENT_BYTES."
         }
         require(extraHeaders.keys.none { name -> name.lowercase() in RESERVED_HEADERS }) {
             "Extra headers must not override Authorization or Content-Type."
@@ -77,6 +86,9 @@ data class OpenAiCompatibleConfig(
         return "OpenAiCompatibleConfig(baseUrl=$baseUrl, model=$model, " +
             "keyValue=$credential, requestTimeout=$requestTimeout, " +
             "parallelToolCalls=$parallelToolCalls, historyCharBudget=$historyCharBudget, " +
+            "streamingEnabled=$streamingEnabled, " +
+            "acceptedAttachmentMediaTypes=${acceptedAttachmentMediaTypes.sorted()}, " +
+            "maxAttachmentBytes=$maxAttachmentBytes, " +
             "extraHeaders=${extraHeaders.keys.sorted()}, " +
             "extraBodyFields=${extraBodyFields.keys.sorted()})"
     }
@@ -84,6 +96,17 @@ data class OpenAiCompatibleConfig(
     companion object {
         const val DEFAULT_BASE_URL: String = "https://api.openai.com/v1"
         const val DEFAULT_MODEL: String = "gpt-4o-mini"
+        const val DEFAULT_MAX_ATTACHMENT_BYTES: Int = 10 * 1024 * 1024
+        const val MAX_ALLOWED_ATTACHMENT_BYTES: Int = 25 * 1024 * 1024
+        val DEFAULT_ATTACHMENT_MEDIA_TYPES: Set<String> = setOf(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "text/plain",
+            "text/markdown",
+            "application/json"
+        )
 
         /** Placeholder printed by [toString] in place of a present credential. */
         const val REDACTED: String = "<redacted>"
@@ -93,7 +116,8 @@ data class OpenAiCompatibleConfig(
             "model",
             "messages",
             "tools",
-            "parallel_tool_calls"
+            "parallel_tool_calls",
+            "stream"
         )
 
         /**

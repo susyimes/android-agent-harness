@@ -67,7 +67,8 @@ data class AgentToolSpec(
     val description: String,
     val requiredArguments: Set<String> = emptySet(),
     val optionalArguments: Set<String> = emptySet(),
-    val argumentSchemas: Map<String, AgentToolArgumentSchema> = emptyMap()
+    val argumentSchemas: Map<String, AgentToolArgumentSchema> = emptyMap(),
+    val capability: AgentToolCapability = AgentToolCapability.none()
 ) {
     init {
         require(TOOL_NAME.matches(name)) {
@@ -112,19 +113,34 @@ data class AgentToolCall(
 data class AgentToolInvocation(
     val callId: String,
     val sessionId: String,
-    val arguments: Map<String, String>
+    val arguments: Map<String, String>,
+    val runId: String = sessionId
 )
 
 data class AgentToolResult(
     val content: String,
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    val envelope: AgentToolResultEnvelope? = null
 ) {
-    companion object {
-        fun success(content: String): AgentToolResult = AgentToolResult(content = content)
+    init {
+        require(envelope == null || envelope.summary.isNotBlank()) {
+            "Tool result envelope summary must not be blank."
+        }
+    }
 
-        fun failure(content: String): AgentToolResult = AgentToolResult(
+    companion object {
+        fun success(
+            content: String,
+            envelope: AgentToolResultEnvelope? = null
+        ): AgentToolResult = AgentToolResult(content = content, envelope = envelope)
+
+        fun failure(
+            content: String,
+            envelope: AgentToolResultEnvelope? = null
+        ): AgentToolResult = AgentToolResult(
             content = content,
-            isError = true
+            isError = true,
+            envelope = envelope
         )
     }
 }
@@ -153,7 +169,11 @@ class AgentToolRegistry(tools: List<AgentTool>) {
 
     fun contains(toolName: String): Boolean = toolByName.containsKey(toolName)
 
-    fun execute(call: AgentToolCall, sessionId: String): AgentToolResult {
+    fun execute(
+        call: AgentToolCall,
+        sessionId: String,
+        runId: String = sessionId
+    ): AgentToolResult {
         val tool = toolByName[call.toolName]
             ?: return AgentToolResult.failure("Unknown tool: ${call.toolName}")
         val missing = tool.spec.requiredArguments
@@ -168,7 +188,8 @@ class AgentToolRegistry(tools: List<AgentTool>) {
                 AgentToolInvocation(
                     callId = call.id,
                     sessionId = sessionId,
-                    arguments = call.arguments.toSortedMap()
+                    arguments = call.arguments.toSortedMap(),
+                    runId = runId
                 )
             )
         } catch (error: RuntimeException) {
@@ -230,6 +251,7 @@ class AgentToolOrchestrator(
     fun execute(
         calls: List<AgentToolCall>,
         sessionId: String,
+        runId: String = sessionId,
         beforeEach: () -> Unit = {}
     ): List<AgentToolExecution> {
         if (calls.size > maxToolCallsPerStep) {
@@ -254,7 +276,7 @@ class AgentToolOrchestrator(
                 !profile.allows(call.toolName) -> AgentToolResult.failure(
                     "Tool '${call.toolName}' is not available in profile '${profile.id}'."
                 )
-                else -> registry.execute(call, sessionId)
+                else -> registry.execute(call, sessionId, runId)
             }
             AgentToolExecution(call = call, result = result)
         }

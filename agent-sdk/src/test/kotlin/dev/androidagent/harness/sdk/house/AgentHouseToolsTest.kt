@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness.sdk.house
 
-import dev.androidagent.harness.AgentContextRequest
-import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentProvider
 import dev.androidagent.harness.AgentProviderFactory
 import dev.androidagent.harness.AgentProviderRequest
 import dev.androidagent.harness.AgentProviderResponse
-import dev.androidagent.harness.AgentSession
 import dev.androidagent.harness.AgentToolCall
 import dev.androidagent.harness.AgentToolInvocation
 import dev.androidagent.harness.sdk.AgentRunOutcome
 import dev.androidagent.harness.sdk.AgentRunRequest
 import dev.androidagent.harness.sdk.AgentSdk
-import java.io.File
+import dev.androidagent.harness.sdk.AgentEvent
+import dev.androidagent.harness.sdk.TraceSink
+import dev.androidagent.harness.state.AgentAssetGovernance
+import dev.androidagent.harness.state.AgentAssetKind
+import dev.androidagent.harness.state.AgentCandidateStatus
+import dev.androidagent.harness.state.InMemoryAgentStateVault
 import java.time.LocalDate
+import java.util.Collections
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -27,101 +30,121 @@ class AgentHouseToolsTest {
     val temporaryFolder = TemporaryFolder()
 
     @Test
-    fun agentAppendsIdempotentMemoryWithoutPromotingItToUserTrust() {
-        val root = temporaryFolder.newFolder("house")
-        val repository = FileAgentHouseRepository(root)
+    fun memoryToolCreatesPendingCandidateWithoutWritingApprovedHouseMemory() {
+        val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
+        val vault = InMemoryAgentStateVault()
+        val governance = AgentAssetGovernance(vault)
         val tool = AgentHouseWriteTools(
             repository = repository,
-            today = { LocalDate.parse("2026-07-27") }
+            memoryCandidateSink = governance.memorySink
         ).tools().single { candidate ->
             candidate.spec.name == AgentHouseWriteTools.MEMORY_TOOL_NAME
         }
-        val arguments = mapOf(
-            "note" to "用户希望技能和记忆由 Agent 按需维护。",
-            "evidence" to "用户在当前会话中明确提出。"
-        )
-
-        val first = tool.execute(
-            AgentToolInvocation("call-1", "session-1", arguments)
-        )
-        val second = tool.execute(
-            AgentToolInvocation("call-2", "session-1", arguments)
-        )
-
-        assertFalse(first.isError)
-        assertFalse(second.isError)
-        val memory = repository.readDailyMemory("2026-07-27")!!
-        assertEquals(AgentHouseOrigin.AGENT, memory.origin)
-        assertEquals(AgentHouseReviewStatus.AUTO_WRITTEN, memory.reviewStatus)
-        assertTrue(memory.source.startsWith("agent:session-1:"))
-        assertEquals(1, "<!-- agent:memory:".toRegex().findAll(memory.content).count())
-        val reopened = FileAgentHouseRepository(root).readDailyMemory("2026-07-27")!!
-        assertEquals(memory.origin, reopened.origin)
-        assertEquals(memory.reviewStatus, reopened.reviewStatus)
-        assertEquals(memory.source, reopened.source)
-
-        val context = AgentHouseContextProvider(repository).load(
-            AgentContextRequest(AgentSession("session-2", 1L, 1L), "继续")
-        )
-        val memoryContext = context.single { item ->
-            item.id == "agent-house-memory-2026-07-27"
-        }
-        assertEquals(AgentContextTrust.AGENT, memoryContext.trust)
-    }
-
-    @Test
-    fun agentWritesDisabledSkillDraftAndOnlyUserEnablePromotesIt() {
-        val root = temporaryFolder.newFolder("house")
-        val repository = FileAgentHouseRepository(root)
-        val tool = AgentHouseWriteTools(repository).tools().single { candidate ->
-            candidate.spec.name == AgentHouseWriteTools.SKILL_TOOL_NAME
-        }
         val invocation = AgentToolInvocation(
-            callId = "skill-call",
+            callId = "call-1",
             sessionId = "session-1",
+            runId = "run-1",
             arguments = mapOf(
-                "id" to "concise-handoff",
-                "name" to "简洁交接",
-                "description" to "为完成的工程任务生成简洁交接。",
-                "content" to "# Concise handoff\n\nLead with outcome and checks.",
-                "evidence" to "用户重复要求结果优先。"
+                "note" to "用户偏好简洁回答。",
+                "type" to "preference",
+                "evidence_ref" to "user-message:1",
+                "dedupe_key" to "concise-response"
             )
         )
 
-        val result = tool.execute(invocation)
+        val first = tool.execute(invocation)
+        val duplicate = tool.execute(invocation.copy(callId = "call-2"))
+
+        assertFalse(first.isError)
+        assertFalse(duplicate.isError)
+        assertTrue(repository.listDailyMemories().isEmpty())
+        val candidate = governance.inbox(AgentAssetKind.MEMORY).single()
+        assertEquals(AgentCandidateStatus.PROPOSED, candidate.status)
+        assertTrue(duplicate.content.contains("duplicate=true"))
+    }
+
+    @Test
+    fun skillToolWritesDisabledDraftAndMirrorsSkillInboxCandidate() {
+        val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
+        val vault = InMemoryAgentStateVault()
+        val governance = AgentAssetGovernance(vault)
+        val tool = AgentHouseWriteTools(
+            repository = repository,
+            skillDraftSink = governance.skillSink
+        ).tools().single { candidate ->
+            candidate.spec.name == AgentHouseWriteTools.SKILL_TOOL_NAME
+        }
+
+        val result = tool.execute(
+            AgentToolInvocation(
+                callId = "skill-call",
+                sessionId = "session-1",
+                runId = "run-1",
+                arguments = mapOf(
+                    "id" to "concise-handoff",
+                    "name" to "简洁交接",
+                    "content" to "# Concise handoff\n\nLead with outcome and checks.",
+                    "evidence_ref" to "run:1:result"
+                )
+            )
+        )
 
         assertFalse(result.isError)
         val draft = repository.readSkill("concise-handoff")!!
         assertFalse(draft.enabled)
-        assertEquals(AgentHouseOrigin.AGENT, draft.origin)
         assertEquals(AgentHouseReviewStatus.DRAFT, draft.reviewStatus)
-        val reopened = FileAgentHouseRepository(root).readSkill("concise-handoff")!!
-        assertEquals(draft.origin, reopened.origin)
-        assertEquals(draft.reviewStatus, reopened.reviewStatus)
-        assertEquals(draft.source, reopened.source)
+        assertEquals(1, governance.inbox(AgentAssetKind.SKILL).size)
         assertFalse(
             AgentHouseContextProvider(repository).load(contextRequest())
                 .any { item -> item.id == "agent-house-skill-concise-handoff" }
         )
-
-        val enabled = repository.setSkillEnabled("concise-handoff", true)!!
-        assertTrue(enabled.enabled)
-        assertEquals(AgentHouseReviewStatus.APPROVED, enabled.reviewStatus)
-        val skillContext = AgentHouseContextProvider(repository).load(contextRequest())
-            .single { item -> item.id == "agent-house-skill-concise-handoff" }
-        assertEquals(AgentContextTrust.USER, skillContext.trust)
-
-        assertTrue(tool.execute(invocation.copy(callId = "overwrite")).isError)
     }
 
     @Test
-    fun credentialLikeContentIsRejectedBeforeDiskWrite() {
+    fun personaToolCreatesPendingProposalWithoutChangingHousePersona() {
         val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
-        val memoryTool = AgentHouseWriteTools(repository).tools().single { candidate ->
-            candidate.spec.name == AgentHouseWriteTools.MEMORY_TOOL_NAME
+        val before = repository.readCoreFile("persona")
+        val vault = InMemoryAgentStateVault()
+        val governance = AgentAssetGovernance(vault)
+        val tool = AgentHouseWriteTools(
+            repository = repository,
+            personaProposalSink = governance.personaSink
+        ).tools().single { candidate ->
+            candidate.spec.name == AgentHouseWriteTools.PERSONA_TOOL_NAME
         }
 
-        val result = memoryTool.execute(
+        val result = tool.execute(
+            AgentToolInvocation(
+                callId = "persona-call",
+                sessionId = "session-1",
+                runId = "run-1",
+                arguments = mapOf(
+                    "dimension" to "tone",
+                    "proposal" to "Prefer concise, concrete status summaries.",
+                    "observation_window" to "The latest 10 user-started runs.",
+                    "evidence_ref" to "outcomes:last-10"
+                )
+            )
+        )
+
+        assertFalse(result.isError)
+        assertEquals(before, repository.readCoreFile("persona"))
+        val candidate = governance.inbox(AgentAssetKind.PERSONA).single()
+        assertEquals(AgentCandidateStatus.PROPOSED, candidate.status)
+        assertTrue(result.content.contains("review_required=true"))
+    }
+
+    @Test
+    fun credentialLikeContentIsRejectedBeforeHouseOrVaultWrite() {
+        val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
+        val vault = InMemoryAgentStateVault()
+        val governance = AgentAssetGovernance(vault)
+        val tool = AgentHouseWriteTools(
+            repository,
+            memoryCandidateSink = governance.memorySink
+        ).tools().single { it.spec.name == AgentHouseWriteTools.MEMORY_TOOL_NAME }
+
+        val result = tool.execute(
             AgentToolInvocation(
                 callId = "secret-call",
                 sessionId = "session",
@@ -131,34 +154,53 @@ class AgentHouseToolsTest {
 
         assertTrue(result.isError)
         assertTrue(repository.listDailyMemories().isEmpty())
+        assertTrue(vault.read { candidates().isEmpty() })
     }
 
     @Test
-    fun damagedMemoryProvenanceFailsClosedAsAgentTrust() {
-        val root = temporaryFolder.newFolder("house")
-        val repository = FileAgentHouseRepository(root)
-        repository.updateDailyMemory("2026-07-27", "User-authored legacy memory.")
-        File(root, "memory/2026-07-27.meta").writeText("damaged")
-
-        val reopened = FileAgentHouseRepository(root)
-        val memory = reopened.readDailyMemory("2026-07-27")!!
-
-        assertEquals(AgentHouseOrigin.AGENT, memory.origin)
-        assertEquals(AgentHouseReviewStatus.AUTO_WRITTEN, memory.reviewStatus)
-        val context = AgentHouseContextProvider(reopened).load(contextRequest())
-            .single { item -> item.id == "agent-house-memory-2026-07-27" }
-        assertEquals(AgentContextTrust.AGENT, context.trust)
-    }
-
-    @Test
-    fun sdkProviderCanWriteMemoryAndNextRunReceivesAgentTrustContext() {
+    fun deprecatedDirectAppendExistsOnlyBehindCompatibilityFlag() {
         val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
+        val defaults = AgentHouseWriteTools(repository).tools()
+        assertFalse(
+            defaults.any { tool ->
+                tool.spec.name == AgentHouseWriteTools.DEPRECATED_MEMORY_APPEND_TOOL_NAME
+            }
+        )
+        val legacy = AgentHouseWriteTools(
+            repository = repository,
+            policy = AgentHouseWritePolicy(enableDeprecatedDirectMemoryAppend = true),
+            today = { LocalDate.parse("2026-07-28") }
+        ).tools().single { tool ->
+            tool.spec.name == AgentHouseWriteTools.DEPRECATED_MEMORY_APPEND_TOOL_NAME
+        }
+
+        val result = legacy.execute(
+            AgentToolInvocation(
+                callId = "legacy",
+                sessionId = "session",
+                arguments = mapOf("note" to "Legacy journal note.")
+            )
+        )
+
+        assertFalse(result.isError)
+        assertEquals(
+            AgentHouseReviewStatus.AUTO_WRITTEN,
+            repository.readDailyMemory("2026-07-28")!!.reviewStatus
+        )
+    }
+
+    @Test
+    fun sdkToolCallCreatesInboxCandidateButNoApprovedContext() {
+        val repository = FileAgentHouseRepository(temporaryFolder.newFolder("house"))
+        val vault = InMemoryAgentStateVault()
+        val governance = AgentAssetGovernance(vault)
+        val events = Collections.synchronizedList(mutableListOf<AgentEvent>())
         val tools = AgentHouseWriteTools(
             repository,
-            today = { LocalDate.parse("2026-07-27") }
+            memoryCandidateSink = governance.memorySink
         ).tools()
         var providerStep = 0
-        val writingProvider = object : AgentProvider {
+        val provider = object : AgentProvider {
             override val id = "memory-writer"
 
             override fun respond(request: AgentProviderRequest): AgentProviderResponse {
@@ -169,53 +211,40 @@ class AgentHouseToolsTest {
                                 id = "memory-call",
                                 toolName = AgentHouseWriteTools.MEMORY_TOOL_NAME,
                                 arguments = mapOf(
-                                    "note" to "The user prefers Agent-maintained memory."
+                                    "note" to "The user prefers Agent-maintained memory.",
+                                    "evidence_ref" to "user-message:1"
                                 )
                             )
                         )
                     )
                 } else {
-                    AgentProviderResponse.FinalText("Saved.")
+                    AgentProviderResponse.FinalText("Proposed for review.")
                 }
-            }
-        }
-        val readingProvider = object : AgentProvider {
-            override val id = "memory-reader"
-
-            override fun respond(request: AgentProviderRequest): AgentProviderResponse {
-                val memory = request.context.single { item ->
-                    item.id == "agent-house-memory-2026-07-27"
-                }
-                assertEquals(AgentContextTrust.AGENT, memory.trust)
-                return AgentProviderResponse.FinalText("Read.")
             }
         }
 
         AgentSdk().use { sdk ->
-            val written = sdk.run(
+            val outcome = sdk.run(
                 AgentRunRequest(
                     sessionId = "write-session",
                     userInput = "Remember this.",
-                    providerFactory = AgentProviderFactory.fixed(writingProvider),
-                    tools = tools
+                    providerFactory = AgentProviderFactory.fixed(provider),
+                    tools = tools,
+                    traceSink = TraceSink(events::add)
                 )
             ).await()
-            assertTrue(written is AgentRunOutcome.Success)
-
-            val read = sdk.run(
-                AgentRunRequest(
-                    sessionId = "read-session",
-                    userInput = "What should you remember?",
-                    providerFactory = AgentProviderFactory.fixed(readingProvider),
-                    contextProviders = listOf(AgentHouseContextProvider(repository))
-                )
-            ).await()
-            assertTrue(read is AgentRunOutcome.Success)
+            assertTrue(outcome is AgentRunOutcome.Success)
         }
+        assertEquals(1, governance.inbox(AgentAssetKind.MEMORY).size)
+        assertTrue(repository.listDailyMemories().isEmpty())
+        assertEquals(
+            "memory",
+            events.filterIsInstance<AgentEvent.CandidateProduced>().single().candidateType
+        )
     }
 
-    private fun contextRequest() = AgentContextRequest(
-        session = AgentSession("next-session", 1L, 1L),
+    private fun contextRequest() = dev.androidagent.harness.AgentContextRequest(
+        session = dev.androidagent.harness.AgentSession("next-session", 1L, 1L),
         userInput = "hello"
     )
 }

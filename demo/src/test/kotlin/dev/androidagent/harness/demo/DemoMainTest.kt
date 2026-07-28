@@ -16,8 +16,9 @@ class DemoMainTest {
             listOf(
                 "OUTPUT=Harness result: ANDROID",
                 "PROVIDER_STEPS=2",
-                "TRACE=ContextLoaded -> ProviderInvoked(1) -> ToolExecuted(uppercase) " +
-                    "-> ProviderInvoked(2) -> Completed(2)",
+                "TRACE=ContextLoaded -> ProviderInvoked(1) -> ProviderCompleted(1) " +
+                    "-> ToolRequested(uppercase) -> ToolExecuted(uppercase) " +
+                    "-> ProviderInvoked(2) -> ProviderCompleted(2) -> Completed(2)",
                 "TRANSCRIPT=USER:android | TOOL:ANDROID | ASSISTANT:Harness result: ANDROID"
             ),
             lines

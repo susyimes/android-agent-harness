@@ -94,6 +94,17 @@
                     android:textColor="@color/textSecondary"
                     android:textSize="13sp" />
 
+                <TextView
+                    android:id="@+id/homeBriefText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_surface_soft"
+                    android:lineSpacingExtra="2dp"
+                    android:padding="12dp"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="12sp" />
+
                 <Button
                     android:id="@+id/continueChatButton"
                     android:layout_width="match_parent"
@@ -108,6 +119,63 @@
                     android:textSize="15sp"
                     android:textStyle="bold"
                     android:translationZ="0dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/homeTodayCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_surface_card"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="今日状态"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/homeStatsSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="9dp"
+                    android:text="Stats 正在读取…"
+                    android:textColor="@color/textSecondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/homeTodoSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="7dp"
+                    android:text="Todo 正在读取…"
+                    android:textColor="@color/textSecondary"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:id="@+id/homeTodoQuickContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/homeAgentSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="Agent 状态正在读取…"
+                    android:textColor="@color/textSecondary"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <TextView
@@ -163,6 +231,130 @@
                     android:textColor="@color/textPrimary"
                     android:textSize="14sp"
                     android:translationZ="0dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/homeStatsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Stats"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/homeTodoButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Todo"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/homeDataButton"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_quick_action_button"
+                android:elevation="0dp"
+                android:stateListAnimator="@null"
+                android:text="Data &amp; Retention"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary"
+                android:translationZ="0dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/homeStateButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Obsidian / State"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/homeAutomationButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Automation"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/homePermissionsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Permissions"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/homeDebugButton"
+                    android:layout_width="0dp"
+                    android:layout_height="58dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_quick_action_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="Debug / Replay"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary" />
             </LinearLayout>
 
             <LinearLayout

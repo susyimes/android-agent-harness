@@ -91,13 +91,17 @@ class OpenAiCompatibleProviderTest {
         assertEquals("test-model", body["model"])
 
         val messages = asArray(body["messages"])
-        assertEquals(2, messages.size)
+        assertEquals(3, messages.size)
         val system = asObject(messages[0])
         assertEquals("system", system["role"])
         val systemContent = system["content"] as String
         assertTrue(systemContent.contains("[source=app-settings trust=APPLICATION] Keep answers short."))
-        assertTrue(systemContent.contains("[source=user-notes trust=USER] The user prefers uppercase."))
-        val user = asObject(messages[1])
+        assertFalse(systemContent.contains("The user prefers uppercase."))
+        val contextData = asObject(messages[1])
+        assertEquals("user", contextData["role"])
+        assertTrue((contextData["content"] as String).contains("<context-evidence>"))
+        assertTrue((contextData["content"] as String).contains("The user prefers uppercase."))
+        val user = asObject(messages[2])
         assertEquals("user", user["role"])
         assertEquals("make it loud", user["content"])
 

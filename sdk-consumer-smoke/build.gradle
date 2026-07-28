@@ -15,7 +15,14 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
 
 dependencies {
     testImplementation "dev.androidagent.harness:agent-sdk:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:agent-approval:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:context-engine:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:agent-state:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:agent-scheduling:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:agent-feedback:${rootProject.version}"
     testImplementation "dev.androidagent.harness:provider-openai:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:device-loop:${rootProject.version}"
+    testImplementation "dev.androidagent.harness:harness-eval:${rootProject.version}"
     testImplementation 'junit:junit:4.13.2'
 }
 

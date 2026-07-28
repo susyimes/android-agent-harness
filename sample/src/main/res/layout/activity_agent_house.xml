@@ -95,6 +95,21 @@
             </LinearLayout>
 
             <Button
+                android:id="@+id/houseReviewButton"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginEnd="7dp"
+                android:background="@drawable/bg_secondary_button"
+                android:elevation="0dp"
+                android:minWidth="0dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:stateListAnimator="@null"
+                android:text="候选审核"
+                android:textAllCaps="false"
+                android:textColor="@color/textPrimary" />
+
+            <Button
                 android:id="@+id/renameHouseButton"
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"

@@ -1,0 +1,199 @@
+public final class dev/androidagent/harness/provider/openai/CodexCredential {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/provider/openai/CodexCredential;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/provider/openai/CodexCredential;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/CodexCredential;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccessToken ()Ljava/lang/String;
+	public final fun getAccountId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/provider/openai/CodexCredentialProvider {
+	public abstract fun credential (Z)Ldev/androidagent/harness/provider/openai/CodexCredential;
+}
+
+public final class dev/androidagent/harness/provider/openai/CodexResponsesConfig {
+	public static final field Companion Ldev/androidagent/harness/provider/openai/CodexResponsesConfig$Companion;
+	public static final field DEFAULT_BASE_URL Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/time/Duration;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBaseUrl ()Ljava/lang/String;
+	public final fun getClientVersion ()Ljava/lang/String;
+	public final fun getHistoryCharBudget ()Ljava/lang/Integer;
+	public final fun getModel ()Ljava/lang/String;
+	public final fun getOriginator ()Ljava/lang/String;
+	public final fun getRequestTimeout ()Ljava/time/Duration;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/provider/openai/CodexResponsesConfig$Companion {
+}
+
+public final class dev/androidagent/harness/provider/openai/CodexResponsesProvider : dev/androidagent/harness/AgentProvider {
+	public fun <init> (Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;Ldev/androidagent/harness/provider/openai/CodexCredentialProvider;Ldev/androidagent/harness/provider/openai/HttpTransport;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;Ldev/androidagent/harness/provider/openai/CodexCredentialProvider;Ldev/androidagent/harness/provider/openai/HttpTransport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getCapabilities ()Ldev/androidagent/harness/AgentProviderCapabilities;
+	public fun getId ()Ljava/lang/String;
+	public fun respond (Ldev/androidagent/harness/AgentProviderRequest;)Ldev/androidagent/harness/AgentProviderResponse;
+}
+
+public final class dev/androidagent/harness/provider/openai/HttpRequestCancelledException : java/io/IOException {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public abstract interface class dev/androidagent/harness/provider/openai/HttpStreamingTransport : dev/androidagent/harness/provider/openai/HttpTransport {
+	public abstract fun postStreaming (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+}
+
+public abstract interface class dev/androidagent/harness/provider/openai/HttpTransport {
+	public abstract fun post (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/provider/openai/HttpTransportException : java/lang/RuntimeException {
+	public fun <init> (ILjava/lang/String;)V
+	public final fun getStatusCode ()I
+}
+
+public final class dev/androidagent/harness/provider/openai/MinimalJson {
+	public static final field INSTANCE Ldev/androidagent/harness/provider/openai/MinimalJson;
+	public final fun encode (Ljava/lang/Object;)Ljava/lang/String;
+	public final fun parse (Ljava/lang/String;)Ljava/lang/Object;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiCompatibleConfig {
+	public static final field Companion Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig$Companion;
+	public static final field DEFAULT_BASE_URL Ljava/lang/String;
+	public static final field DEFAULT_MAX_ATTACHMENT_BYTES I
+	public static final field DEFAULT_MODEL Ljava/lang/String;
+	public static final field MAX_ALLOWED_ATTACHMENT_BYTES I
+	public static final field REDACTED Ljava/lang/String;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Boolean;Ljava/lang/Integer;ZLjava/util/Set;ILjava/util/Map;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Boolean;Ljava/lang/Integer;ZLjava/util/Set;ILjava/util/Map;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/util/Map;
+	public final fun component11 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/time/Duration;
+	public final fun component5 ()Ljava/lang/Boolean;
+	public final fun component6 ()Ljava/lang/Integer;
+	public final fun component7 ()Z
+	public final fun component8 ()Ljava/util/Set;
+	public final fun component9 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Boolean;Ljava/lang/Integer;ZLjava/util/Set;ILjava/util/Map;Ljava/util/Map;)Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Boolean;Ljava/lang/Integer;ZLjava/util/Set;ILjava/util/Map;Ljava/util/Map;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAcceptedAttachmentMediaTypes ()Ljava/util/Set;
+	public final fun getBaseUrl ()Ljava/lang/String;
+	public final fun getExtraBodyFields ()Ljava/util/Map;
+	public final fun getExtraHeaders ()Ljava/util/Map;
+	public final fun getHistoryCharBudget ()Ljava/lang/Integer;
+	public final fun getKeyValue ()Ljava/lang/String;
+	public final fun getMaxAttachmentBytes ()I
+	public final fun getModel ()Ljava/lang/String;
+	public final fun getParallelToolCalls ()Ljava/lang/Boolean;
+	public final fun getRequestTimeout ()Ljava/time/Duration;
+	public final fun getStreamingEnabled ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiCompatibleConfig$Companion {
+	public final fun fromEnvironment (Lkotlin/jvm/functions/Function1;)Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;
+	public static synthetic fun fromEnvironment$default (Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig$Companion;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;
+	public final fun getDEFAULT_ATTACHMENT_MEDIA_TYPES ()Ljava/util/Set;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiCompatibleProvider : dev/androidagent/harness/AgentStreamingProvider {
+	public static final field Companion Ldev/androidagent/harness/provider/openai/OpenAiCompatibleProvider$Companion;
+	public static final field OMITTED_TOOL_RESULT Ljava/lang/String;
+	public fun <init> (Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;Ldev/androidagent/harness/provider/openai/HttpTransport;Ldev/androidagent/harness/AgentAttachmentResolver;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;Ldev/androidagent/harness/provider/openai/HttpTransport;Ldev/androidagent/harness/AgentAttachmentResolver;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getCapabilities ()Ldev/androidagent/harness/AgentProviderCapabilities;
+	public fun getId ()Ljava/lang/String;
+	public fun respond (Ldev/androidagent/harness/AgentProviderRequest;)Ldev/androidagent/harness/AgentProviderResponse;
+	public fun respondStreaming (Ldev/androidagent/harness/AgentProviderRequest;Ldev/androidagent/harness/AgentProviderDisplayObserver;)Ldev/androidagent/harness/AgentProviderResponse;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiCompatibleProvider$Companion {
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiEndpointPreset {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/util/List;
+	public final fun containsModel (Ljava/lang/String;)Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ldev/androidagent/harness/provider/openai/OpenAiEndpointPreset;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/provider/openai/OpenAiEndpointPreset;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/OpenAiEndpointPreset;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBaseUrl ()Ljava/lang/String;
+	public final fun getDefaultModel ()Ljava/lang/String;
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getModels ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiEndpointPresets {
+	public static final field INSTANCE Ldev/androidagent/harness/provider/openai/OpenAiEndpointPresets;
+	public final fun getARK_PLAN ()Ldev/androidagent/harness/provider/openai/OpenAiEndpointPreset;
+	public final fun getKIMI_PLAN ()Ldev/androidagent/harness/provider/openai/OpenAiEndpointPreset;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiModelPreset {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/provider/openai/OpenAiModelPreset;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/provider/openai/OpenAiModelPreset;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/provider/openai/OpenAiModelPreset;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiProtocolException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class dev/androidagent/harness/provider/openai/OpenAiProviderFactories {
+	public static final field INSTANCE Ldev/androidagent/harness/provider/openai/OpenAiProviderFactories;
+	public final fun codex (Ldev/androidagent/harness/provider/openai/CodexResponsesConfig;Ldev/androidagent/harness/provider/openai/CodexCredentialProvider;)Ldev/androidagent/harness/AgentProviderFactory;
+	public final fun compatible (Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;Ldev/androidagent/harness/AgentAttachmentResolver;)Ldev/androidagent/harness/AgentProviderFactory;
+	public static synthetic fun compatible$default (Ldev/androidagent/harness/provider/openai/OpenAiProviderFactories;Ldev/androidagent/harness/provider/openai/OpenAiCompatibleConfig;Ldev/androidagent/harness/AgentAttachmentResolver;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderFactory;
+}
+
+public final class dev/androidagent/harness/provider/openai/UrlConnectionHttpTransport : dev/androidagent/harness/provider/openai/HttpStreamingTransport {
+	public static final field CHARSET_PARAMETER Ljava/lang/String;
+	public static final field CONTENT_TYPE_HEADER Ljava/lang/String;
+	public static final field LOCATION_HEADER Ljava/lang/String;
+	public static final field MAX_ERROR_BODY_CHARS I
+	public fun <init> ()V
+	public fun <init> (Ljava/time/Duration;)V
+	public synthetic fun <init> (Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun cancel ()V
+	public fun post (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Ljava/lang/String;
+	public fun postStreaming (Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+}
+

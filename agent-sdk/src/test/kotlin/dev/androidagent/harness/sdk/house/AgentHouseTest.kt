@@ -27,7 +27,7 @@ class AgentHouseTest {
         )
 
         val initial = repository.snapshot()
-        assertEquals(8, initial.coreFiles.size)
+        assertEquals(11, initial.coreFiles.size)
         assertTrue(initial.coreFiles.all { file -> file.isDefault })
         assertFalse(
             initial.coreFiles.any { file ->

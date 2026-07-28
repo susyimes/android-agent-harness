@@ -76,16 +76,27 @@ class DevicePaymentFlowIntegrationTest {
             listOf(
                 "ContextLoaded",
                 "ProviderInvoked(1)",
+                "ProviderCompleted(1)",
+                "ToolRequested(device_observe)",
                 "ToolExecuted(device_observe)",
                 "ProviderInvoked(2)",
+                "ProviderCompleted(2)",
+                "ToolRequested(device_act)",
                 "ToolExecuted(device_act)",
                 "ProviderInvoked(3)",
+                "ProviderCompleted(3)",
+                "ToolRequested(device_act)",
                 "ToolExecuted(device_act)",
                 "ProviderInvoked(4)",
+                "ProviderCompleted(4)",
+                "ToolRequested(device_observe)",
                 "ToolExecuted(device_observe)",
                 "ProviderInvoked(5)",
+                "ProviderCompleted(5)",
+                "ToolRequested(device_finish)",
                 "ToolExecuted(device_finish)",
                 "ProviderInvoked(6)",
+                "ProviderCompleted(6)",
                 "Completed(6)"
             ),
             result.trace.map { event -> event.label() }
@@ -123,6 +134,9 @@ class DevicePaymentFlowIntegrationTest {
         return when (this) {
             is AgentHarnessTraceEvent.ContextLoaded -> "ContextLoaded"
             is AgentHarnessTraceEvent.ProviderInvoked -> "ProviderInvoked($step)"
+            is AgentHarnessTraceEvent.ProviderDisplay -> "ProviderDisplay($step)"
+            is AgentHarnessTraceEvent.ProviderCompleted -> "ProviderCompleted($step)"
+            is AgentHarnessTraceEvent.ToolRequested -> "ToolRequested($toolName)"
             is AgentHarnessTraceEvent.ToolLoopActivated -> "ToolLoopActivated($toolName)"
             is AgentHarnessTraceEvent.ToolExecuted -> "ToolExecuted($toolName)"
             is AgentHarnessTraceEvent.Completed -> "Completed($step)"

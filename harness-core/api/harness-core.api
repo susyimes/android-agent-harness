@@ -1,0 +1,1216 @@
+public final class dev/androidagent/harness/AgentArtifactRef {
+	public static final field Companion Ldev/androidagent/harness/AgentArtifactRef$Companion;
+	public static final field MAX_MEDIA_TYPE_CHARS I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)Ldev/androidagent/harness/AgentArtifactRef;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentArtifactRef;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Ldev/androidagent/harness/AgentArtifactRef;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getByteSize ()Ljava/lang/Long;
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMediaType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentArtifactRef$Companion {
+}
+
+public final class dev/androidagent/harness/AgentAttachmentContent {
+	public fun <init> (Ljava/lang/String;[B)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()[B
+	public final fun copy (Ljava/lang/String;[B)Ldev/androidagent/harness/AgentAttachmentContent;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentAttachmentContent;Ljava/lang/String;[BILjava/lang/Object;)Ldev/androidagent/harness/AgentAttachmentContent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytes ()[B
+	public final fun getMediaType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentAttachmentResolver {
+	public static final field Companion Ldev/androidagent/harness/AgentAttachmentResolver$Companion;
+	public abstract fun resolve (Ldev/androidagent/harness/AttachmentRef;)Ldev/androidagent/harness/AgentAttachmentContent;
+}
+
+public final class dev/androidagent/harness/AgentAttachmentResolver$Companion {
+	public final fun getNONE ()Ldev/androidagent/harness/AgentAttachmentResolver;
+}
+
+public abstract interface class dev/androidagent/harness/AgentCancellationSignal {
+	public static final field Companion Ldev/androidagent/harness/AgentCancellationSignal$Companion;
+	public abstract fun isCancellationRequested ()Z
+}
+
+public final class dev/androidagent/harness/AgentCancellationSignal$Companion {
+	public final fun getTHREAD_INTERRUPTED ()Ldev/androidagent/harness/AgentCancellationSignal;
+}
+
+public final class dev/androidagent/harness/AgentCandidateRef {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentCandidateRef;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentCandidateRef;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentCandidateRef;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentClock {
+	public abstract fun nowEpochMillis ()J
+}
+
+public final class dev/androidagent/harness/AgentContextBundle {
+	public fun <init> (Ljava/util/List;Ljava/util/List;I)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()I
+	public final fun copy (Ljava/util/List;Ljava/util/List;I)Ldev/androidagent/harness/AgentContextBundle;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentContextBundle;Ljava/util/List;Ljava/util/List;IILjava/lang/Object;)Ldev/androidagent/harness/AgentContextBundle;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDroppedItemIds ()Ljava/util/List;
+	public final fun getItems ()Ljava/util/List;
+	public final fun getTotalContentChars ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentContextCoordinator {
+	public fun <init> (Ldev/androidagent/harness/AgentContextProvider;Ldev/androidagent/harness/AgentContextPolicy;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentContextProvider;Ldev/androidagent/harness/AgentContextPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/List;Ldev/androidagent/harness/AgentContextPolicy;)V
+	public synthetic fun <init> (Ljava/util/List;Ldev/androidagent/harness/AgentContextPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun build (Ldev/androidagent/harness/AgentContextRequest;)Ldev/androidagent/harness/AgentContextBundle;
+}
+
+public final class dev/androidagent/harness/AgentContextItem {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ldev/androidagent/harness/AgentContextTrust;
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;I)Ldev/androidagent/harness/AgentContextItem;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentContextItem;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentContextTrust;IILjava/lang/Object;)Ldev/androidagent/harness/AgentContextItem;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getPriority ()I
+	public final fun getSource ()Ljava/lang/String;
+	public final fun getTrust ()Ldev/androidagent/harness/AgentContextTrust;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentContextPolicy {
+	public fun <init> ()V
+	public fun <init> (IILjava/util/Set;)V
+	public synthetic fun <init> (IILjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/util/Set;
+	public final fun copy (IILjava/util/Set;)Ldev/androidagent/harness/AgentContextPolicy;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentContextPolicy;IILjava/util/Set;ILjava/lang/Object;)Ldev/androidagent/harness/AgentContextPolicy;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowedTrust ()Ljava/util/Set;
+	public final fun getMaxContentChars ()I
+	public final fun getMaxItems ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentContextProvider {
+	public abstract fun load (Ldev/androidagent/harness/AgentContextRequest;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/AgentContextRequest {
+	public fun <init> (Ldev/androidagent/harness/AgentSession;Ljava/lang/String;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentSession;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ldev/androidagent/harness/AgentSession;Ljava/lang/String;)Ldev/androidagent/harness/AgentContextRequest;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentContextRequest;Ldev/androidagent/harness/AgentSession;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentContextRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSession ()Ldev/androidagent/harness/AgentSession;
+	public final fun getUserInput ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentContextTrust : java/lang/Enum {
+	public static final field AGENT Ldev/androidagent/harness/AgentContextTrust;
+	public static final field APPLICATION Ldev/androidagent/harness/AgentContextTrust;
+	public static final field EXTERNAL Ldev/androidagent/harness/AgentContextTrust;
+	public static final field USER Ldev/androidagent/harness/AgentContextTrust;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentContextTrust;
+	public static fun values ()[Ldev/androidagent/harness/AgentContextTrust;
+}
+
+public final class dev/androidagent/harness/AgentEvidenceRef {
+	public static final field Companion Ldev/androidagent/harness/AgentEvidenceRef$Companion;
+	public static final field MAX_REFERENCE_SUMMARY_CHARS I
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentEvidenceRef;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentEvidenceRef;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentEvidenceRef;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getSource ()Ljava/lang/String;
+	public final fun getSummary ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentEvidenceRef$Companion {
+}
+
+public abstract interface class dev/androidagent/harness/AgentHarness {
+	public abstract fun run (Ldev/androidagent/harness/AgentHarnessRequest;)Ldev/androidagent/harness/AgentHarnessResult;
+}
+
+public final class dev/androidagent/harness/AgentHarnessCancelledException : java/lang/IllegalStateException {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class dev/androidagent/harness/AgentHarnessConfig {
+	public static final field Companion Ldev/androidagent/harness/AgentHarnessConfig$Companion;
+	public static final field MAX_PROVIDER_STEPS I
+	public fun <init> ()V
+	public fun <init> (IILdev/androidagent/harness/AgentToolLoopActivation;IILjava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (IILdev/androidagent/harness/AgentToolLoopActivation;IILjava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ldev/androidagent/harness/AgentToolLoopActivation;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()Ljava/lang/Integer;
+	public final fun component7 ()Ljava/lang/Integer;
+	public final fun copy (IILdev/androidagent/harness/AgentToolLoopActivation;IILjava/lang/Integer;Ljava/lang/Integer;)Ldev/androidagent/harness/AgentHarnessConfig;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessConfig;IILdev/androidagent/harness/AgentToolLoopActivation;IILjava/lang/Integer;Ljava/lang/Integer;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxInputTokens ()Ljava/lang/Integer;
+	public final fun getMaxOutputTokens ()Ljava/lang/Integer;
+	public final fun getMaxProviderSteps ()I
+	public final fun getMaxRepeatedFailures ()I
+	public final fun getMaxToolCallsPerStep ()I
+	public final fun getMaxToolCallsTotal ()I
+	public final fun getToolLoopActivation ()Ldev/androidagent/harness/AgentToolLoopActivation;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessConfig$Companion {
+}
+
+public final class dev/androidagent/harness/AgentHarnessLimitException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public abstract interface class dev/androidagent/harness/AgentHarnessObserver {
+	public static final field Companion Ldev/androidagent/harness/AgentHarnessObserver$Companion;
+	public abstract fun onEvent (Ldev/androidagent/harness/AgentHarnessTraceEvent;)V
+}
+
+public final class dev/androidagent/harness/AgentHarnessObserver$Companion {
+	public final fun getNONE ()Ldev/androidagent/harness/AgentHarnessObserver;
+}
+
+public final class dev/androidagent/harness/AgentHarnessProtocolException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class dev/androidagent/harness/AgentHarnessRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ldev/androidagent/harness/AgentHarnessRequest;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessRequest;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttachments ()Ljava/util/List;
+	public final fun getRunId ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getUserInput ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessResult {
+	public fun <init> (Ldev/androidagent/harness/AgentSession;Ljava/lang/String;ILjava/util/List;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentSession;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ldev/androidagent/harness/AgentSession;Ljava/lang/String;ILjava/util/List;)Ldev/androidagent/harness/AgentHarnessResult;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessResult;Ldev/androidagent/harness/AgentSession;Ljava/lang/String;ILjava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOutput ()Ljava/lang/String;
+	public final fun getProviderSteps ()I
+	public final fun getSession ()Ldev/androidagent/harness/AgentSession;
+	public final fun getTrace ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessRunner : dev/androidagent/harness/AgentHarness {
+	public fun <init> (Ldev/androidagent/harness/AgentOrchestrator;)V
+	public fun <init> (Ldev/androidagent/harness/AgentProvider;Ljava/util/List;Ljava/util/List;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;Ldev/androidagent/harness/AgentContextPolicy;Ldev/androidagent/harness/AgentToolProfile;Ldev/androidagent/harness/AgentHarnessObserver;Ldev/androidagent/harness/AgentCancellationSignal;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentProvider;Ljava/util/List;Ljava/util/List;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;Ldev/androidagent/harness/AgentContextPolicy;Ldev/androidagent/harness/AgentToolProfile;Ldev/androidagent/harness/AgentHarnessObserver;Ldev/androidagent/harness/AgentCancellationSignal;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun run (Ldev/androidagent/harness/AgentHarnessRequest;)Ldev/androidagent/harness/AgentHarnessResult;
+}
+
+public abstract interface class dev/androidagent/harness/AgentHarnessTraceEvent {
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$Completed : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;)Ldev/androidagent/harness/AgentHarnessTraceEvent$Completed;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$Completed;ILjava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$Completed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOutput ()Ljava/lang/String;
+	public final fun getStep ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ContextLoaded : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (Ljava/util/List;Ljava/util/List;I)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/List;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()I
+	public final fun copy (Ljava/util/List;Ljava/util/List;I)Ldev/androidagent/harness/AgentHarnessTraceEvent$ContextLoaded;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ContextLoaded;Ljava/util/List;Ljava/util/List;IILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ContextLoaded;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDroppedItemIds ()Ljava/util/List;
+	public final fun getItemIds ()Ljava/util/List;
+	public final fun getTotalContentChars ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ProviderCompleted : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ILjava/lang/String;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderCompleted;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderCompleted;ILjava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderCompleted;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getResponseKind ()Ljava/lang/String;
+	public final fun getStep ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ProviderDisplay : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILdev/androidagent/harness/AgentProviderDisplayEvent;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ldev/androidagent/harness/AgentProviderDisplayEvent;
+	public final fun copy (ILdev/androidagent/harness/AgentProviderDisplayEvent;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderDisplay;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderDisplay;ILdev/androidagent/harness/AgentProviderDisplayEvent;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderDisplay;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvent ()Ldev/androidagent/harness/AgentProviderDisplayEvent;
+	public final fun getStep ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ProviderInvoked : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (ILjava/lang/String;Ljava/util/List;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderInvoked;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderInvoked;ILjava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ProviderInvoked;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getProviderId ()Ljava/lang/String;
+	public final fun getStep ()I
+	public final fun getToolNames ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ToolExecuted : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/util/Map;Ldev/androidagent/harness/AgentToolResultEnvelope;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/util/Map;Ldev/androidagent/harness/AgentToolResultEnvelope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Z
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun component7 ()Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/util/Map;Ldev/androidagent/harness/AgentToolResultEnvelope;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolExecuted;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolExecuted;ILjava/lang/String;Ljava/lang/String;ZLjava/lang/String;Ljava/util/Map;Ldev/androidagent/harness/AgentToolResultEnvelope;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolExecuted;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArguments ()Ljava/util/Map;
+	public final fun getCallId ()Ljava/lang/String;
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getEnvelope ()Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public final fun getStep ()I
+	public final fun getSucceeded ()Z
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ToolLoopActivated : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;II)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun copy (ILjava/lang/String;II)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolLoopActivated;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolLoopActivated;ILjava/lang/String;IIILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolLoopActivated;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxProviderSteps ()I
+	public final fun getMaxToolCallsPerStep ()I
+	public final fun getStep ()I
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentHarnessTraceEvent$ToolRequested : dev/androidagent/harness/AgentHarnessTraceEvent {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/Map;
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;Ljava/util/Map;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolRequested;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolRequested;ILjava/lang/String;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Ldev/androidagent/harness/AgentHarnessTraceEvent$ToolRequested;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArguments ()Ljava/util/Map;
+	public final fun getCallId ()Ljava/lang/String;
+	public final fun getStep ()I
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentIdGenerator {
+	public abstract fun nextId (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentMessage {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentRole;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentRole;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ldev/androidagent/harness/AgentRole;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentRole;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentMessage;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentMessage;Ljava/lang/String;Ljava/lang/String;Ldev/androidagent/harness/AgentRole;Ljava/lang/String;JLjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getRole ()Ldev/androidagent/harness/AgentRole;
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getToolCallId ()Ljava/lang/String;
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentOrchestrator {
+	public fun <init> (Ldev/androidagent/harness/AgentProvider;Ldev/androidagent/harness/AgentContextCoordinator;Ldev/androidagent/harness/AgentToolOrchestrator;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;Ldev/androidagent/harness/AgentHarnessObserver;Ldev/androidagent/harness/AgentCancellationSignal;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentProvider;Ldev/androidagent/harness/AgentContextCoordinator;Ldev/androidagent/harness/AgentToolOrchestrator;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;Ldev/androidagent/harness/AgentHarnessObserver;Ldev/androidagent/harness/AgentCancellationSignal;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun execute (Ldev/androidagent/harness/AgentHarnessRequest;)Ldev/androidagent/harness/AgentHarnessResult;
+}
+
+public final class dev/androidagent/harness/AgentPrivacyLabel : java/lang/Enum {
+	public static final field INTERNAL Ldev/androidagent/harness/AgentPrivacyLabel;
+	public static final field PUBLIC Ldev/androidagent/harness/AgentPrivacyLabel;
+	public static final field RESTRICTED Ldev/androidagent/harness/AgentPrivacyLabel;
+	public static final field SENSITIVE Ldev/androidagent/harness/AgentPrivacyLabel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentPrivacyLabel;
+	public static fun values ()[Ldev/androidagent/harness/AgentPrivacyLabel;
+}
+
+public abstract interface class dev/androidagent/harness/AgentProvider {
+	public fun getCapabilities ()Ldev/androidagent/harness/AgentProviderCapabilities;
+	public abstract fun getId ()Ljava/lang/String;
+	public abstract fun respond (Ldev/androidagent/harness/AgentProviderRequest;)Ldev/androidagent/harness/AgentProviderResponse;
+}
+
+public final class dev/androidagent/harness/AgentProvider$DefaultImpls {
+	public static fun getCapabilities (Ldev/androidagent/harness/AgentProvider;)Ldev/androidagent/harness/AgentProviderCapabilities;
+}
+
+public final class dev/androidagent/harness/AgentProviderCapabilities {
+	public fun <init> ()V
+	public fun <init> (ZLjava/util/Set;ZZ)V
+	public synthetic fun <init> (ZLjava/util/Set;ZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun accepts (Ljava/lang/String;)Z
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/util/Set;
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun copy (ZLjava/util/Set;ZZ)Ldev/androidagent/harness/AgentProviderCapabilities;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderCapabilities;ZLjava/util/Set;ZZILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderCapabilities;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAcceptedInputMediaTypes ()Ljava/util/Set;
+	public final fun getAudioInput ()Z
+	public final fun getAudioOutput ()Z
+	public final fun getStreaming ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentProviderConnection {
+	public fun <init> (Ldev/androidagent/harness/AgentProvider;Lkotlin/jvm/functions/Function0;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentProvider;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentProvider;
+	public final fun component2 ()Lkotlin/jvm/functions/Function0;
+	public final fun copy (Ldev/androidagent/harness/AgentProvider;Lkotlin/jvm/functions/Function0;)Ldev/androidagent/harness/AgentProviderConnection;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderConnection;Ldev/androidagent/harness/AgentProvider;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCancel ()Lkotlin/jvm/functions/Function0;
+	public final fun getProvider ()Ldev/androidagent/harness/AgentProvider;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentProviderDisplayEvent {
+}
+
+public final class dev/androidagent/harness/AgentProviderDisplayEvent$ActionNarration : dev/androidagent/harness/AgentProviderDisplayEvent {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/androidagent/harness/AgentProviderDisplayEvent$ActionNarration;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderDisplayEvent$ActionNarration;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderDisplayEvent$ActionNarration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentProviderDisplayEvent$TextDelta : dev/androidagent/harness/AgentProviderDisplayEvent {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/androidagent/harness/AgentProviderDisplayEvent$TextDelta;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderDisplayEvent$TextDelta;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderDisplayEvent$TextDelta;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentProviderDisplayEvent$ToolStatus : dev/androidagent/harness/AgentProviderDisplayEvent {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentProviderDisplayEvent$ToolStatus;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderDisplayEvent$ToolStatus;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderDisplayEvent$ToolStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getStatus ()Ljava/lang/String;
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentProviderDisplayEvent$Usage : dev/androidagent/harness/AgentProviderDisplayEvent {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/Integer;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/lang/Integer;Ljava/lang/Integer;)Ldev/androidagent/harness/AgentProviderDisplayEvent$Usage;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderDisplayEvent$Usage;Ljava/lang/Integer;Ljava/lang/Integer;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderDisplayEvent$Usage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getInputTokens ()Ljava/lang/Integer;
+	public final fun getOutputTokens ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentProviderDisplayObserver {
+	public static final field Companion Ldev/androidagent/harness/AgentProviderDisplayObserver$Companion;
+	public abstract fun onEvent (Ldev/androidagent/harness/AgentProviderDisplayEvent;)V
+}
+
+public final class dev/androidagent/harness/AgentProviderDisplayObserver$Companion {
+	public final fun getNONE ()Ldev/androidagent/harness/AgentProviderDisplayObserver;
+}
+
+public abstract interface class dev/androidagent/harness/AgentProviderFactory {
+	public static final field Companion Ldev/androidagent/harness/AgentProviderFactory$Companion;
+	public abstract fun connect ()Ldev/androidagent/harness/AgentProviderConnection;
+}
+
+public final class dev/androidagent/harness/AgentProviderFactory$Companion {
+	public final fun fixed (Ldev/androidagent/harness/AgentProvider;)Ldev/androidagent/harness/AgentProviderFactory;
+}
+
+public final class dev/androidagent/harness/AgentProviderRequest {
+	public fun <init> (Ldev/androidagent/harness/AgentSession;Ljava/util/List;Ljava/util/List;ILjava/util/List;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentSession;Ljava/util/List;Ljava/util/List;ILjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentSession;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (Ldev/androidagent/harness/AgentSession;Ljava/util/List;Ljava/util/List;ILjava/util/List;)Ldev/androidagent/harness/AgentProviderRequest;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderRequest;Ldev/androidagent/harness/AgentSession;Ljava/util/List;Ljava/util/List;ILjava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttachments ()Ljava/util/List;
+	public final fun getContext ()Ljava/util/List;
+	public final fun getProviderStep ()I
+	public final fun getSession ()Ldev/androidagent/harness/AgentSession;
+	public final fun getTools ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentProviderResponse {
+}
+
+public final class dev/androidagent/harness/AgentProviderResponse$FinalText : dev/androidagent/harness/AgentProviderResponse {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/androidagent/harness/AgentProviderResponse$FinalText;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderResponse$FinalText;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderResponse$FinalText;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentProviderResponse$ToolRequests : dev/androidagent/harness/AgentProviderResponse {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Ldev/androidagent/harness/AgentProviderResponse$ToolRequests;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentProviderResponse$ToolRequests;Ljava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentProviderResponse$ToolRequests;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCalls ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentRawPayload {
+	public static final field Companion Ldev/androidagent/harness/AgentRawPayload$Companion;
+	public static final field MAX_CONTENT_BYTES I
+	public fun <init> (Ljava/lang/String;[BLjava/lang/String;Ldev/androidagent/harness/AgentPrivacyLabel;Ldev/androidagent/harness/AgentRawPayloadScope;JJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()[B
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public final fun component5 ()Ldev/androidagent/harness/AgentRawPayloadScope;
+	public final fun component6 ()J
+	public final fun component7 ()J
+	public final fun copy (Ljava/lang/String;[BLjava/lang/String;Ldev/androidagent/harness/AgentPrivacyLabel;Ldev/androidagent/harness/AgentRawPayloadScope;JJ)Ldev/androidagent/harness/AgentRawPayload;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentRawPayload;Ljava/lang/String;[BLjava/lang/String;Ldev/androidagent/harness/AgentPrivacyLabel;Ldev/androidagent/harness/AgentRawPayloadScope;JJILjava/lang/Object;)Ldev/androidagent/harness/AgentRawPayload;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()[B
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getExpiresAtEpochMillis ()J
+	public final fun getMediaType ()Ljava/lang/String;
+	public final fun getPrivacy ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public final fun getRef ()Ljava/lang/String;
+	public final fun getScope ()Ldev/androidagent/harness/AgentRawPayloadScope;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentRawPayload$Companion {
+}
+
+public final class dev/androidagent/harness/AgentRawPayloadScope {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentRawPayloadScope;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentRawPayloadScope;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentRawPayloadScope;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRunId ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getToolCallId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentRawPayloadStore {
+	public abstract fun delete (Ljava/lang/String;Ldev/androidagent/harness/AgentRawPayloadScope;)Z
+	public abstract fun get (Ljava/lang/String;Ldev/androidagent/harness/AgentRawPayloadScope;J)Ldev/androidagent/harness/AgentRawPayload;
+	public abstract fun put (Ldev/androidagent/harness/AgentRawPayload;)V
+}
+
+public final class dev/androidagent/harness/AgentRetryAdvice {
+	public fun <init> (ZLjava/lang/String;Ljava/lang/Long;)V
+	public synthetic fun <init> (ZLjava/lang/String;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun copy (ZLjava/lang/String;Ljava/lang/Long;)Ldev/androidagent/harness/AgentRetryAdvice;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentRetryAdvice;ZLjava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Ldev/androidagent/harness/AgentRetryAdvice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getRetryAfterMillis ()Ljava/lang/Long;
+	public final fun getRetryable ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentRole : java/lang/Enum {
+	public static final field ASSISTANT Ldev/androidagent/harness/AgentRole;
+	public static final field TOOL Ldev/androidagent/harness/AgentRole;
+	public static final field USER Ldev/androidagent/harness/AgentRole;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentRole;
+	public static fun values ()[Ldev/androidagent/harness/AgentRole;
+}
+
+public final class dev/androidagent/harness/AgentRunCheckpoint {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentRunCheckpointStatus;Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentRunCheckpointStatus;Ljava/lang/String;J)Ldev/androidagent/harness/AgentRunCheckpoint;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentRunCheckpoint;Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentRunCheckpointStatus;Ljava/lang/String;JILjava/lang/Object;)Ldev/androidagent/harness/AgentRunCheckpoint;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPayloadJson ()Ljava/lang/String;
+	public final fun getRevision ()J
+	public final fun getRunId ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public final fun getStatus ()Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public final fun getUpdatedAtEpochMillis ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentRunCheckpointStatus : java/lang/Enum {
+	public static final field ACTIVE Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static final field CANCELLED Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static final field COMPLETED Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static final field EXPIRED Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static final field FAILED Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static final field PAUSED Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentRunCheckpointStatus;
+	public static fun values ()[Ldev/androidagent/harness/AgentRunCheckpointStatus;
+}
+
+public abstract interface class dev/androidagent/harness/AgentRunCheckpointStore {
+	public abstract fun compareAndSet (Ldev/androidagent/harness/AgentRunCheckpoint;Ljava/lang/Long;)Z
+	public abstract fun delete (Ljava/lang/String;)Z
+	public abstract fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentRunCheckpoint;
+}
+
+public final class dev/androidagent/harness/AgentSession {
+	public fun <init> (Ljava/lang/String;JJLjava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;JJLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun append (Ldev/androidagent/harness/AgentMessage;)Ldev/androidagent/harness/AgentSession;
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;JJLjava/util/List;)Ldev/androidagent/harness/AgentSession;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentSession;Ljava/lang/String;JJLjava/util/List;ILjava/lang/Object;)Ldev/androidagent/harness/AgentSession;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMessages ()Ljava/util/List;
+	public final fun getUpdatedAtEpochMillis ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentSessionRevisionConflictException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Long;Ljava/lang/Long;)V
+}
+
+public abstract interface class dev/androidagent/harness/AgentSessionStore {
+	public abstract fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentSession;
+	public abstract fun save (Ldev/androidagent/harness/AgentSession;)V
+}
+
+public abstract interface class dev/androidagent/harness/AgentStreamingProvider : dev/androidagent/harness/AgentProvider {
+	public abstract fun respondStreaming (Ldev/androidagent/harness/AgentProviderRequest;Ldev/androidagent/harness/AgentProviderDisplayObserver;)Ldev/androidagent/harness/AgentProviderResponse;
+}
+
+public final class dev/androidagent/harness/AgentStreamingProvider$DefaultImpls {
+	public static fun getCapabilities (Ldev/androidagent/harness/AgentStreamingProvider;)Ldev/androidagent/harness/AgentProviderCapabilities;
+}
+
+public abstract interface class dev/androidagent/harness/AgentTool {
+	public abstract fun execute (Ldev/androidagent/harness/AgentToolInvocation;)Ldev/androidagent/harness/AgentToolResult;
+	public abstract fun getSpec ()Ldev/androidagent/harness/AgentToolSpec;
+}
+
+public final class dev/androidagent/harness/AgentToolArgumentSchema {
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/AgentToolArgumentType;Ljava/lang/String;Ljava/util/List;Ldev/androidagent/harness/AgentToolArgumentSchema;Ljava/util/Map;Ljava/util/Set;Z)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentToolArgumentType;Ljava/lang/String;Ljava/util/List;Ldev/androidagent/harness/AgentToolArgumentSchema;Ljava/util/Map;Ljava/util/Set;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentToolArgumentType;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ldev/androidagent/harness/AgentToolArgumentSchema;
+	public final fun component5 ()Ljava/util/Map;
+	public final fun component6 ()Ljava/util/Set;
+	public final fun component7 ()Z
+	public final fun copy (Ldev/androidagent/harness/AgentToolArgumentType;Ljava/lang/String;Ljava/util/List;Ldev/androidagent/harness/AgentToolArgumentSchema;Ljava/util/Map;Ljava/util/Set;Z)Ldev/androidagent/harness/AgentToolArgumentSchema;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolArgumentSchema;Ldev/androidagent/harness/AgentToolArgumentType;Ljava/lang/String;Ljava/util/List;Ldev/androidagent/harness/AgentToolArgumentSchema;Ljava/util/Map;Ljava/util/Set;ZILjava/lang/Object;)Ldev/androidagent/harness/AgentToolArgumentSchema;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdditionalProperties ()Z
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getEnumValues ()Ljava/util/List;
+	public final fun getItems ()Ldev/androidagent/harness/AgentToolArgumentSchema;
+	public final fun getProperties ()Ljava/util/Map;
+	public final fun getRequiredProperties ()Ljava/util/Set;
+	public final fun getType ()Ldev/androidagent/harness/AgentToolArgumentType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolArgumentType : java/lang/Enum {
+	public static final field ARRAY Ldev/androidagent/harness/AgentToolArgumentType;
+	public static final field BOOLEAN Ldev/androidagent/harness/AgentToolArgumentType;
+	public static final field INTEGER Ldev/androidagent/harness/AgentToolArgumentType;
+	public static final field NUMBER Ldev/androidagent/harness/AgentToolArgumentType;
+	public static final field OBJECT Ldev/androidagent/harness/AgentToolArgumentType;
+	public static final field STRING Ldev/androidagent/harness/AgentToolArgumentType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getJsonSchemaName ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolArgumentType;
+	public static fun values ()[Ldev/androidagent/harness/AgentToolArgumentType;
+}
+
+public final class dev/androidagent/harness/AgentToolCall {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)Ldev/androidagent/harness/AgentToolCall;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolCall;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolCall;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArguments ()Ljava/util/Map;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getToolName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolCapability {
+	public static final field Companion Ldev/androidagent/harness/AgentToolCapability$Companion;
+	public fun <init> ()V
+	public fun <init> (Ldev/androidagent/harness/AgentToolSideEffect;Ldev/androidagent/harness/AgentToolRisk;Ljava/util/Set;ZLdev/androidagent/harness/AgentToolIdempotency;ZLjava/util/Set;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentToolSideEffect;Ldev/androidagent/harness/AgentToolRisk;Ljava/util/Set;ZLdev/androidagent/harness/AgentToolIdempotency;ZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentToolSideEffect;
+	public final fun component2 ()Ldev/androidagent/harness/AgentToolRisk;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Z
+	public final fun component5 ()Ldev/androidagent/harness/AgentToolIdempotency;
+	public final fun component6 ()Z
+	public final fun component7 ()Ljava/util/Set;
+	public final fun copy (Ldev/androidagent/harness/AgentToolSideEffect;Ldev/androidagent/harness/AgentToolRisk;Ljava/util/Set;ZLdev/androidagent/harness/AgentToolIdempotency;ZLjava/util/Set;)Ldev/androidagent/harness/AgentToolCapability;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolCapability;Ldev/androidagent/harness/AgentToolSideEffect;Ldev/androidagent/harness/AgentToolRisk;Ljava/util/Set;ZLdev/androidagent/harness/AgentToolIdempotency;ZLjava/util/Set;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolCapability;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDataScopes ()Ljava/util/Set;
+	public final fun getIdempotency ()Ldev/androidagent/harness/AgentToolIdempotency;
+	public final fun getMayMutate ()Z
+	public final fun getRequiresForeground ()Z
+	public final fun getRisk ()Ldev/androidagent/harness/AgentToolRisk;
+	public final fun getSideEffect ()Ldev/androidagent/harness/AgentToolSideEffect;
+	public final fun getSupportsCancellation ()Z
+	public final fun getTargetArgumentNames ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolCapability$Companion {
+	public final fun localRead ([Ljava/lang/String;)Ldev/androidagent/harness/AgentToolCapability;
+	public final fun none ()Ldev/androidagent/harness/AgentToolCapability;
+}
+
+public final class dev/androidagent/harness/AgentToolEffectRecord {
+	public fun <init> (Ljava/lang/String;Ldev/androidagent/harness/AgentToolSideEffect;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ldev/androidagent/harness/AgentToolSideEffect;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ldev/androidagent/harness/AgentToolSideEffect;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun copy (Ljava/lang/String;Ldev/androidagent/harness/AgentToolSideEffect;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)Ldev/androidagent/harness/AgentToolEffectRecord;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolEffectRecord;Ljava/lang/String;Ldev/androidagent/harness/AgentToolSideEffect;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Ldev/androidagent/harness/AgentToolEffectRecord;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArgumentHash ()Ljava/lang/String;
+	public final fun getEffectId ()Ljava/lang/String;
+	public final fun getIdempotencyKey ()Ljava/lang/String;
+	public final fun getOccurred ()Z
+	public final fun getSideEffect ()Ldev/androidagent/harness/AgentToolSideEffect;
+	public final fun getTargetRef ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolExecution {
+	public fun <init> (Ldev/androidagent/harness/AgentToolCall;Ldev/androidagent/harness/AgentToolResult;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentToolCall;
+	public final fun component2 ()Ldev/androidagent/harness/AgentToolResult;
+	public final fun copy (Ldev/androidagent/harness/AgentToolCall;Ldev/androidagent/harness/AgentToolResult;)Ldev/androidagent/harness/AgentToolExecution;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolExecution;Ldev/androidagent/harness/AgentToolCall;Ldev/androidagent/harness/AgentToolResult;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolExecution;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCall ()Ldev/androidagent/harness/AgentToolCall;
+	public final fun getResult ()Ldev/androidagent/harness/AgentToolResult;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolIdempotency : java/lang/Enum {
+	public static final field IDEMPOTENT Ldev/androidagent/harness/AgentToolIdempotency;
+	public static final field IDEMPOTENT_WITH_KEY Ldev/androidagent/harness/AgentToolIdempotency;
+	public static final field NON_IDEMPOTENT Ldev/androidagent/harness/AgentToolIdempotency;
+	public static final field UNKNOWN Ldev/androidagent/harness/AgentToolIdempotency;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolIdempotency;
+	public static fun values ()[Ldev/androidagent/harness/AgentToolIdempotency;
+}
+
+public final class dev/androidagent/harness/AgentToolInvocation {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Ldev/androidagent/harness/AgentToolInvocation;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolInvocation;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolInvocation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArguments ()Ljava/util/Map;
+	public final fun getCallId ()Ljava/lang/String;
+	public final fun getRunId ()Ljava/lang/String;
+	public final fun getSessionId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolLoopActivation {
+	public fun <init> (Ljava/util/Set;II)V
+	public synthetic fun <init> (Ljava/util/Set;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/util/Set;II)Ldev/androidagent/harness/AgentToolLoopActivation;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolLoopActivation;Ljava/util/Set;IIILjava/lang/Object;)Ldev/androidagent/harness/AgentToolLoopActivation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMaxProviderSteps ()I
+	public final fun getMaxToolCallsPerStep ()I
+	public final fun getToolNames ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolOrchestrator {
+	public fun <init> (Ldev/androidagent/harness/AgentToolRegistry;Ldev/androidagent/harness/AgentToolProfile;I)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentToolRegistry;Ldev/androidagent/harness/AgentToolProfile;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun execute (Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function0;)Ljava/util/List;
+	public static synthetic fun execute$default (Ldev/androidagent/harness/AgentToolOrchestrator;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function0;ILjava/lang/Object;)Ljava/util/List;
+	public final fun getProfile ()Ldev/androidagent/harness/AgentToolProfile;
+	public final fun specifications ()Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/AgentToolProfile {
+	public static final field Companion Ldev/androidagent/harness/AgentToolProfile$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/util/Set;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun allows (Ljava/lang/String;)Z
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun copy (Ljava/lang/String;Ljava/util/Set;)Ldev/androidagent/harness/AgentToolProfile;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolProfile;Ljava/lang/String;Ljava/util/Set;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolProfile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowedToolNames ()Ljava/util/Set;
+	public final fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolProfile$Companion {
+	public final fun all (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolProfile;
+	public static synthetic fun all$default (Ldev/androidagent/harness/AgentToolProfile$Companion;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolProfile;
+	public final fun only (Ljava/lang/String;Ljava/util/Set;)Ldev/androidagent/harness/AgentToolProfile;
+}
+
+public final class dev/androidagent/harness/AgentToolRegistry {
+	public fun <init> (Ljava/util/List;)V
+	public final fun contains (Ljava/lang/String;)Z
+	public final fun execute (Ldev/androidagent/harness/AgentToolCall;Ljava/lang/String;Ljava/lang/String;)Ldev/androidagent/harness/AgentToolResult;
+	public static synthetic fun execute$default (Ldev/androidagent/harness/AgentToolRegistry;Ldev/androidagent/harness/AgentToolCall;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResult;
+	public final fun specifications ()Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/AgentToolResult {
+	public static final field Companion Ldev/androidagent/harness/AgentToolResult$Companion;
+	public fun <init> (Ljava/lang/String;ZLdev/androidagent/harness/AgentToolResultEnvelope;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLdev/androidagent/harness/AgentToolResultEnvelope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public final fun copy (Ljava/lang/String;ZLdev/androidagent/harness/AgentToolResultEnvelope;)Ldev/androidagent/harness/AgentToolResult;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolResult;Ljava/lang/String;ZLdev/androidagent/harness/AgentToolResultEnvelope;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getEnvelope ()Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public fun hashCode ()I
+	public final fun isError ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolResult$Companion {
+	public final fun failure (Ljava/lang/String;Ldev/androidagent/harness/AgentToolResultEnvelope;)Ldev/androidagent/harness/AgentToolResult;
+	public static synthetic fun failure$default (Ldev/androidagent/harness/AgentToolResult$Companion;Ljava/lang/String;Ldev/androidagent/harness/AgentToolResultEnvelope;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResult;
+	public final fun success (Ljava/lang/String;Ldev/androidagent/harness/AgentToolResultEnvelope;)Ldev/androidagent/harness/AgentToolResult;
+	public static synthetic fun success$default (Ldev/androidagent/harness/AgentToolResult$Companion;Ljava/lang/String;Ldev/androidagent/harness/AgentToolResultEnvelope;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResult;
+}
+
+public final class dev/androidagent/harness/AgentToolResultEnvelope {
+	public static final field Companion Ldev/androidagent/harness/AgentToolResultEnvelope$Companion;
+	public static final field MAX_DATA_JSON_CHARS I
+	public static final field MAX_PROVIDER_CONTENT_CHARS I
+	public static final field MAX_REFERENCES I
+	public static final field MAX_REFERENCE_CHARS I
+	public static final field MAX_SUMMARY_CHARS I
+	public fun <init> (Ldev/androidagent/harness/AgentToolResultStatus;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ldev/androidagent/harness/AgentToolEffectRecord;Ldev/androidagent/harness/AgentRetryAdvice;Ldev/androidagent/harness/AgentPrivacyLabel;JLjava/lang/Long;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentToolResultStatus;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ldev/androidagent/harness/AgentToolEffectRecord;Ldev/androidagent/harness/AgentRetryAdvice;Ldev/androidagent/harness/AgentPrivacyLabel;JLjava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentToolResultStatus;
+	public final fun component10 ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public final fun component11 ()J
+	public final fun component12 ()Ljava/lang/Long;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ldev/androidagent/harness/AgentToolEffectRecord;
+	public final fun component9 ()Ldev/androidagent/harness/AgentRetryAdvice;
+	public final fun copy (Ldev/androidagent/harness/AgentToolResultStatus;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ldev/androidagent/harness/AgentToolEffectRecord;Ldev/androidagent/harness/AgentRetryAdvice;Ldev/androidagent/harness/AgentPrivacyLabel;JLjava/lang/Long;)Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolResultEnvelope;Ldev/androidagent/harness/AgentToolResultStatus;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/lang/String;Ldev/androidagent/harness/AgentToolEffectRecord;Ldev/androidagent/harness/AgentRetryAdvice;Ldev/androidagent/harness/AgentPrivacyLabel;JLjava/lang/Long;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArtifacts ()Ljava/util/List;
+	public final fun getCandidates ()Ljava/util/List;
+	public final fun getCreatedAtEpochMillis ()J
+	public final fun getDataJson ()Ljava/lang/String;
+	public final fun getEffect ()Ldev/androidagent/harness/AgentToolEffectRecord;
+	public final fun getEvidence ()Ljava/util/List;
+	public final fun getExpiresAtEpochMillis ()Ljava/lang/Long;
+	public final fun getPrivacy ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public final fun getRawPayloadRef ()Ljava/lang/String;
+	public final fun getRetryAdvice ()Ldev/androidagent/harness/AgentRetryAdvice;
+	public final fun getStatus ()Ldev/androidagent/harness/AgentToolResultStatus;
+	public final fun getSummary ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isError ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolResultEnvelope$Companion {
+	public final fun boundedProviderContent (Ldev/androidagent/harness/AgentToolResult;)Ljava/lang/String;
+	public final fun fromLegacy (Ldev/androidagent/harness/AgentToolResult;JLdev/androidagent/harness/AgentPrivacyLabel;)Ldev/androidagent/harness/AgentToolResultEnvelope;
+	public static synthetic fun fromLegacy$default (Ldev/androidagent/harness/AgentToolResultEnvelope$Companion;Ldev/androidagent/harness/AgentToolResult;JLdev/androidagent/harness/AgentPrivacyLabel;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolResultEnvelope;
+}
+
+public final class dev/androidagent/harness/AgentToolResultStatus : java/lang/Enum {
+	public static final field CANCELLED Ldev/androidagent/harness/AgentToolResultStatus;
+	public static final field DENIED Ldev/androidagent/harness/AgentToolResultStatus;
+	public static final field FAILURE Ldev/androidagent/harness/AgentToolResultStatus;
+	public static final field SUCCESS Ldev/androidagent/harness/AgentToolResultStatus;
+	public static final field UNAVAILABLE Ldev/androidagent/harness/AgentToolResultStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolResultStatus;
+	public static fun values ()[Ldev/androidagent/harness/AgentToolResultStatus;
+}
+
+public final class dev/androidagent/harness/AgentToolRisk : java/lang/Enum {
+	public static final field CONTEXTUAL Ldev/androidagent/harness/AgentToolRisk;
+	public static final field HIGH Ldev/androidagent/harness/AgentToolRisk;
+	public static final field LOW Ldev/androidagent/harness/AgentToolRisk;
+	public static final field MEDIUM Ldev/androidagent/harness/AgentToolRisk;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolRisk;
+	public static fun values ()[Ldev/androidagent/harness/AgentToolRisk;
+}
+
+public final class dev/androidagent/harness/AgentToolSideEffect : java/lang/Enum {
+	public static final field DEVICE_ACTION Ldev/androidagent/harness/AgentToolSideEffect;
+	public static final field EXTERNAL_WRITE Ldev/androidagent/harness/AgentToolSideEffect;
+	public static final field LOCAL_DRAFT_WRITE Ldev/androidagent/harness/AgentToolSideEffect;
+	public static final field LOCAL_DURABLE_WRITE Ldev/androidagent/harness/AgentToolSideEffect;
+	public static final field LOCAL_READ Ldev/androidagent/harness/AgentToolSideEffect;
+	public static final field NONE Ldev/androidagent/harness/AgentToolSideEffect;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolSideEffect;
+	public static fun values ()[Ldev/androidagent/harness/AgentToolSideEffect;
+}
+
+public final class dev/androidagent/harness/AgentToolSpec {
+	public static final field Companion Ldev/androidagent/harness/AgentToolSpec$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ldev/androidagent/harness/AgentToolCapability;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ldev/androidagent/harness/AgentToolCapability;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun component5 ()Ljava/util/Map;
+	public final fun component6 ()Ldev/androidagent/harness/AgentToolCapability;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ldev/androidagent/harness/AgentToolCapability;)Ldev/androidagent/harness/AgentToolSpec;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentToolSpec;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ldev/androidagent/harness/AgentToolCapability;ILjava/lang/Object;)Ldev/androidagent/harness/AgentToolSpec;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getArgumentSchemas ()Ljava/util/Map;
+	public final fun getArguments ()Ljava/util/Set;
+	public final fun getCapability ()Ldev/androidagent/harness/AgentToolCapability;
+	public final fun getDescription ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getOptionalArguments ()Ljava/util/Set;
+	public final fun getRequiredArguments ()Ljava/util/Set;
+	public fun hashCode ()I
+	public final fun schemaFor (Ljava/lang/String;)Ldev/androidagent/harness/AgentToolArgumentSchema;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AgentToolSpec$Companion {
+}
+
+public final class dev/androidagent/harness/AgentVersionedSession {
+	public fun <init> (Ldev/androidagent/harness/AgentSession;J)V
+	public final fun component1 ()Ldev/androidagent/harness/AgentSession;
+	public final fun component2 ()J
+	public final fun copy (Ldev/androidagent/harness/AgentSession;J)Ldev/androidagent/harness/AgentVersionedSession;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AgentVersionedSession;Ldev/androidagent/harness/AgentSession;JILjava/lang/Object;)Ldev/androidagent/harness/AgentVersionedSession;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRevision ()J
+	public final fun getSession ()Ldev/androidagent/harness/AgentSession;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/androidagent/harness/AgentVersionedSessionStore : dev/androidagent/harness/AgentSessionStore {
+	public abstract fun loadVersioned (Ljava/lang/String;)Ldev/androidagent/harness/AgentVersionedSession;
+	public abstract fun saveVersioned (Ldev/androidagent/harness/AgentSession;Ljava/lang/Long;)J
+}
+
+public final class dev/androidagent/harness/AttachmentRef {
+	public static final field Companion Ldev/androidagent/harness/AttachmentRef$Companion;
+	public static final field MAX_ATTACHMENT_BYTES J
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentPrivacyLabel;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentPrivacyLabel;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun component5 ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentPrivacyLabel;Ljava/lang/String;)Ldev/androidagent/harness/AttachmentRef;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/AttachmentRef;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JLdev/androidagent/harness/AgentPrivacyLabel;Ljava/lang/String;ILjava/lang/Object;)Ldev/androidagent/harness/AttachmentRef;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getByteSize ()J
+	public final fun getContentRef ()Ljava/lang/String;
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMediaType ()Ljava/lang/String;
+	public final fun getPrivacy ()Ldev/androidagent/harness/AgentPrivacyLabel;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/AttachmentRef$Companion {
+}
+
+public final class dev/androidagent/harness/DeterministicAgentHarness : dev/androidagent/harness/AgentHarness {
+	public fun <init> (Ldev/androidagent/harness/AgentProvider;Ldev/androidagent/harness/AgentContextProvider;Ldev/androidagent/harness/AgentToolRegistry;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;)V
+	public synthetic fun <init> (Ldev/androidagent/harness/AgentProvider;Ldev/androidagent/harness/AgentContextProvider;Ldev/androidagent/harness/AgentToolRegistry;Ldev/androidagent/harness/AgentSessionStore;Ldev/androidagent/harness/AgentClock;Ldev/androidagent/harness/AgentIdGenerator;Ldev/androidagent/harness/AgentHarnessConfig;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun run (Ldev/androidagent/harness/AgentHarnessRequest;)Ldev/androidagent/harness/AgentHarnessResult;
+}
+
+public final class dev/androidagent/harness/EmptyAgentContextProvider : dev/androidagent/harness/AgentContextProvider {
+	public static final field INSTANCE Ldev/androidagent/harness/EmptyAgentContextProvider;
+	public fun load (Ldev/androidagent/harness/AgentContextRequest;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/FixedAgentClock : dev/androidagent/harness/AgentClock {
+	public fun <init> (J)V
+	public fun nowEpochMillis ()J
+}
+
+public final class dev/androidagent/harness/InMemoryAgentRunCheckpointStore : dev/androidagent/harness/AgentRunCheckpointStore {
+	public fun <init> ()V
+	public fun compareAndSet (Ldev/androidagent/harness/AgentRunCheckpoint;Ljava/lang/Long;)Z
+	public fun delete (Ljava/lang/String;)Z
+	public fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentRunCheckpoint;
+}
+
+public final class dev/androidagent/harness/InMemoryAgentSessionStore : dev/androidagent/harness/AgentSessionStore {
+	public fun <init> ()V
+	public fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentSession;
+	public fun save (Ldev/androidagent/harness/AgentSession;)V
+}
+
+public final class dev/androidagent/harness/InMemoryVersionedAgentSessionStore : dev/androidagent/harness/AgentVersionedSessionStore {
+	public fun <init> ()V
+	public fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentSession;
+	public fun loadVersioned (Ljava/lang/String;)Ldev/androidagent/harness/AgentVersionedSession;
+	public fun save (Ldev/androidagent/harness/AgentSession;)V
+	public fun saveVersioned (Ldev/androidagent/harness/AgentSession;Ljava/lang/Long;)J
+}
+
+public final class dev/androidagent/harness/SequentialAgentIdGenerator : dev/androidagent/harness/AgentIdGenerator {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun nextId (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/StaticAgentContextProvider : dev/androidagent/harness/AgentContextProvider {
+	public fun <init> (Ljava/util/List;)V
+	public fun load (Ldev/androidagent/harness/AgentContextRequest;)Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/SystemAgentClock : dev/androidagent/harness/AgentClock {
+	public static final field INSTANCE Ldev/androidagent/harness/SystemAgentClock;
+	public fun nowEpochMillis ()J
+}
+
+public final class dev/androidagent/harness/TransactionalAgentSessionStore : dev/androidagent/harness/AgentSessionStore {
+	public fun <init> (Ldev/androidagent/harness/AgentSessionStore;Ljava/lang/String;)V
+	public final fun commit ()Z
+	public final fun discard ()Z
+	public fun load (Ljava/lang/String;)Ldev/androidagent/harness/AgentSession;
+	public fun save (Ldev/androidagent/harness/AgentSession;)V
+}
+
+public final class dev/androidagent/harness/UuidAgentIdGenerator : dev/androidagent/harness/AgentIdGenerator {
+	public fun <init> ()V
+	public fun nextId (Ljava/lang/String;)Ljava/lang/String;
+}
+

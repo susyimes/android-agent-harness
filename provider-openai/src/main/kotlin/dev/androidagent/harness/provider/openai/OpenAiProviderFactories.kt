@@ -3,6 +3,7 @@ package dev.androidagent.harness.provider.openai
 
 import dev.androidagent.harness.AgentProviderConnection
 import dev.androidagent.harness.AgentProviderFactory
+import dev.androidagent.harness.AgentAttachmentResolver
 
 data class OpenAiModelPreset(
     val id: String,
@@ -76,11 +77,14 @@ object OpenAiEndpointPresets {
 
 /** Turn-scoped factories with real transport cancellation. */
 object OpenAiProviderFactories {
-    fun compatible(config: OpenAiCompatibleConfig): AgentProviderFactory {
+    fun compatible(
+        config: OpenAiCompatibleConfig,
+        attachmentResolver: AgentAttachmentResolver? = null
+    ): AgentProviderFactory {
         return AgentProviderFactory {
             val transport = UrlConnectionHttpTransport(config.requestTimeout)
             AgentProviderConnection(
-                provider = OpenAiCompatibleProvider(config, transport),
+                provider = OpenAiCompatibleProvider(config, transport, attachmentResolver),
                 cancel = transport::cancel
             )
         }

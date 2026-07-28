@@ -1,10 +1,13 @@
 plugins {
     id 'org.jetbrains.kotlin.jvm'
+    id 'java-library'
+    id 'maven-publish'
 }
 
 java {
     sourceCompatibility JavaVersion.VERSION_17
     targetCompatibility JavaVersion.VERSION_17
+    withSourcesJar()
 }
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
@@ -13,7 +16,22 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     }
 }
 
+kotlin {
+    abiValidation {
+        enabled.set(true)
+    }
+}
+
 dependencies {
-    implementation project(':harness-core')
+    api project(':harness-core')
     testImplementation 'junit:junit:4.13.2'
+}
+
+publishing {
+    publications {
+        sdk(MavenPublication) {
+            from components.java
+            artifactId = 'harness-eval'
+        }
+    }
 }

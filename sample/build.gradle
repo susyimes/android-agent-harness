@@ -9,12 +9,11 @@ android {
 
     defaultConfig {
         applicationId 'dev.androidagent.harness.sample'
-        // java.time (used by the provider configuration) is part of the Android
-        // platform from API 26, so the sample app requires 26 without desugaring.
-        minSdk 26
+        minSdk 29
         targetSdk 36
-        versionCode 6
-        versionName '0.3.0'
+        versionCode 7
+        versionName '0.4.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     compileOptions {
@@ -30,9 +29,19 @@ android {
 dependencies {
     implementation project(':agent-sdk')
     implementation project(':agent-sdk-android')
+    implementation project(':agent-permission-android')
+    implementation project(':agent-data-android')
+    implementation project(':agent-scheduling')
+    implementation project(':agent-scheduling-android')
+    implementation project(':agent-feedback')
+    implementation project(':agent-voice-android')
     implementation project(':harness-core')
     implementation project(':provider-openai')
     implementation project(':device-loop')
     implementation project(':device-loop-android')
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:core-ktx:1.7.0'
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test.ext:junit-ktx:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 }

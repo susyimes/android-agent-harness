@@ -138,6 +138,21 @@ interface AgentHouseRepository {
     fun deleteDailyMemory(date: String): Boolean
 }
 
+data class AgentHouseResetReport(
+    val removedSkills: Int,
+    val removedDailyMemories: Int,
+    val restoredCoreFiles: Int,
+    val resetName: Boolean
+)
+
+interface AgentHouseDataMaintenance {
+    /**
+     * Replaces the complete House domain with a newly initialized default
+     * workspace. Implementations must not alter State Vault or sessions.
+     */
+    fun resetToDefaults(): AgentHouseResetReport
+}
+
 /**
  * App-private directory implementation of [AgentHouseRepository].
  *
@@ -148,7 +163,7 @@ interface AgentHouseRepository {
 class FileAgentHouseRepository(
     private val directory: File,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis
-) : AgentHouseRepository {
+) : AgentHouseRepository, AgentHouseDataMaintenance {
 
     private val coreDirectory = File(directory, "core")
     private val skillsDirectory = File(directory, "skills")
@@ -434,6 +449,44 @@ class FileAgentHouseRepository(
         return deleted
     }
 
+    @Synchronized
+    override fun resetToDefaults(): AgentHouseResetReport {
+        val before = snapshot()
+        val parent = requireNotNull(directory.absoluteFile.parentFile) {
+            "Agent House directory must have a parent."
+        }
+        val suffix = java.util.UUID.randomUUID().toString()
+        val staging = File(parent, "${directory.name}.reset-$suffix")
+        val backup = File(parent, "${directory.name}.backup-$suffix")
+        require(!staging.exists() && !backup.exists()) {
+            "Agent House reset workspace already exists."
+        }
+        try {
+            FileAgentHouseRepository(staging, nowEpochMillis).snapshot()
+            check(directory.renameTo(backup)) {
+                "Could not move Agent House into the reset transaction."
+            }
+            if (!staging.renameTo(directory)) {
+                check(backup.renameTo(directory)) {
+                    "Could not restore Agent House after reset failure."
+                }
+                error("Could not install the reset Agent House.")
+            }
+            check(backup.deleteRecursively()) {
+                "Agent House reset succeeded but old private data could not be deleted."
+            }
+        } finally {
+            if (staging.exists()) staging.deleteRecursively()
+            if (backup.exists() && !directory.exists()) backup.renameTo(directory)
+        }
+        return AgentHouseResetReport(
+            removedSkills = before.skills.size,
+            removedDailyMemories = before.dailyMemories.size,
+            restoredCoreFiles = before.coreFiles.count { file -> !file.isDefault },
+            resetName = before.profile.name != DEFAULT_HOUSE_NAME
+        )
+    }
+
     private fun initialize() {
         if (!metadataFile.isFile) {
             val now = nowEpochMillis()
@@ -446,9 +499,19 @@ class FileAgentHouseRepository(
                 )
             )
         }
+        migrateLegacyRulesFile()
         CORE_SPECS.forEach { spec ->
             val target = File(coreDirectory, spec.fileName)
             if (!target.isFile) atomicWriteText(target, spec.defaultContent)
+        }
+    }
+
+    private fun migrateLegacyRulesFile() {
+        val legacy = File(coreDirectory, "AGENTS.md")
+        val rules = File(coreDirectory, "RULES.md")
+        if (legacy.isFile && !rules.exists()) {
+            val content = readTextOrNull(legacy) ?: return
+            atomicWriteText(rules, content)
         }
     }
 
@@ -788,9 +851,9 @@ class FileAgentHouseRepository(
 
         val CORE_SPECS = listOf(
             CoreSpec(
-                key = "agents",
-                fileName = "AGENTS.md",
-                title = "AGENTS.md",
+                key = "rules",
+                fileName = "RULES.md",
+                title = "RULES.md",
                 description = "启动顺序、工作规则与边界",
                 defaultContent = """
                     # Agent operating notes
@@ -822,6 +885,18 @@ class FileAgentHouseRepository(
 
                     Communicate clearly and directly. Adapt detail to the user and keep the
                     result more prominent than internal process.
+                """.trimIndent()
+            ),
+            CoreSpec(
+                key = "psyche",
+                fileName = "PSYCHE.md",
+                title = "PSYCHE.md",
+                description = "人格、情绪和主动性观察；不等于已批准人格",
+                defaultContent = """
+                    # Psyche observations
+
+                    Keep time-bounded observations and hypotheses here. Nothing in this file
+                    becomes persona policy unless it is evaluated and explicitly approved.
                 """.trimIndent()
             ),
             CoreSpec(
@@ -883,6 +958,30 @@ class FileAgentHouseRepository(
                     Save verified principles, not brittle click paths, coordinates, or
                     one-screen recipes. Re-observe current state before every device action.
                 """.trimIndent()
+            ),
+            CoreSpec(
+                key = "heartbeat",
+                fileName = "HEARTBEAT.md",
+                title = "HEARTBEAT.md",
+                description = "短周期观察意图",
+                defaultContent = """
+                    # Heartbeat intent
+
+                    Check only explicitly enabled, low-cost sources. Report meaningful changes;
+                    do not manufacture work or perform durable effects without approval.
+                """.trimIndent()
+            ),
+            CoreSpec(
+                key = "dream",
+                fileName = "DREAM.md",
+                title = "DREAM.md",
+                description = "慢周期整理与反思意图",
+                defaultContent = """
+                    # Dream intent
+
+                    Periodically consolidate evidence, surface conflicts, and propose memory,
+                    skill, or persona candidates. Never auto-promote those proposals.
+                """.trimIndent()
             )
         )
         val CORE_BY_KEY = CORE_SPECS.associateBy { spec -> spec.key }
@@ -922,7 +1021,8 @@ class AgentHouseContextProvider(
     override fun load(request: AgentContextRequest): List<AgentContextItem> {
         val snapshot = repository.snapshot()
         val candidates = buildList {
-            snapshot.coreFiles.forEachIndexed { index, file ->
+            snapshot.coreFiles.filterNot { file -> file.key == "psyche" }
+                .forEachIndexed { index, file ->
                 if (file.content.isNotBlank()) {
                     add(
                         Candidate(

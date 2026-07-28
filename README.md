@@ -4,60 +4,76 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/susyimes/android-agent-harness)](https://github.com/susyimes/android-agent-harness/releases)
 
+Android Agent Harness is a provider-neutral Kotlin SDK for building bounded agents on the JVM and Android. It provides one governed run kernel plus optional context, state, scheduling, feedback, approval, product-data, Phone Use, multimodal, and voice components.
+
+The repository also ships an installable sample app. It is a reference composition, not a second runtime: Chat, Heartbeat, Dream, Proactive, Cron, and LongTask all enter the same `AgentSdk` lifecycle.
+
+## What is included
+
+- A cancellable and transactional run lifecycle with deadlines, per-session isolation, late-result fences, stable events, traces, and deterministic replay checks.
+- CCP V2 context compilation with `ContextNeedSpec`, source trust/privacy/risk, conflict resolution, token and item budgets, `EvidencePack`, `RouteGate`, and prompt rendering.
+- A State Vault for memory, skill, and persona candidates with validation, evaluation, exact approval, promotion, revision history, and rollback.
+- A general effect-approval protocol bound to target, argument hash, risk, evidence, and expiry.
+- Typed tool result envelopes with bounded content, structured data, effect/evidence references, and expiring raw-payload references.
+- Reliable schedules, occurrences, leases, checkpoints, missed-run policy, Cron, and LongTask semantics.
+- Heartbeat, Dream, Proactive, Home Brief, and Self Check with conservative local fallbacks and user-controlled initiative.
+- Android adapters for permissions, Stats, Todo, local documents, State/House, location, calendar, notifications, scheduling, accessibility Phone Use, visual observation, sensors, STT, and TTS.
+- True streaming for the OpenAI-compatible transport, file/image attachments, a global Stop control, and a strict Phone Use state machine.
+
+## Sample app
+
 <p align="center">
-  <img src="docs/assets/demo.svg" alt="Android Agent Harness deterministic demo and safety protocol" width="860">
+  <a href="docs/screenshots/android-home.png"><img src="docs/screenshots/android-home.png" alt="Agent Harness home dashboard" width="23%"></a>
+  <a href="docs/screenshots/android-chat.png"><img src="docs/screenshots/android-chat.png" alt="Agent Harness streaming chat" width="23%"></a>
+  <a href="docs/screenshots/android-state.png"><img src="docs/screenshots/android-state.png" alt="Agent Harness State and candidate inbox" width="23%"></a>
+  <a href="docs/screenshots/android-automation.png"><img src="docs/screenshots/android-automation.png" alt="Agent Harness automation controls" width="23%"></a>
 </p>
 
-Android Agent Harness is a provider-neutral Kotlin SDK for building bounded agents on the JVM and Android. It combines a small runtime, cancellable host API, controlled context, typed tools, durable local sessions, and an optional accessibility-backed Phone Use component.
+The v0.4.0 sample exposes:
 
-The repository also contains an installable Android reference app with:
+- Home Brief, provider state, active runs, recent sessions, and shortcuts to every product surface.
+- Chat with provider/model selection, streamed text, file/image attachment, speech input, TTS, Stop, and model-selected Phone Use.
+- Agent House editing plus skills and memory review.
+- Stats and Todo with typed unavailable states and governed durable changes.
+- State / Obsidian view for memory, skill, and persona candidates, evidence, effects, evaluations, promotion, and rollback.
+- Automation controls for Heartbeat, Dream, Proactive, Cron, and LongTask, including revision, next run, receipts, checkpoints, pause, delete, and manual run.
+- Permission disclosures and direct navigation to the relevant Android settings.
+- Debug / Replay with stable events, approvals, occurrence receipts, self-check, deterministic trace evaluation, and redacted export.
+- Data & Retention controls for domain-scoped export, retention, exact-approved deletion, and credential-boundary disclosure.
 
-- Home, Chat, Agent House, and Settings screens;
-- offline demo, experimental Codex account login, Kimi Plan, Ark Plan, and custom OpenAI-compatible providers;
-- per-provider model selection and Android Keystore-backed secret storage;
-- persistent conversations and local Agent context;
-- model-selected Phone Use with explicit human approval for high-risk actions;
-- a real Stop control and an 80-step ceiling after Phone Use activates.
-
-## Android app at a glance
-
-<p align="center">
-  <a href="docs/screenshots/android-home.png"><img src="docs/screenshots/android-home.png" alt="Agent Harness home dashboard on a physical Android phone" width="23%"></a>
-  <a href="docs/screenshots/android-chat.png"><img src="docs/screenshots/android-chat.png" alt="Agent Harness chat and model-routed Phone Use screen" width="23%"></a>
-  <a href="docs/screenshots/android-house.png"><img src="docs/screenshots/android-house.png" alt="Agent House core files, skills, and memory screen" width="23%"></a>
-  <a href="docs/screenshots/android-settings.png"><img src="docs/screenshots/android-settings.png" alt="Agent Harness provider, Phone Use, House, and session settings" width="23%"></a>
-</p>
-
-<p align="center"><sub>Home · Chat · Agent House · Settings — captured from v0.3.0 on a physical Android phone.</sub></p>
-
-This is a bounded agent SDK and reference host, not a background autonomous-agent service. Heartbeat, Dream, persona proposals, proactive scheduling, and unattended background execution are intentionally not implemented.
+All background features default to off. Proactive work also obeys initiative level, quiet hours, and a daily activation cap.
 
 ## Architecture
 
-```text
-Android app / JVM host
-        │
-        ▼
-AgentSdk ── run / events / cancel / session fence
-        │
-        ▼
-AgentHarnessRunner
-   ├─ AgentContextCoordinator ── trust, priority, size policy
-   ├─ AgentProvider           ── model or scripted transport
-   ├─ AgentToolOrchestrator   ── typed, profile-scoped tools
-   └─ AgentSessionStore       ── transactional persistence
+```mermaid
+flowchart TB
+    Entry["Sample UI / host / scheduled occurrence"]
+    SDK["AgentSdk — the only run kernel"]
+    Context["CCP V2 context engine"]
+    State["State Vault and candidate governance"]
+    Feedback["Heartbeat / Dream / Proactive"]
+    Schedule["Schedule / Cron / LongTask"]
+    Approval["Effect approval"]
+    Adapters["Optional Android adapters"]
+    Provider["Provider transport"]
+    Tool["Typed tools and result envelopes"]
 
-Optional components
-   ├─ FileAgentSessionStore   ── app-private durable sessions
-   ├─ Agent House             ── core files, skills, memories
-   └─ AndroidPhoneAgent       ── model-routed accessibility tools
+    Entry --> SDK
+    Feedback --> SDK
+    Schedule --> SDK
+    SDK --> Context
+    Context --> State
+    SDK --> Provider
+    SDK --> Tool
+    Tool --> Approval
+    Tool --> Adapters
 ```
 
-The core never grants capabilities from prompt text. The host owns provider credentials, context policy, tool registration, risk classification, approval UI, persistence location, and Android service enablement.
+The core never grants capabilities from prompt text. The host owns credentials, tool registration, approval UI, Android permission declarations, persistence choices, retention policy, and background enablement.
 
 ## Quickstart
 
-The deterministic JVM demo needs only JDK 17:
+The deterministic JVM demo needs JDK 17 and does not need Android, a credential, a device, or network access:
 
 ```sh
 git clone https://github.com/susyimes/android-agent-harness.git
@@ -71,50 +87,65 @@ On Windows:
 .\gradlew.bat :demo:run
 ```
 
-Expected output:
+Build and install the Android sample:
 
-```text
-OUTPUT=Harness result: ANDROID
-PROVIDER_STEPS=2
-TRACE=ContextLoaded -> ProviderInvoked(1) -> ToolExecuted(uppercase) -> ProviderInvoked(2) -> Completed(2)
-TRANSCRIPT=USER:android | TOOL:ANDROID | ASSISTANT:Harness result: ANDROID
+```sh
+./gradlew :sample:installDebug
 ```
 
-No Android SDK, account, API key, device, emulator, or network call is needed for this demo.
+Requirements:
 
-## Use it as an SDK
+- JDK 17;
+- Android SDK Platform 36 for Android modules;
+- Android 10 / API 29 or newer for all Android AARs and the sample.
 
-The v0.3.0 coordinates use group `dev.androidagent.harness` and version `0.3.0`.
+## SDK artifacts
 
-| Artifact | Type | Purpose |
+The v0.4.0 coordinates use group `dev.androidagent.harness`.
+
+| Artifact | Type | Responsibility |
 | --- | --- | --- |
-| `harness-core` | JAR | Contracts and synchronous bounded runtime |
-| `agent-sdk` | JAR | Async host API, events, cancellation, transactions, sessions, Agent House |
-| `provider-openai` | JAR | Compatible chat-completions and experimental Codex transports |
-| `device-loop` | JAR | Host-neutral observe/act/finish contract |
-| `device-loop-android` | AAR | Accessibility-backed Android device surface |
-| `agent-sdk-android` | AAR | Safe model-routed Phone Use composition |
+| `harness-core` | JAR | Provider, tool, session, envelope, budget, and synchronous run contracts |
+| `agent-sdk` | JAR | Lifecycle, events, cancellation, transactions, traces, replay, and House |
+| `agent-approval` | JAR | Effect intent, policy, exact approval token, and journal |
+| `context-engine` | JAR | CCP V2 selection, routing, evidence, and renderer |
+| `agent-state` | JAR | State Vault, candidates, evaluation, promotion, retention, and rollback |
+| `agent-scheduling` | JAR | Schedule, occurrence, lease, checkpoint, Cron, and LongTask |
+| `agent-feedback` | JAR | Signal/outcome journals, Heartbeat, Dream, Proactive, Home Brief, Self Check |
+| `provider-openai` | JAR | OpenAI-compatible streaming and experimental Codex transports |
+| `harness-eval` | JAR | Baseline/candidate evaluation |
+| `device-loop` | JAR | Strict host-neutral observe → one action → observe/finish protocol |
+| `agent-sdk-android` | AAR | Android Phone Use composition |
+| `agent-permission-android` | AAR | Runtime/special permission and capability states |
+| `agent-data-android` | AAR | Stats, Todo, State/House, document, location, calendar, notification adapters |
+| `agent-scheduling-android` | AAR | WorkManager worker/backend, boot receiver, durable stores, visible LongTask carrier |
+| `agent-voice-android` | AAR | STT, ephemeral recording, TTS, and transcript contracts |
+| `device-loop-android` | AAR | Accessibility, approval overlay, visual and experimental sensor adapters |
 
-Publish all six artifacts to the repository-local Maven directory:
+Publish all artifacts to the repository-local Maven directory:
 
 ```sh
 ./gradlew publishSdk
 ```
 
-Then add the local repository and the artifacts your host needs:
+Consume only the modules your host needs:
 
 ```groovy
 repositories {
     maven { url = uri("../android-agent-harness/build/sdk-repository") }
-    mavenCentral()
     google()
+    mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.3.0"
-    implementation "dev.androidagent.harness:provider-openai:0.3.0"
-    // Android Phone Use only:
-    implementation "dev.androidagent.harness:agent-sdk-android:0.3.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.4.0"
+    implementation "dev.androidagent.harness:context-engine:0.4.0"
+    implementation "dev.androidagent.harness:agent-state:0.4.0"
+    implementation "dev.androidagent.harness:provider-openai:0.4.0"
+
+    // Optional Android features:
+    implementation "dev.androidagent.harness:agent-sdk-android:0.4.0"
+    implementation "dev.androidagent.harness:agent-data-android:0.4.0"
 }
 ```
 
@@ -126,9 +157,10 @@ val handle = sdk.run(
     AgentRunRequest(
         sessionId = "chat-1",
         userInput = "Summarize the current task",
-        providerFactory = OpenAiProviderFactories.compatible(providerConfig),
-        contextProviders = contextProviders,
+        providerFactory = providerFactory,
+        contextSources = contextSources,
         tools = tools,
+        traceSink = traceSink,
         listener = AgentRunListener { event -> render(event) }
     )
 )
@@ -137,10 +169,11 @@ when (val outcome = handle.await()) {
     is AgentRunOutcome.Success -> showAnswer(outcome.result.output)
     is AgentRunOutcome.Failure -> showError(outcome.error)
     is AgentRunOutcome.Cancelled -> showStopped(outcome.reason)
+    is AgentRunOutcome.Expired -> showExpired(outcome.reason)
 }
 ```
 
-Bind a Stop control to the same handle:
+Bind Stop to the same handle:
 
 ```kotlin
 stopButton.setOnClickListener {
@@ -148,228 +181,100 @@ stopButton.setOnClickListener {
 }
 ```
 
-Cancellation marks the run terminal, invokes the provider cancel hook, interrupts the worker, fences late results, and discards the incomplete conversation turn. External effects already performed by a tool or device action cannot be rolled back.
+Cancellation marks the run terminal, invokes the provider cancel hook, interrupts the worker, prevents another SDK-controlled effect, rejects late deltas/results, and discards the staged conversation turn. Effects already completed outside the session transaction cannot be rolled back automatically.
 
-`AgentSdk` also guarantees:
+See [SDK Quickstart](docs/SDK_QUICKSTART.md) and [Architecture](docs/SDK_ARCHITECTURE.md) for integration details.
 
-- one active run per session id;
-- isolated provider connections per run;
-- structured Started, Trace, and Finished events;
-- listener-failure isolation;
-- transactional conversation commits;
-- cancellation checks after provider I/O and before each SDK-controlled tool effect.
+## Providers
 
-See [SDK Quickstart](docs/SDK_QUICKSTART.md) for the complete integration contract.
+The sample includes:
 
-## Sessions and Agent House
-
-`FileAgentSessionStore` is a small app-private persistence adapter:
-
-```kotlin
-val sessionStore = FileAgentSessionStore(File(appDataDirectory, "agent-sessions"))
-val sdk = AgentSdk(sessionStore)
-
-val recent = sdk.listSessions()
-sdk.deleteSession(recent.first().id)
-```
-
-It hashes session ids before using them as file names, bounds decoded input, replaces complete files atomically where supported, and refuses to delete an active session. Session contents are not encrypted by this adapter.
-
-`FileAgentHouseRepository` provides eight core Markdown files plus skills and daily memories:
-
-```kotlin
-val house = FileAgentHouseRepository(File(appDataDirectory, "agent-house"))
-val houseContext = AgentHouseContextProvider(house)
-val houseTools = AgentHouseWriteTools(house).tools()
-
-sdk.run(
-    request.copy(
-        contextProviders = listOf(houseContext),
-        tools = request.tools + houseTools
-    )
-)
-```
-
-The Agent House write boundary is deliberate:
-
-- `agent_memory_append` writes idempotent daily notes with `AGENT` trust and source metadata;
-- `agent_skill_write` creates or revises only disabled Agent drafts;
-- an Agent draft enters later context only after the user reviews and enables it;
-- Agent writes cannot silently overwrite an enabled or user-owned skill;
-- both write tools reject credential-like content and enforce size/count quotas;
-- House text cannot grant tools, approve risk, or override host policy.
-
-The Android app lets the user edit identity and collaboration preferences, review Agent-written memories, and enable or disable skill drafts. Skills and memories are written by the Agent during conversation rather than through a manual “create” shortcut.
-
-## Android reference app
-
-Build and install the debug app:
-
-```sh
-./gradlew :sample:assembleDebug
-./gradlew :sample:installDebug
-```
-
-Requirements:
-
-- JDK 17;
-- Android SDK Platform 36 to build Android modules;
-- Android 8.0 / API 26 or newer to install the sample.
-
-The APK is debug-signed and intended for sideloading and development. CI builds a `sample-debug-apk` artifact from `main`, and releases may attach a ready-to-install APK.
-
-### Providers
-
-| Provider | Authentication | Models |
+| Provider | Authentication | Model selection |
 | --- | --- | --- |
-| Offline demo | None | Deterministic local scripted provider |
-| Codex (experimental) | Browser PKCE, device-code fallback | Responses transport selected by the sample |
-| Kimi Plan | Coding Plan API key | Kimi K3, Kimi K2.7 Code, Kimi K2.6 |
-| Ark Plan | Plan API key | All presets listed below |
-| Custom compatible | Host-configured credential | Any supplied compatible model id |
+| Offline demo | None | Deterministic scripted provider |
+| Codex (experimental) | Browser PKCE with device-code fallback | Responses-compatible model |
+| Kimi Plan | Coding Plan API key | Presets plus custom compatible id |
+| Ark Plan | Plan API key | Full sample preset catalog plus custom compatible id |
+| Custom compatible | API key | Host-supplied model id |
 
-Ark Plan presets:
+Provider credentials are stored separately with Android Keystore-backed encryption. They never enter House, State Vault, trace exports, or prompts.
 
-```text
-doubao-seed-2.0-pro
-doubao-seed-2.0-lite
-doubao-seed-2.0-mini
-doubao-seed-2.1-turbo
-doubao-seed-evolving
-glm-5.2
-kimi-k3
-kimi-k2.7-code
-kimi-k2.6
-minimax-m3
-minimax-m2.7
-deepseek-v4-pro
-deepseek-v4-flash
-```
+The experimental Codex login is a sample integration and is not presented as an officially supported third-party Android authentication surface.
 
-Presets are defaults, not SDK allow-lists. A host can supply a newer compatible model id directly.
+## Phone Use protocol
 
-Provider endpoints used by the sample:
+Phone Use is not a fixed chat mode and is not activated by keywords. The selected model sees the tool schemas and chooses whether to call them.
 
-- Kimi Plan: `https://api.kimi.com/coding/v1`
-- Ark Plan: `https://ark.cn-beijing.volces.com/api/plan/v3`
+1. A normal turn starts with an 8-provider-step budget.
+2. A direct answer remains a normal chat turn.
+3. The first real device tool call activates Phone Use for that turn.
+4. The runtime expands the ceiling to 80 provider steps and permits one selected tool call per step.
+5. `device_observe` returns a snapshot binding.
+6. Exactly one action may use that binding; then observation is mandatory again.
+7. `device_finish` requires fresh, visible completion evidence.
 
-API keys and Codex tokens are stored separately with Android Keystore-backed encryption. The experimental Codex login is an isolated sample adapter, not an officially documented third-party Android authentication surface.
+The run is also bounded by wall-clock time, tool count, repeated failures, approval expiry, and user Stop.
 
-## Model-routed Phone Use
+High-risk actions require a human-backed approval surface. Missing UI, denial, timeout, stale snapshot, changed target/arguments, or a mismatched token fails closed. Pressing Home is refused because it breaks the observed task chain.
 
-There is no fixed Chat/Phone mode selector and no keyword router. An online model sees the optional device-tool descriptions during normal planning and decides whether the task needs them.
+Visual observation is optional, host-enabled, redacted, and represented by an expiring raw-payload reference. It is not a silent screenshot fallback.
 
-The execution policy is:
+## State and background safety
 
-1. A normal turn starts with an 8-step budget.
-2. A direct model answer stays a normal chat turn.
-3. The first actual `device_observe`, `device_act`, or `device_finish` call activates Phone Use.
-4. Activation is sticky for that turn, expands the ceiling to 80 steps, and tightens execution to one selected tool call per provider step.
-5. The user can press Stop at any time.
-
-`AgentHarnessTraceEvent.ToolLoopActivated` records the transition for the host.
-
-Phone Use currently exposes semantic accessibility operations:
-
-- observe the foreground accessibility tree;
-- tap a node;
-- enter text into an editable node;
-- press Back;
-- swipe;
-- scroll until text is visible;
-- launch an app by display name or package;
-- wait for the screen to settle;
-- finish with evidence visible in the current screen snapshot.
-
-Pressing Home is refused because it invalidates the observed task chain. `launch_app` requires an explicit `app` argument; the model cannot omit it and expect the tool layer to infer a package.
-
-### Phone Use safety boundary
-
-- The user must enable the accessibility service manually in Android Settings.
-- The app reads the tree only while a user-started turn has activated Phone Use.
-- Snapshots are text-only: visible accessibility labels, roles, text, and view-id suffixes. There is no screenshot, screen recording, or vision fallback.
-- High-risk controls such as payment, transfer, purchase, delete, uninstall, or order confirmation pause for a human approval overlay.
-- Model-supplied confirmation flags are ignored. Only the user's tap on Allow approves the action.
-- Deny, timeout, or a missing approval surface is refusal.
-- Risk matching is best effort and keyword/context based; unlabeled, canvas-drawn, foreign-language, and WebView-heavy interfaces can evade semantic matching.
-- Disabling the service immediately removes observation and action access.
-
-An Android host must supply both a `RiskPolicy` and a real human-backed `ApprovalGate`. The SDK has no allow-all production default.
-
-## Modules
-
-| Module | Responsibility |
-| --- | --- |
-| `harness-core` | Dependency-light contracts, context policy, bounded orchestration, trace events |
-| `agent-sdk` | Host facade, lifecycle, stop semantics, persistence, Agent House |
-| `provider-openai` | OpenAI-compatible and experimental Codex transports |
-| `harness-eval` | Baseline-vs-candidate governed evaluation |
-| `device-loop` | Host-neutral device-operation and high-risk pause protocol |
-| `device-loop-android` | Accessibility tree mapping, Android actions, approval overlay |
-| `agent-sdk-android` | Model-routed Phone Use composition |
-| `sdk-consumer-smoke` | Independent public-API consumer verification |
-| `demo` | Deterministic, live, context-policy, evaluation, and fake-phone demos |
-| `sample` | Installable Android reference host |
+- Memory, skill, and persona output enters a pending candidate inbox first.
+- A durable promotion requires validation, evaluation, an exact candidate hash, explicit approval, and an auditable revision.
+- Rollback creates another governed revision; history is not silently rewritten.
+- Dream can create a pending reflection candidate but cannot promote it.
+- Workers dispatch typed occurrences into `AgentSdk`; they do not contain another model/tool loop.
+- Schedule revisions, unique occurrence ids, leases, execution windows, checkpoints, and cancellation fences prevent stale or duplicate work.
+- Boot/package-update restoration only re-enqueues schedules that remain enabled.
+- Visible LongTask work uses an optional foreground service with a notification Stop action.
 
 ## Verification
 
-JVM and SDK packaging gate:
+Run the SDK gate:
 
 ```sh
 ./gradlew checkSdk
 ```
 
-Full repository gate, including Android sample tests, lint, and APK assembly:
+It covers unit tests, committed JVM ABI baselines, independent Maven JAR/AAR consumers, Android library lint, publication, and provenance checks.
+
+Run the complete repository gate:
 
 ```sh
 ./gradlew checkM0
 ```
 
-Provenance and credential audit:
+Run the sample instrumentation suite on a connected device:
 
 ```sh
-./gradlew auditProvenance
+./gradlew checkConnectedSample
 ```
 
-The CI workflow runs the repository gates on every change to `main`.
+The sample instrumentation suite checks navigation to every documented product surface and guards the quick-entry buttons against clipped elevation shadows.
 
 ## Storage and privacy
 
-- Provider secrets in the sample use Android Keystore-backed encryption.
-- Chat sessions and Agent House content live in the app-private directory but are plaintext at the file-adapter layer.
+- Provider secrets use Android Keystore-backed encryption in the sample.
+- Sessions, House, State, Todo, schedules, leases, and checkpoints use app-private file adapters; these adapters are not encrypted databases.
+- Raw image/audio payloads are optional, bounded, and temporary.
 - Android backup is disabled for the sample.
-- Device snapshots are sent only to the selected online provider after Phone Use activates.
-- Credentials must never be placed in Agent House content, logs, source files, or demo arguments.
-- A debuggable APK is not a production secret boundary; use low-limit, revocable development credentials.
+- Data & Retention exposes per-domain export, bounded retention, and explicit deletion.
+- The SDK AARs do not force unrelated sensitive permissions into a host manifest.
 
-Replace the file adapters with an encrypted database when a product needs encryption, schema migration, retention, cross-process locking, search, or managed backup.
+A production host should replace file adapters when it needs database encryption, cross-process transactions beyond the supplied leases, managed backup, full-text search, or organization policy.
 
-## Current scope
+## Deliberate limits
 
-Implemented:
+- No GitHub, web-browsing, or arbitrary code-execution tools are registered.
+- “Obsidian” means the local logical State/House view; this release does not read or write an external Obsidian vault format.
+- Visual capture and local-understanding engines remain host-supplied and opt-in.
+- There is no bundled offline foundation model.
+- Artifacts are published to a repository-local Maven directory, not Maven Central.
+- Release APK signing remains a release-owner responsibility; debug APKs are for development and sideloading.
 
-- bounded provider → tool → provider execution;
-- controlled context with trust, priority, and size limits;
-- typed provider tool schemas;
-- cancellable transactional turns;
-- durable sessions;
-- Agent-written memory and review-gated skill drafts;
-- provider/model selection;
-- Android accessibility Phone Use with human approval;
-- installable reference UI.
-
-Not implemented:
-
-- streaming responses;
-- multimodal or screenshot input;
-- concurrent tool execution;
-- background autonomy;
-- Heartbeat or Dream loops;
-- persona proposals or proactive scheduling;
-- encrypted/database-backed session and House adapters;
-- remote Maven Central publication.
-
-See [Roadmap](ROADMAP.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for design boundaries and future work.
+The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.4.0.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
 
 ## License
 

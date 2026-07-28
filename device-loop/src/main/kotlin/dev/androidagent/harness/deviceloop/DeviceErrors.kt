@@ -42,7 +42,8 @@ enum class DeviceErrorType {
     NEEDS_CONFIRMATION,
     UNSUPPORTED_ACTION,
     INVALID_ARGUMENT,
-    STALE_TARGET
+    STALE_TARGET,
+    PROTOCOL_VIOLATION
 }
 
 /**
@@ -85,6 +86,13 @@ internal object DeviceText {
             }
         }
         return AgentToolResult.failure(body)
+    }
+
+    fun protocolFailure(error: DeviceProtocolException): AgentToolResult {
+        return failure(
+            DeviceErrorType.PROTOCOL_VIOLATION,
+            "[${error.code.name}] ${error.message.orEmpty()}"
+        )
     }
 
     /**

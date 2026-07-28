@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package dev.androidagent.harness.sample
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
@@ -16,6 +18,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -35,17 +38,26 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import dev.androidagent.harness.AgentContextItem
+import dev.androidagent.harness.AgentAttachmentContent
+import dev.androidagent.harness.AgentAttachmentResolver
 import dev.androidagent.harness.AgentContextTrust
 import dev.androidagent.harness.AgentHarnessConfig
 import dev.androidagent.harness.AgentHarnessTraceEvent
 import dev.androidagent.harness.AgentProviderFactory
+import dev.androidagent.harness.AgentProviderDisplayEvent
+import dev.androidagent.harness.AgentPrivacyLabel
 import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.AgentToolProfile
 import dev.androidagent.harness.StaticAgentContextProvider
+import dev.androidagent.harness.AttachmentRef
 import dev.androidagent.harness.deviceloop.android.AccessibilityAvailability
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
 import dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService
 import dev.androidagent.harness.deviceloop.android.OverlayApprovalGate
+import dev.androidagent.harness.data.android.AndroidSystemContextSource
+import dev.androidagent.harness.data.android.TodoContextSource
+import dev.androidagent.harness.data.android.UsageStatsContextSource
+import dev.androidagent.harness.permission.android.PermissionContextSource
 import dev.androidagent.harness.provider.openai.CodexCredential
 import dev.androidagent.harness.provider.openai.CodexCredentialProvider
 import dev.androidagent.harness.provider.openai.CodexResponsesConfig
@@ -67,6 +79,16 @@ import dev.androidagent.harness.sdk.house.AgentHouseContextProvider
 import dev.androidagent.harness.sdk.house.AgentHouseWriteTools
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgent
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgentConfiguration
+import dev.androidagent.harness.context.NamedContextSource
+import dev.androidagent.harness.state.AgentApprovedStateContextSource
+import dev.androidagent.harness.state.AgentVaultDocumentContextSource
+import dev.androidagent.harness.voice.android.AndroidSpeechToTextEngine
+import dev.androidagent.harness.voice.android.AndroidTextToSpeechEngine
+import dev.androidagent.harness.voice.android.SpeechOutputListener
+import dev.androidagent.harness.voice.android.SpeechToTextListener
+import dev.androidagent.harness.voice.android.VoiceOperation
+import dev.androidagent.harness.voice.android.VoiceOperationState
+import dev.androidagent.harness.voice.android.VoiceUnavailableException
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -86,6 +108,7 @@ class MainActivity : Activity() {
     private lateinit var diskExecutor: ExecutorService
     private lateinit var dialogGate: DialogApprovalGate
     private lateinit var approvalGate: PhoneApprovalGate
+    private lateinit var genericApprovalUi: SampleApprovalUi
     private lateinit var sessionStore: FileAgentSessionStore
     private lateinit var samplePreferences: SamplePreferences
     private lateinit var providerSettings: ProviderSettingsRepository
@@ -111,6 +134,17 @@ class MainActivity : Activity() {
     private lateinit var statusView: TextView
     private lateinit var inputField: EditText
     private lateinit var sendButton: Button
+    private lateinit var attachmentButton: Button
+    private lateinit var attachmentPreview: TextView
+    private lateinit var voiceButton: Button
+    private lateinit var toolDetailsButton: Button
+    private lateinit var speakButton: Button
+    private lateinit var textToSpeech: AndroidTextToSpeechEngine
+    private var voiceOperation: VoiceOperation? = null
+    private var selectedAttachment: SelectedAttachment? = null
+    private var lastAssistantText: String? = null
+    private var showToolDetails = false
+    private var toolLineCount = 0
 
     @Volatile
     private var authInProgress = false
@@ -153,6 +187,9 @@ class MainActivity : Activity() {
             ),
             dialog = dialogGate
         )
+        genericApprovalUi = SampleApprovalUi(this) {
+            onApprovalWaitingChanged(SampleRuntime.approvalBridge().pending().isNotEmpty())
+        }
         currentSessionId = intent.getStringExtra(EXTRA_SESSION_ID)
             ?.takeIf(String::isNotBlank)
             ?: samplePreferences.lastSessionId()
@@ -163,6 +200,7 @@ class MainActivity : Activity() {
         bindViews()
         applyWindowInsets(contentRoot)
         setupInteractions()
+        textToSpeech = AndroidTextToSpeechEngine(this)
         renderPersistedSession()
         updateProviderUi()
         updatePhoneUseUi()
@@ -182,11 +220,25 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        genericApprovalUi.attach()
+    }
+
+    override fun onStop() {
+        genericApprovalUi.detach()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         activeTurn?.let { turn ->
             activeTurn = null
             turn.handle.cancel("Activity destroyed.")
+            SampleRuntime.unregisterRun(turn.handle.runId)
         }
+        voiceOperation?.cancel()
+        voiceOperation = null
+        if (::textToSpeech.isInitialized) textToSpeech.close()
         agentSdk.close()
         dialogGate.cancelPending()
         authAttempt += 1
@@ -221,6 +273,16 @@ class MainActivity : Activity() {
         statusView = findViewById(R.id.statusView)
         inputField = findViewById(R.id.inputField)
         sendButton = findViewById(R.id.sendButton)
+        attachmentButton = findViewById(R.id.attachmentButton)
+        attachmentPreview = findViewById(R.id.attachmentPreview)
+        voiceButton = findViewById(R.id.voiceButton)
+        toolDetailsButton = findViewById(R.id.toolDetailsButton)
+        speakButton = findViewById(R.id.speakButton)
+        attachmentButton.removeClippedShadow()
+        voiceButton.removeClippedShadow()
+        toolDetailsButton.removeClippedShadow()
+        speakButton.removeClippedShadow()
+        updateToolDetailsButton()
     }
 
     private fun setupInteractions() {
@@ -251,6 +313,243 @@ class MainActivity : Activity() {
         }
         phoneUseSettingsButton.setOnClickListener {
             startActivity(AccessibilityAvailability.settingsIntent())
+        }
+        attachmentButton.setOnClickListener { chooseAttachment() }
+        attachmentPreview.setOnClickListener {
+            selectedAttachment = null
+            renderAttachment()
+        }
+        voiceButton.setOnClickListener {
+            if (voiceOperation != null) stopVoiceInput() else requestVoiceInput()
+        }
+        toolDetailsButton.setOnClickListener { toggleToolDetails() }
+        speakButton.setOnClickListener {
+            lastAssistantText?.takeIf(String::isNotBlank)?.let(::speak)
+                ?: Toast.makeText(this, "还没有可朗读的回复", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun chooseAttachment() {
+        if (isBusy()) return
+        startActivityForResult(
+            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf(
+                        "image/jpeg",
+                        "image/png",
+                        "image/webp",
+                        "image/gif",
+                        "text/plain",
+                        "text/markdown",
+                        "application/json"
+                    )
+                )
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                )
+            },
+            REQUEST_ATTACHMENT
+        )
+    }
+
+    @Deprecated("Deprecated in Android API; retained for minSdk-compatible sample.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_ATTACHMENT || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        val mediaType = contentResolver.getType(uri).orEmpty()
+        if (mediaType !in SUPPORTED_ATTACHMENT_TYPES) {
+            Toast.makeText(this, "暂不支持 $mediaType", Toast.LENGTH_LONG).show()
+            return
+        }
+        runCatching {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        val metadata = contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) {
+                null
+            } else {
+                val name = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    .takeIf { it >= 0 }
+                    ?.let(cursor::getString)
+                val size = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    .takeIf { it >= 0 && !cursor.isNull(it) }
+                    ?.let(cursor::getLong) ?: 0L
+                name to size
+            }
+        }
+        val size = metadata?.second ?: 0L
+        if (size > MAX_ATTACHMENT_BYTES) {
+            Toast.makeText(this, "附件不能超过 10 MB", Toast.LENGTH_LONG).show()
+            return
+        }
+        selectedAttachment = SelectedAttachment(
+            id = UUID.randomUUID().toString(),
+            uri = uri,
+            mediaType = mediaType,
+            displayName = metadata?.first ?: "附件",
+            byteSize = size
+        )
+        renderAttachment()
+    }
+
+    private fun renderAttachment() {
+        val attachment = selectedAttachment
+        attachmentPreview.visibility = if (attachment == null) View.GONE else View.VISIBLE
+        attachmentPreview.text = attachment?.let {
+            "附件 · ${it.displayName} · ${it.mediaType}（点此移除）"
+        }.orEmpty()
+    }
+
+    private fun requestVoiceInput() {
+        if (isBusy()) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO)
+            return
+        }
+        startVoiceInput()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_RECORD_AUDIO &&
+            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        ) {
+            startVoiceInput()
+        } else if (requestCode == REQUEST_RECORD_AUDIO) {
+            Toast.makeText(this, "未授予录音权限，语音输入保持关闭", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun startVoiceInput() {
+        val engine = AndroidSpeechToTextEngine(this)
+        voiceOperation = try {
+            engine.start(
+                sessionId = currentSessionId,
+                listener = object : SpeechToTextListener {
+                    override fun onStateChanged(state: VoiceOperationState) {
+                        postToUi {
+                            statusView.text = when (state) {
+                                VoiceOperationState.LISTENING -> "正在听…点语音可取消"
+                                VoiceOperationState.PROCESSING -> "正在转写语音…"
+                                VoiceOperationState.CANCELLED -> "语音输入已取消"
+                                VoiceOperationState.FAILED -> "语音输入失败"
+                                else -> statusView.text
+                            }
+                            if (state in VOICE_TERMINAL_STATES) {
+                                voiceOperation = null
+                                voiceButton.text = "语音"
+                            }
+                        }
+                    }
+
+                    override fun onPartialTranscript(text: String) {
+                        postToUi {
+                            inputField.setText(text)
+                            inputField.setSelection(text.length)
+                        }
+                    }
+
+                    override fun onFinalTranscript(text: String) {
+                        postToUi {
+                            inputField.setText(text)
+                            inputField.setSelection(text.length)
+                            voiceOperation = null
+                            voiceButton.text = "语音"
+                            updateProviderUi()
+                        }
+                    }
+
+                    override fun onError(error: VoiceUnavailableException) {
+                        postToUi {
+                            voiceOperation = null
+                            voiceButton.text = "语音"
+                            Toast.makeText(
+                                this@MainActivity,
+                                error.message ?: "语音输入不可用",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+            ).also {
+                voiceButton.text = "取消"
+                statusView.text = "正在启动语音输入…"
+            }
+        } catch (error: RuntimeException) {
+            Toast.makeText(this, error.message ?: "语音输入不可用", Toast.LENGTH_LONG).show()
+            null
+        }
+    }
+
+    private fun stopVoiceInput() {
+        voiceOperation?.cancel()
+        voiceOperation = null
+        voiceButton.text = "语音"
+        updateProviderUi()
+    }
+
+    private fun speak(text: String) {
+        try {
+            textToSpeech.speak(
+                text,
+                object : SpeechOutputListener {
+                    override fun onStateChanged(state: VoiceOperationState) {
+                        postToUi {
+                            speakButton.text = if (state == VoiceOperationState.SPEAKING) {
+                                "停止"
+                            } else {
+                                "朗读"
+                            }
+                            if (state != VoiceOperationState.SPEAKING) setupSpeakClick()
+                        }
+                    }
+
+                    override fun onError(error: VoiceUnavailableException) {
+                        postToUi {
+                            speakButton.text = "朗读"
+                            Toast.makeText(
+                                this@MainActivity,
+                                error.message ?: "语音输出不可用",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
+            )
+            speakButton.setOnClickListener {
+                textToSpeech.stop()
+                speakButton.text = "朗读"
+                setupSpeakClick()
+            }
+        } catch (error: RuntimeException) {
+            Toast.makeText(this, error.message ?: "语音输出尚未就绪", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun setupSpeakClick() {
+        speakButton.setOnClickListener {
+            lastAssistantText?.takeIf(String::isNotBlank)?.let(::speak)
+                ?: Toast.makeText(this, "还没有可朗读的回复", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -888,6 +1187,7 @@ class MainActivity : Activity() {
             postToUi {
                 if (requestedSession != currentSessionId) return@postToUi
                 transcriptContainer.removeAllViews()
+                toolLineCount = 0
                 session?.messages.orEmpty().forEach { message ->
                     val kind = when (message.role) {
                         AgentRole.USER -> LineKind.USER
@@ -896,6 +1196,10 @@ class MainActivity : Activity() {
                     }
                     appendLine(kind, message.content)
                 }
+                lastAssistantText = session?.messages.orEmpty()
+                    .lastOrNull { message -> message.role == AgentRole.ASSISTANT }
+                    ?.content
+                updateToolDetailsButton()
                 updateProviderUi()
                 updateEmptyState()
             }
@@ -983,6 +1287,17 @@ class MainActivity : Activity() {
         if (userText.isEmpty() || isBusy()) return
 
         val profile = providerSettings.profile()
+        val turnAttachment = selectedAttachment
+        if (turnAttachment != null &&
+            profile.kind !in setOf(
+                ProviderKind.KIMI_PLAN,
+                ProviderKind.ARK_PLAN,
+                ProviderKind.CUSTOM
+            )
+        ) {
+            appendLine(LineKind.ERROR, "${profile.kind.title} 的当前适配器未启用附件输入。")
+            return
+        }
         val readiness = providerReadiness(profile.kind)
         if (!readiness.ready) {
             appendLine(LineKind.ERROR, readiness.detail)
@@ -991,7 +1306,7 @@ class MainActivity : Activity() {
         }
 
         val providerFactory = try {
-            buildProviderFactory(profile)
+            buildProviderFactory(profile, turnAttachment)
         } catch (error: RuntimeException) {
             appendLine(LineKind.ERROR, error.message ?: "提供商配置无效")
             return
@@ -1012,7 +1327,8 @@ class MainActivity : Activity() {
             providerKind = profile.kind,
             providerFactory = providerFactory,
             userText = userText,
-            listener = listener
+            listener = listener,
+            attachments = turnAttachment?.let { listOf(it.toRef()) }.orEmpty()
         )
         val handle = try {
             agentSdk.run(request)
@@ -1021,7 +1337,10 @@ class MainActivity : Activity() {
             appendLine(LineKind.ERROR, error.message ?: "无法启动 Agent")
             return
         }
+        SampleRuntime.registerRun(handle)
         activeTurn = ActiveTurn(turnId, handle, phoneUseActivated)
+        selectedAttachment = null
+        renderAttachment()
     }
 
     private fun onRunEvent(
@@ -1046,6 +1365,20 @@ class MainActivity : Activity() {
                             appendLine(LineKind.TOOL, renderToolTrace(trace))
                         }
                     }
+                    is AgentHarnessTraceEvent.ProviderDisplay -> {
+                        when (val display = trace.event) {
+                            is AgentProviderDisplayEvent.TextDelta -> postTurnUi(turnId) {
+                                appendStreamingDelta(turnId, display.text)
+                            }
+                            is AgentProviderDisplayEvent.ActionNarration -> postTurnUi(turnId) {
+                                statusView.text = display.text
+                            }
+                            is AgentProviderDisplayEvent.ToolStatus -> postTurnUi(turnId) {
+                                statusView.text = "${display.toolName} · ${display.status}"
+                            }
+                            is AgentProviderDisplayEvent.Usage -> Unit
+                        }
+                    }
                     else -> Unit
                 }
             }
@@ -1059,13 +1392,27 @@ class MainActivity : Activity() {
     private fun completeTurn(turnId: Long, outcome: AgentRunOutcome) {
         val turn = activeTurn?.takeIf { candidate -> candidate.id == turnId } ?: return
         activeTurn = null
+        SampleRuntime.unregisterRun(turn.handle.runId)
         when (outcome) {
-            is AgentRunOutcome.Success -> appendLine(LineKind.ASSISTANT, outcome.result.output)
+            is AgentRunOutcome.Success -> {
+                lastAssistantText = outcome.result.output
+                val bubble = turn.streamingBubble
+                if (bubble == null) {
+                    appendLine(LineKind.ASSISTANT, outcome.result.output)
+                } else {
+                    bubble.text = getString(
+                        R.string.transcript_line,
+                        LineKind.ASSISTANT.prefix,
+                        outcome.result.output
+                    )
+                }
+            }
             is AgentRunOutcome.Failure -> appendLine(
                 LineKind.ERROR,
                 renderRunFailure(outcome.error, turn.phoneUseActivated.get())
             )
             is AgentRunOutcome.Cancelled -> Unit
+            is AgentRunOutcome.Expired -> appendLine(LineKind.ERROR, "本轮运行超时，已安全停止。")
         }
         setBusy(false)
     }
@@ -1074,12 +1421,37 @@ class MainActivity : Activity() {
         val turn = activeTurn ?: return
         activeTurn = null
         turn.handle.cancel("用户停止了本轮。")
+        SampleRuntime.unregisterRun(turn.handle.runId)
         dialogGate.cancelPending()
+        SampleRuntime.approvalBridge().cancelAll()
+        turn.streamingBubble?.let { bubble ->
+            bubble.text = getString(
+                R.string.transcript_line,
+                LineKind.ASSISTANT.prefix,
+                turn.streamingText.toString() + "\n（已停止，未写入会话）"
+            )
+        }
         setBusy(false)
         appendLine(LineKind.INFO, getString(R.string.msg_turn_stopped))
     }
 
-    private fun buildProviderFactory(profile: ProviderProfile): AgentProviderFactory {
+    private fun appendStreamingDelta(turnId: Long, delta: String) {
+        val turn = activeTurn?.takeIf { value -> value.id == turnId } ?: return
+        turn.streamingText.append(delta)
+        val bubble = turn.streamingBubble ?: appendLine(LineKind.ASSISTANT, "").also {
+            turn.streamingBubble = it
+        }
+        bubble.text = getString(
+            R.string.transcript_line,
+            LineKind.ASSISTANT.prefix,
+            turn.streamingText.toString()
+        )
+    }
+
+    private fun buildProviderFactory(
+        profile: ProviderProfile,
+        attachment: SelectedAttachment?
+    ): AgentProviderFactory {
         val historyBudget = if (profile.kind == ProviderKind.OFFLINE) {
             null
         } else {
@@ -1108,6 +1480,7 @@ class MainActivity : Activity() {
                     keyValue = requireNotNull(profile.secret),
                     parallelToolCalls = false,
                     historyCharBudget = historyBudget,
+                    streamingEnabled = true,
                     extraHeaders = mapOf(
                         "User-Agent" to "AgentHarness/0.5 coding-agent"
                     ),
@@ -1116,7 +1489,8 @@ class MainActivity : Activity() {
                     } else {
                         emptyMap()
                     }
-                )
+                ),
+                attachment?.let(::attachmentResolver)
             )
             ProviderKind.ARK_PLAN -> OpenAiProviderFactories.compatible(
                 OpenAiCompatibleConfig(
@@ -1124,8 +1498,10 @@ class MainActivity : Activity() {
                     model = profile.model,
                     keyValue = requireNotNull(profile.secret),
                     parallelToolCalls = false,
-                    historyCharBudget = historyBudget
-                )
+                    historyCharBudget = historyBudget,
+                    streamingEnabled = true
+                ),
+                attachment?.let(::attachmentResolver)
             )
             ProviderKind.CUSTOM -> OpenAiProviderFactories.compatible(
                 OpenAiCompatibleConfig(
@@ -1133,21 +1509,80 @@ class MainActivity : Activity() {
                     model = profile.model,
                     keyValue = requireNotNull(profile.secret),
                     parallelToolCalls = false,
-                    historyCharBudget = historyBudget
-                )
+                    historyCharBudget = historyBudget,
+                    streamingEnabled = true
+                ),
+                attachment?.let(::attachmentResolver)
             )
         }
+    }
+
+    private fun attachmentResolver(
+        selected: SelectedAttachment
+    ): AgentAttachmentResolver = AgentAttachmentResolver { requested ->
+        require(requested.id == selected.id) {
+            "Attachment '${requested.id}' is not authorized for this turn."
+        }
+        val bytes = contentResolver.openInputStream(selected.uri)?.use { stream ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8 * 1024)
+            var total = 0
+            while (true) {
+                val read = stream.read(buffer)
+                if (read < 0) break
+                total += read
+                require(total <= MAX_ATTACHMENT_BYTES) {
+                    "Attachment exceeds $MAX_ATTACHMENT_BYTES bytes."
+                }
+                output.write(buffer, 0, read)
+            }
+            output.toByteArray()
+        } ?: throw IOException("Could not open selected attachment.")
+        AgentAttachmentContent(selected.mediaType, bytes)
     }
 
     private fun buildRunRequest(
         providerKind: ProviderKind,
         providerFactory: AgentProviderFactory,
         userText: String,
-        listener: AgentRunListener
+        listener: AgentRunListener,
+        attachments: List<AttachmentRef>
     ): AgentRunRequest {
         val houseContext = AgentHouseContextProvider(SampleRuntime.house(this))
+        val governance = SampleRuntime.governance(this)
         val chatTools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool()) +
-            AgentHouseWriteTools(SampleRuntime.house(this)).tools()
+            AgentHouseWriteTools(
+                repository = SampleRuntime.house(this),
+                memoryCandidateSink = governance.memorySink,
+                skillDraftSink = governance.skillSink,
+                personaProposalSink = governance.personaSink
+            ).tools()
+        val contextSources = listOf(
+            NamedContextSource(
+                "approved-agent-state",
+                AgentApprovedStateContextSource(SampleRuntime.state(this))
+            ),
+            NamedContextSource(
+                "agent-state-documents",
+                AgentVaultDocumentContextSource(SampleRuntime.state(this))
+            ),
+            NamedContextSource(
+                "android-permissions",
+                PermissionContextSource(SampleRuntime.permissions(this))
+            ),
+            NamedContextSource(
+                "local-todo",
+                TodoContextSource(SampleRuntime.todo(this))
+            ),
+            NamedContextSource(
+                "mirror-stats",
+                UsageStatsContextSource(SampleRuntime.usageStats(this))
+            ),
+            NamedContextSource(
+                "android-system",
+                AndroidSystemContextSource(this)
+            )
+        )
         val sampleGuidance = StaticAgentContextProvider(
             listOf(
                 AgentContextItem(
@@ -1156,9 +1591,10 @@ class MainActivity : Activity() {
                     content = "You are a helpful assistant inside the Agent Harness sample app. " +
                         "Use uppercase, current_time, or word_count when they fit; otherwise " +
                         "answer directly. Agent memory and skill tools are optional maintenance " +
-                        "tools, not a required first step. Append memory only for a durable fact, " +
-                        "preference, decision, or completed outcome worth using later. Write a " +
-                        "disabled skill draft only after repeated evidence shows a reusable " +
+                        "tools, not a required first step. Propose a pending memory candidate only " +
+                        "for a durable fact, preference, decision, or completed outcome worth " +
+                        "reviewing. Write a disabled skill draft " +
+                        "only after repeated evidence shows a reusable " +
                         "instruction would help; never call either tool merely because it exists.",
                     trust = AgentContextTrust.APPLICATION,
                     priority = 100
@@ -1182,7 +1618,13 @@ class MainActivity : Activity() {
                 listener = listener,
                 additionalContextProviders = listOf(sampleGuidance, houseContext),
                 additionalTools = chatTools
-            ).copy(errorMapper = sampleErrorMapper())
+            ).copy(
+                errorMapper = sampleErrorMapper(),
+                approvalCoordinator = SampleRuntime.approvalCoordinator(),
+                contextSources = contextSources,
+                traceSink = SampleRuntime.traceSink(),
+                attachments = attachments
+            )
         }
         return AgentRunRequest(
             sessionId = currentSessionId,
@@ -1199,7 +1641,11 @@ class MainActivity : Activity() {
                 toolNames = chatTools.map { tool -> tool.spec.name }.toSet()
             ),
             listener = listener,
-            errorMapper = sampleErrorMapper()
+            errorMapper = sampleErrorMapper(),
+            traceSink = SampleRuntime.traceSink(),
+            attachments = attachments,
+            approvalCoordinator = SampleRuntime.approvalCoordinator(),
+            contextSources = contextSources
         )
     }
 
@@ -1244,7 +1690,20 @@ class MainActivity : Activity() {
             .sortedBy { entry -> entry.key }
             .joinToString(", ") { entry -> "${entry.key}=${abbreviate(entry.value)}" }
         val marker = if (event.succeeded) "" else "ERROR "
-        return "${event.toolName}($arguments) -> $marker${abbreviate(event.content)}"
+        val envelope = event.envelope?.let { value ->
+            buildString {
+                append(" [${value.status}")
+                if (value.evidence.isNotEmpty()) append(" evidence=${value.evidence.size}")
+                if (value.artifacts.isNotEmpty()) append(" artifacts=${value.artifacts.size}")
+                if (value.candidates.isNotEmpty()) append(" candidates=${value.candidates.size}")
+                value.effect?.let { effect ->
+                    append(" effect=${effect.sideEffect}/${effect.occurred}")
+                }
+                if (value.rawPayloadRef != null) append(" raw=TTL-ref")
+                append("]")
+            }
+        }.orEmpty()
+        return "${event.toolName}($arguments) -> $marker${abbreviate(event.content)}$envelope"
     }
 
     private fun abbreviate(value: String): String {
@@ -1258,12 +1717,18 @@ class MainActivity : Activity() {
 
     // ------------------------------------------------------------- transcript
 
-    private fun appendLine(kind: LineKind, message: String) {
+    private fun appendLine(kind: LineKind, message: String): TextView {
         emptyState.visibility = View.GONE
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = if (kind.alignEnd) Gravity.END else Gravity.START
             setPadding(0, dp(4), 0, dp(4))
+        }
+        if (kind == LineKind.TOOL) {
+            row.tag = TOOL_ROW_TAG
+            row.visibility = if (showToolDetails) View.VISIBLE else View.GONE
+            toolLineCount += 1
+            updateToolDetailsButton()
         }
         if (kind.alignEnd) {
             row.addView(Space(this), weightedParams())
@@ -1300,17 +1765,43 @@ class MainActivity : Activity() {
             )
         )
         transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
+        return bubble
     }
 
     private fun startNewChat(showToast: Boolean) {
         currentSessionId = newSessionId()
         samplePreferences.setLastSessionId(currentSessionId)
         transcriptContainer.removeAllViews()
+        toolLineCount = 0
+        updateToolDetailsButton()
+        lastAssistantText = null
         updateProviderUi()
         updateEmptyState()
         if (showToast) {
             Toast.makeText(this, getString(R.string.msg_new_chat), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun toggleToolDetails() {
+        showToolDetails = !showToolDetails
+        for (index in 0 until transcriptContainer.childCount) {
+            transcriptContainer.getChildAt(index)
+                .takeIf { view -> view.tag == TOOL_ROW_TAG }
+                ?.visibility = if (showToolDetails) View.VISIBLE else View.GONE
+        }
+        updateToolDetailsButton()
+        transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun updateToolDetailsButton() {
+        if (!::toolDetailsButton.isInitialized) return
+        toolDetailsButton.text = if (showToolDetails) {
+            "收起($toolLineCount)"
+        } else {
+            "工具($toolLineCount)"
+        }
+        toolDetailsButton.isEnabled = toolLineCount > 0
+        toolDetailsButton.alpha = if (toolLineCount > 0) 1f else 0.55f
     }
 
     private fun onApprovalWaitingChanged(waiting: Boolean) {
@@ -1336,6 +1827,8 @@ class MainActivity : Activity() {
         settingsButton.isEnabled = !busy
         providerSelector.isEnabled = !busy
         phoneUseSettingsButton.isEnabled = !busy
+        attachmentButton.isEnabled = !busy
+        voiceButton.isEnabled = !busy
         sendButton.alpha = 1f
         sendButton.text = getString(if (busy) R.string.btn_stop else R.string.btn_send)
         sendButton.background = getDrawable(
@@ -1481,8 +1974,27 @@ class MainActivity : Activity() {
     private data class ActiveTurn(
         val id: Long,
         val handle: AgentRunHandle,
-        val phoneUseActivated: AtomicBoolean
+        val phoneUseActivated: AtomicBoolean,
+        val streamingText: StringBuilder = StringBuilder(),
+        var streamingBubble: TextView? = null
     )
+
+    private data class SelectedAttachment(
+        val id: String,
+        val uri: Uri,
+        val mediaType: String,
+        val displayName: String,
+        val byteSize: Long
+    ) {
+        fun toRef() = AttachmentRef(
+            id = id,
+            mediaType = mediaType,
+            displayName = displayName,
+            byteSize = byteSize,
+            privacy = AgentPrivacyLabel.SENSITIVE,
+            contentRef = "android-content:$id"
+        )
+    }
 
     companion object {
         const val EXTRA_SESSION_ID = "session_id"
@@ -1491,7 +2003,25 @@ class MainActivity : Activity() {
         private const val PHONE_MAX_PROVIDER_STEPS = 80
         private const val MODEL_ROUTED_HISTORY_BUDGET = 24_000
         private const val MAX_TOOL_LINE_CHARS = 200
+        private const val MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+        private const val REQUEST_ATTACHMENT = 401
+        private const val REQUEST_RECORD_AUDIO = 402
+        private const val TOOL_ROW_TAG = "agent-tool-detail"
         private val WHITESPACE = Regex("\\s+")
+        private val SUPPORTED_ATTACHMENT_TYPES = setOf(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "text/plain",
+            "text/markdown",
+            "application/json"
+        )
+        private val VOICE_TERMINAL_STATES = setOf(
+            VoiceOperationState.COMPLETED,
+            VoiceOperationState.CANCELLED,
+            VoiceOperationState.FAILED
+        )
 
     }
 }

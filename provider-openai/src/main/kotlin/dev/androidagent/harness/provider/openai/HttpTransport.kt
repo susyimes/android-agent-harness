@@ -17,6 +17,16 @@ fun interface HttpTransport {
     fun post(url: String, headers: Map<String, String>, body: String): String
 }
 
+/** Streaming HTTP boundary; [onData] receives one complete SSE `data:` payload. */
+interface HttpStreamingTransport : HttpTransport {
+    fun postStreaming(
+        url: String,
+        headers: Map<String, String>,
+        body: String,
+        onData: (String) -> Unit
+    )
+}
+
 /** Thrown when the endpoint answers with a non-2xx status. */
 class HttpTransportException(
     val statusCode: Int,
@@ -58,7 +68,7 @@ class HttpRequestCancelledException(
  */
 class UrlConnectionHttpTransport(
     private val requestTimeout: Duration = Duration.ofSeconds(60)
-) : HttpTransport {
+) : HttpStreamingTransport {
     private val cancelled = AtomicBoolean(false)
     private val activeConnection = AtomicReference<HttpURLConnection?>()
 
@@ -102,6 +112,79 @@ class UrlConnectionHttpTransport(
             val response = readAll(connection.inputStream, charset)
             ensureNotCancelled()
             return response
+        } catch (error: IOException) {
+            if (cancelled.get()) {
+                throw HttpRequestCancelledException(cause = error)
+            }
+            throw error
+        } finally {
+            activeConnection.compareAndSet(connection, null)
+            connection.disconnect()
+        }
+    }
+
+    override fun postStreaming(
+        url: String,
+        headers: Map<String, String>,
+        body: String,
+        onData: (String) -> Unit
+    ) {
+        ensureNotCancelled()
+        val connection = URI.create(url).toURL().openConnection() as? HttpURLConnection
+            ?: throw IOException("Not an HTTP(S) URL: $url")
+        check(activeConnection.compareAndSet(null, connection)) {
+            "UrlConnectionHttpTransport supports one active request at a time."
+        }
+        try {
+            ensureNotCancelled()
+            connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = timeoutMillis()
+            connection.readTimeout = timeoutMillis()
+            connection.doOutput = true
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            connection.setRequestProperty("Accept", "text/event-stream")
+            connection.outputStream.use { stream ->
+                stream.write(body.toByteArray(StandardCharsets.UTF_8))
+            }
+            val status = connection.responseCode
+            if (status in 300..399) {
+                throw HttpTransportException(
+                    statusCode = status,
+                    message = "HTTP $status redirect refused for $url: this request carries " +
+                        "credentials that must not be replayed to another host. Redirect " +
+                        "target host: ${redirectHost(connection)}. Configure the base URL to " +
+                        "point at the final endpoint."
+                )
+            }
+            val charset = responseCharset(connection)
+            if (status !in 200..299) {
+                ensureNotCancelled()
+                throw HttpTransportException(
+                    statusCode = status,
+                    message = "HTTP $status from $url: " +
+                        truncate(readAll(connection.errorStream, charset))
+                )
+            }
+            connection.inputStream.bufferedReader(charset).use { reader ->
+                val data = mutableListOf<String>()
+                while (true) {
+                    ensureNotCancelled()
+                    val line = reader.readLine() ?: break
+                    if (line.isEmpty()) {
+                        if (data.isNotEmpty()) {
+                            onData(data.joinToString("\n"))
+                            data.clear()
+                        }
+                    } else if (line.startsWith("data:")) {
+                        data += line.removePrefix("data:").trimStart()
+                    }
+                }
+                if (data.isNotEmpty()) {
+                    onData(data.joinToString("\n"))
+                }
+            }
+            ensureNotCancelled()
         } catch (error: IOException) {
             if (cancelled.get()) {
                 throw HttpRequestCancelledException(cause = error)

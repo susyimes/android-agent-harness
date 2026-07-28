@@ -48,15 +48,28 @@ class DeterministicAgentHarnessTest {
                     totalContentChars = 9
                 ),
                 AgentHarnessTraceEvent.ProviderInvoked(1, "scripted-uppercase", listOf("uppercase")),
+                AgentHarnessTraceEvent.ProviderCompleted(1, "tool_requests"),
+                AgentHarnessTraceEvent.ToolRequested(
+                    1,
+                    "uppercase-1",
+                    "uppercase",
+                    mapOf("text" to "android")
+                ),
                 AgentHarnessTraceEvent.ToolExecuted(
                     1,
                     "uppercase-1",
                     "uppercase",
                     true,
                     "ANDROID",
-                    mapOf("text" to "android")
+                    mapOf("text" to "android"),
+                    AgentToolResultEnvelope(
+                        status = AgentToolResultStatus.SUCCESS,
+                        summary = "ANDROID",
+                        createdAtEpochMillis = 1_700_000_000_000L
+                    )
                 ),
                 AgentHarnessTraceEvent.ProviderInvoked(2, "scripted-uppercase", listOf("uppercase")),
+                AgentHarnessTraceEvent.ProviderCompleted(2, "final_text"),
                 AgentHarnessTraceEvent.Completed(2, "Harness result: ANDROID")
             ),
             result.trace
@@ -110,6 +123,7 @@ class DeterministicAgentHarnessTest {
         assertEquals(result.trace, observed)
         val toolEvent = observed.filterIsInstance<AgentHarnessTraceEvent.ToolExecuted>().single()
         assertEquals(mapOf("text" to "sdk"), toolEvent.arguments)
+        assertEquals(AgentToolResultStatus.SUCCESS, toolEvent.envelope?.status)
     }
 
     private class UppercaseProvider : AgentProvider {
