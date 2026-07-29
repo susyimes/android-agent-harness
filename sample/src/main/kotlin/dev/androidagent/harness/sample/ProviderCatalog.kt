@@ -12,7 +12,8 @@ enum class ProviderCredentialMode {
 
 data class ModelPreset(
     val id: String,
-    val label: String
+    val label: String,
+    val supportsImageInput: Boolean = true
 )
 
 /**
@@ -69,7 +70,7 @@ enum class ProviderKind(
         credentialMode = ProviderCredentialMode.API_KEY,
         defaultBaseUrl = OpenAiEndpointPresets.ARK_PLAN.baseUrl,
         defaultModel = OpenAiEndpointPresets.ARK_PLAN.defaultModel,
-        models = OpenAiEndpointPresets.ARK_PLAN.toUiModels()
+        models = OpenAiEndpointPresets.ARK_PLAN.toUiModels(ARK_TEXT_ONLY_MODEL_IDS)
     ),
     CUSTOM(
         id = "custom",
@@ -85,6 +86,12 @@ enum class ProviderKind(
         return models.firstOrNull { preset -> preset.id == modelId }?.label ?: modelId
     }
 
+    fun supportsImageInput(modelId: String): Boolean {
+        return models.firstOrNull { preset -> preset.id == modelId }
+            ?.supportsImageInput
+            ?: true
+    }
+
     companion object {
         fun fromId(id: String?): ProviderKind {
             return entries.firstOrNull { kind -> kind.id == id } ?: OFFLINE
@@ -92,6 +99,19 @@ enum class ProviderKind(
     }
 }
 
-private fun OpenAiEndpointPreset.toUiModels(): List<ModelPreset> {
-    return models.map { model -> ModelPreset(model.id, model.displayName) }
+private fun OpenAiEndpointPreset.toUiModels(
+    textOnlyModelIds: Set<String> = emptySet()
+): List<ModelPreset> {
+    return models.map { model ->
+        ModelPreset(
+            id = model.id,
+            label = model.displayName,
+            supportsImageInput = model.id !in textOnlyModelIds
+        )
+    }
 }
+
+private val ARK_TEXT_ONLY_MODEL_IDS = setOf(
+    "glm-5.2",
+    "deepseek-v4-flash"
+)

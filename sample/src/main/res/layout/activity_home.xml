@@ -1,27 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/homeContent"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen_gradient"
     android:clipChildren="false"
-    android:clipToPadding="false">
+    android:clipToPadding="false"
+    android:orientation="vertical"
+    android:paddingStart="20dp"
+    android:paddingTop="14dp"
+    android:paddingEnd="20dp"
+    android:paddingBottom="10dp">
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:clipToPadding="false"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:paddingBottom="14dp">
 
         <LinearLayout
-            android:id="@+id/homeContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingStart="20dp"
-            android:paddingTop="18dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="28dp">
+            android:orientation="vertical">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -38,323 +41,65 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/app_name"
+                        android:text="首页"
                         android:textColor="@color/textPrimary"
-                        android:textSize="30sp"
+                        android:textSize="28sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="@string/home_subtitle"
+                        android:layout_marginTop="2dp"
+                        android:text="今天的重点和 Agent 状态"
                         android:textColor="@color/textSecondary"
                         android:textSize="13sp" />
                 </LinearLayout>
 
                 <Button
                     android:id="@+id/homeSettingsButton"
-                    android:layout_width="wrap_content"
+                    android:layout_width="56dp"
                     android:layout_height="40dp"
                     android:background="@drawable/bg_secondary_button"
                     android:elevation="0dp"
                     android:minWidth="0dp"
-                    android:paddingStart="14dp"
-                    android:paddingEnd="14dp"
                     android:stateListAnimator="@null"
-                    android:text="@string/btn_settings"
+                    android:text="设置"
                     android:textAllCaps="false"
                     android:textColor="@color/textPrimary"
-                    android:textSize="13sp"
-                    android:translationZ="0dp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 android:background="@drawable/bg_surface_card"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/home_ready_title"
-                    android:textColor="@color/textPrimary"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
 
                 <TextView
                     android:id="@+id/homeProviderStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:lineSpacingExtra="3dp"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/homeBriefText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:background="@drawable/bg_surface_soft"
-                    android:lineSpacingExtra="2dp"
-                    android:padding="12dp"
-                    android:textColor="@color/textPrimary"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/continueChatButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="16dp"
-                    android:background="@drawable/bg_primary_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="@string/home_continue_chat"
-                    android:textAllCaps="false"
-                    android:textColor="@color/white"
-                    android:textSize="15sp"
-                    android:textStyle="bold"
-                    android:translationZ="0dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/homeTodayCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_surface_card"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="今日状态"
-                    android:textColor="@color/textPrimary"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/homeStatsSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="9dp"
-                    android:text="Stats 正在读取…"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/homeTodoSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="7dp"
-                    android:text="Todo 正在读取…"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="12sp" />
-
-                <LinearLayout
-                    android:id="@+id/homeTodoQuickContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    android:orientation="vertical" />
-
-                <TextView
-                    android:id="@+id/homeAgentSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:lineSpacingExtra="2dp"
-                    android:text="Agent 状态正在读取…"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:text="@string/home_quick_actions"
-                android:textColor="@color/textPrimary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:paddingBottom="2dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/homeHouseButton"
                     android:layout_width="0dp"
-                    android:layout_height="70dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:gravity="start|center_vertical"
-                    android:paddingStart="16dp"
-                    android:stateListAnimator="@null"
-                    android:text="@string/home_house_action"
-                    android:textAllCaps="false"
+                    android:lineSpacingExtra="2dp"
                     android:textColor="@color/textPrimary"
-                    android:textSize="14sp"
-                    android:translationZ="0dp" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
+                    android:textSize="13sp" />
 
                 <Button
                     android:id="@+id/homeModelButton"
-                    android:layout_width="0dp"
-                    android:layout_height="70dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
+                    android:layout_width="56dp"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="10dp"
+                    android:background="@drawable/bg_secondary_button"
                     android:elevation="0dp"
-                    android:gravity="start|center_vertical"
-                    android:paddingStart="16dp"
+                    android:minWidth="0dp"
                     android:stateListAnimator="@null"
-                    android:text="@string/home_model_action"
+                    android:text="切换"
                     android:textAllCaps="false"
                     android:textColor="@color/textPrimary"
-                    android:textSize="14sp"
-                    android:translationZ="0dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/homeStatsButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Stats"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/homeTodoButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Todo"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/homeDataButton"
-                android:layout_width="match_parent"
-                android:layout_height="58dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_quick_action_button"
-                android:elevation="0dp"
-                android:stateListAnimator="@null"
-                android:text="Data &amp; Retention"
-                android:textAllCaps="false"
-                android:textColor="@color/textPrimary"
-                android:translationZ="0dp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/homeStateButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Obsidian / State"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/homeAutomationButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Automation"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/homePermissionsButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Permissions"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/homeDebugButton"
-                    android:layout_width="0dp"
-                    android:layout_height="58dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_quick_action_button"
-                    android:elevation="0dp"
-                    android:stateListAnimator="@null"
-                    android:text="Debug / Replay"
-                    android:textAllCaps="false"
-                    android:textColor="@color/textPrimary" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -363,41 +108,167 @@
                 android:layout_marginTop="12dp"
                 android:background="@drawable/bg_surface_soft"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/home_runtime_title"
-                    android:textColor="@color/textPrimary"
-                    android:textSize="14sp"
+                    android:text="AgentBrief"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <TextView
-                    android:id="@+id/homeRuntimeStatus"
+                    android:id="@+id/homeBriefText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:lineSpacingExtra="2dp"
-                    android:textColor="@color/textSecondary"
-                    android:textSize="12sp" />
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="4dp"
+                    android:text="@string/home_ready_title"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/continueChatButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_primary_button"
+                    android:elevation="0dp"
+                    android:stateListAnimator="@null"
+                    android:text="@string/home_continue_chat"
+                    android:textAllCaps="false"
+                    android:textColor="@color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
-                android:text="@string/home_recent_sessions"
+                android:text="需要关注"
                 android:textColor="@color/textPrimary"
-                android:textSize="16sp"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/homeAgentSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="9dp"
+                android:background="@drawable/bg_surface_card"
+                android:lineSpacingExtra="3dp"
+                android:padding="16dp"
+                android:textColor="@color/textPrimary"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:baselineAligned="false"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/homeStatsButton"
+                    android:layout_width="0dp"
+                    android:layout_height="84dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_settings_row"
+                    android:elevation="0dp"
+                    android:gravity="start|center_vertical"
+                    android:maxLines="3"
+                    android:minWidth="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:stateListAnimator="@null"
+                    android:text="使用统计"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+
+                <Space
+                    android:layout_width="10dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/homeTodoButton"
+                    android:layout_width="0dp"
+                    android:layout_height="84dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_settings_row"
+                    android:elevation="0dp"
+                    android:gravity="start|center_vertical"
+                    android:maxLines="3"
+                    android:minWidth="0dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:stateListAnimator="@null"
+                    android:text="待办事项"
+                    android:textAllCaps="false"
+                    android:textColor="@color/textPrimary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/homeStatsSummary"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/homeTodoSummary"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/homeTodoQuickContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:text="运行状态"
+                android:textColor="@color/textPrimary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/homeRuntimeStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="9dp"
+                android:background="@drawable/bg_surface_card"
+                android:lineSpacingExtra="3dp"
+                android:padding="16dp"
+                android:text="正在读取本地状态…"
+                android:textColor="@color/textSecondary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:text="最近对话"
+                android:textColor="@color/textPrimary"
+                android:textSize="18sp"
                 android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/recentSessionsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="9dp"
                 android:orientation="vertical" />
         </LinearLayout>
     </ScrollView>
-</FrameLayout>
+
+    <include layout="@layout/view_bottom_navigation" />
+</LinearLayout>

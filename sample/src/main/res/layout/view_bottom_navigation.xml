@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/sampleBottomNavigation"
+    android:layout_width="match_parent"
+    android:layout_height="66dp"
+    android:background="@drawable/bg_bottom_navigation"
+    android:baselineAligned="false"
+    android:orientation="horizontal"
+    android:padding="5dp">
+
+    <TextView
+        android:id="@+id/navHome"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:drawableTop="@drawable/ic_nav_home"
+        android:drawablePadding="3dp"
+        android:gravity="center"
+        android:text="首页"
+        android:textColor="@color/textSecondary"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/navChat"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:drawableTop="@drawable/ic_nav_chat"
+        android:drawablePadding="3dp"
+        android:gravity="center"
+        android:text="对话"
+        android:textColor="@color/textSecondary"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/navAgent"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:drawableTop="@drawable/ic_nav_agent"
+        android:drawablePadding="3dp"
+        android:gravity="center"
+        android:text="Agent"
+        android:textColor="@color/textSecondary"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/navWorkbench"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:drawableTop="@drawable/ic_nav_workbench"
+        android:drawablePadding="3dp"
+        android:gravity="center"
+        android:text="工作台"
+        android:textColor="@color/textSecondary"
+        android:textSize="11sp" />
+</LinearLayout>

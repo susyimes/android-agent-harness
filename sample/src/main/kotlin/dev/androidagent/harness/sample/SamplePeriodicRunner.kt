@@ -548,7 +548,7 @@ class SamplePeriodicRunner(
         output: String
     ) {
         val content = output.trim().take(8_000)
-        if (content.isBlank() || content.isNoDreamProposal()) return
+        if (content.isBlank() || content.isNoDreamProposalText()) return
         runCatching {
             SampleRuntime.governance(appContext).memorySink.propose(
                 MemoryCandidate(
@@ -570,20 +570,6 @@ class SamplePeriodicRunner(
                 )
             )
         }
-    }
-
-    private fun String.isNoDreamProposal(): Boolean {
-        val normalized = lowercase()
-            .replace(Regex("""[\s\p{Punct}，。；：！？]+"""), "")
-        return normalized in setOf(
-            "无建议",
-            "没有建议",
-            "暂无建议",
-            "本次无建议",
-            "nosuggestion",
-            "noproposal",
-            "none"
-        )
     }
 
     private fun dev.androidagent.harness.scheduling.ScheduleTargetType.toRunTrigger() =
@@ -684,4 +670,14 @@ class SamplePeriodicRunner(
             return "$scheduleId-r$scheduleRevision"
         }
     }
+}
+
+internal fun String.isNoDreamProposalText(): Boolean {
+    val normalized = lowercase()
+        .replace(Regex("""[\s\p{Punct}，。；：！？]+"""), "")
+    if (normalized in setOf("nosuggestion", "noproposal", "none")) return true
+    return Regex(
+        """^(?:(?:本次|本轮)?(?:无|没有|暂无)(?:可审查)?建议|""" +
+            """(?:本次|本轮)?(?:可审查)?建议(?:为)?(?:无|没有|暂无))$"""
+    ).matches(normalized)
 }

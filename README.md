@@ -200,6 +200,9 @@ The sample includes:
 | Ark Plan | Plan API key | Full sample preset catalog plus custom compatible id |
 | Custom compatible | API key | Host-supplied model id |
 
+The model picker marks Ark models that currently reject image input as
+`仅文本`; the sample blocks incompatible image attachments before starting a run.
+
 Provider credentials are stored separately with Android Keystore-backed encryption. They never enter House, State Vault, trace exports, or prompts.
 
 The experimental Codex login is a sample integration and is not presented as an officially supported third-party Android authentication surface.

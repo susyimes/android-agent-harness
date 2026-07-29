@@ -61,17 +61,15 @@ class HomeActivity : Activity() {
         todoQuickContainer = findViewById(R.id.homeTodoQuickContainer)
         recentSessions = findViewById(R.id.recentSessionsContainer)
         approvalUi = SampleApprovalUi(this, ::loadLocalState)
+        bindSampleNavigation(SampleTab.HOME)
         findViewById<Button>(R.id.continueChatButton).setOnClickListener {
             openChat(preferences.lastSessionId())
         }
-        findViewById<Button>(R.id.homeHouseButton).apply {
+        findViewById<Button>(R.id.homeSettingsButton).apply {
             removeClippedShadow()
             setOnClickListener {
-                startActivity(Intent(this@HomeActivity, AgentHouseActivity::class.java))
+                startActivity(Intent(this@HomeActivity, SettingsActivity::class.java))
             }
-        }
-        findViewById<Button>(R.id.homeSettingsButton).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
         }
         findViewById<Button>(R.id.homeModelButton).apply {
             removeClippedShadow()
@@ -84,11 +82,7 @@ class HomeActivity : Activity() {
         }
         bindProductButton(R.id.homeStatsButton, "stats")
         bindProductButton(R.id.homeTodoButton, "todo")
-        bindProductButton(R.id.homeStateButton, "state")
-        bindProductButton(R.id.homeAutomationButton, "automation")
-        bindProductButton(R.id.homePermissionsButton, "permissions")
-        bindProductButton(R.id.homeDebugButton, "debug")
-        bindProductButton(R.id.homeDataButton, "data")
+        findViewById<Button>(R.id.continueChatButton).removeClippedShadow()
     }
 
     override fun onStart() {
@@ -172,7 +166,20 @@ class HomeActivity : Activity() {
                     append(" · ${checkpoints.count { it.status.name == "RUNNING" }} 个 LongTask 运行中")
                 }
                 briefText.text = buildString {
-                    appendLine("今日简报 · ${brief.summary}")
+                    val enabledSchedules = schedules.count { schedule -> schedule.enabled }
+                    if (
+                        overdue == 0 &&
+                        brief.pendingCandidateCount == 0 &&
+                        enabledSchedules == 0
+                    ) {
+                        appendLine("今天状态平稳")
+                    } else {
+                        appendLine("今天有需要留意的进展")
+                    }
+                    appendLine(
+                        "逾期待办 $overdue · 待审候选 ${brief.pendingCandidateCount} · " +
+                            "自动任务 $enabledSchedules"
+                    )
                     append(
                         if (brief.pendingCandidateCount == 0) {
                             "没有待审候选"
@@ -183,17 +190,23 @@ class HomeActivity : Activity() {
                     val activeRuns = SampleRuntime.activeRunSnapshot().size
                     if (activeRuns > 0) append(" · $activeRuns 个 Agent 正在运行")
                 }
-                statsSummary.text = when (stats.availability.status) {
+                val statsText = when (stats.availability.status) {
                     ProductDataStatus.AVAILABLE ->
-                        "Stats · 前台 ${formatDuration(stats.totalForegroundMillis)} · " +
+                        "前台 ${formatDuration(stats.totalForegroundMillis)} · " +
                             "解锁 ${stats.unlockCount} 次" +
                             if (stats.isRealZero) " · 今日真实零数据" else ""
                     else ->
-                        "Stats · ${stats.availability.status} · ${stats.availability.reason}"
+                        usageStatusText(stats.availability.status)
                 }
+                statsSummary.text = statsText
                 val committed = todos.filter { item -> item.state == TodoState.COMMITTED }
-                todoSummary.text = "Todo · ${committed.size} 个待办 · " +
+                val todoText = "${committed.size} 个待办 · " +
                     "$overdue 个逾期 · ${todos.count { it.state == TodoState.DRAFT }} 个草稿"
+                todoSummary.text = todoText
+                findViewById<Button>(R.id.homeStatsButton).text =
+                    "使用统计\n$statsText"
+                findViewById<Button>(R.id.homeTodoButton).text =
+                    "待办事项\n$todoText"
                 agentSummary.text = buildString {
                     val pendingApprovals = SampleRuntime.approvalBridge().pending().size
                     val pendingCandidates = state.candidates.count { candidate ->
@@ -211,8 +224,15 @@ class HomeActivity : Activity() {
                             LongTaskStatus.PAUSED
                         )
                     }
-                    append("Agent · $pendingCandidates 个候选 · $pendingApprovals 个待审批")
-                    append(" · $activeLongTasks 个 LongTask 可继续")
+                    append(
+                        when {
+                            pendingApprovals > 0 -> "$pendingApprovals 项操作等待你审批"
+                            pendingCandidates > 0 -> "$pendingCandidates 项 Agent 候选等待处理"
+                            activeLongTasks > 0 -> "$activeLongTasks 个长期任务可以继续"
+                            else -> "当前没有需要处理的事项"
+                        }
+                    )
+                    append("\n候选 $pendingCandidates · 审批 $pendingApprovals · 长期任务 $activeLongTasks")
                 }
                 renderQuickTodos(committed.take(3))
                 renderRecentSessions(summaries)
@@ -224,7 +244,7 @@ class HomeActivity : Activity() {
         todoQuickContainer.removeAllViews()
         if (items.isEmpty()) {
             todoQuickContainer.addView(TextView(this).apply {
-                text = "今天没有可快速完成的 Todo。"
+                text = "今天没有可快速完成的待办。"
                 textSize = 12f
                 setTextColor(getColor(R.color.textSecondary))
             })
@@ -234,7 +254,7 @@ class HomeActivity : Activity() {
             todoQuickContainer.addView(
                 Button(this).apply {
                     removeClippedShadow()
-                    text = "完成 · ${item.title}"
+                    text = "完成待办 · ${item.title}"
                     gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     textSize = 12f
                     minWidth = 0
@@ -351,5 +371,14 @@ class HomeActivity : Activity() {
     private fun formatDuration(millis: Long): String {
         val minutes = millis / 60_000
         return if (minutes < 60) "${minutes} 分钟" else "${minutes / 60}小时${minutes % 60}分"
+    }
+
+    private fun usageStatusText(status: ProductDataStatus): String = when (status) {
+        ProductDataStatus.AVAILABLE -> "可用"
+        ProductDataStatus.DISABLED -> "使用统计未开启"
+        ProductDataStatus.PERMISSION_REQUIRED -> "需要授予使用情况访问权限"
+        ProductDataStatus.NOT_DECLARED -> "应用未声明使用统计能力"
+        ProductDataStatus.SERVICE_DISABLED -> "系统使用统计服务不可用"
+        ProductDataStatus.UNAVAILABLE -> "暂时无法读取使用统计"
     }
 }

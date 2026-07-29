@@ -70,9 +70,11 @@ class ProductCenterActivity : Activity() {
     private lateinit var subtitleView: TextView
     private lateinit var navigation: LinearLayout
     private lateinit var content: LinearLayout
+    private lateinit var backButton: Button
+    private lateinit var stopAllRunsButton: Button
     private lateinit var approvalUi: SampleApprovalUi
     private lateinit var preferences: SamplePreferences
-    private var section = Section.STATS
+    private var section = Section.OVERVIEW
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,12 +86,24 @@ class ProductCenterActivity : Activity() {
         subtitleView = findViewById(R.id.productSubtitle)
         navigation = findViewById(R.id.productNavigation)
         content = findViewById(R.id.productContent)
+        backButton = findViewById(R.id.productBackButton)
+        stopAllRunsButton = findViewById(R.id.stopAllRunsButton)
         applySampleInsets(root)
-        findViewById<Button>(R.id.productBackButton).apply {
+        bindSampleNavigation(SampleTab.WORKBENCH)
+        backButton.apply {
             removeClippedShadow()
-            setOnClickListener { finish() }
+            setOnClickListener {
+                if (section == Section.OVERVIEW) {
+                    startActivity(
+                        Intent(this@ProductCenterActivity, SettingsActivity::class.java)
+                    )
+                } else {
+                    section = Section.OVERVIEW
+                    render()
+                }
+            }
         }
-        findViewById<Button>(R.id.stopAllRunsButton).apply {
+        stopAllRunsButton.apply {
             removeClippedShadow()
             setOnClickListener {
                 val stopped = SampleRuntime.stopAllRuns()
@@ -104,6 +118,19 @@ class ProductCenterActivity : Activity() {
         approvalUi = SampleApprovalUi(this, ::render)
         buildNavigation()
         render()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent == null) return
+        setIntent(intent)
+        section = Section.fromId(intent.getStringExtra(EXTRA_SECTION))
+        render()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::content.isInitialized) render()
     }
 
     override fun onStart() {
@@ -123,41 +150,20 @@ class ProductCenterActivity : Activity() {
 
     private fun buildNavigation() {
         navigation.removeAllViews()
-        Section.entries.forEachIndexed { index, item ->
-            val button = Button(this).apply {
-                removeClippedShadow()
-                text = item.label
-                textSize = 12f
-                setTextColor(getColor(R.color.textPrimary))
-                background = getDrawable(
-                    if (item == section) R.drawable.bg_surface_button
-                    else R.drawable.bg_secondary_button
-                )
-                setPadding(dp(14), 0, dp(14), 0)
-                setOnClickListener {
-                    section = item
-                    buildNavigation()
-                    render()
-                }
-            }
-            navigation.addView(
-                button,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    dp(40)
-                ).apply {
-                    if (index > 0) marginStart = dp(7)
-                }
-            )
-        }
+        navigation.visibility = View.GONE
     }
 
     private fun render() {
         titleView.text = section.title
         subtitleView.text = section.subtitle
+        backButton.text = if (section == Section.OVERVIEW) "设置" else "总览"
+        val activeRuns = SampleRuntime.activeRunSnapshot().size
+        stopAllRunsButton.visibility = if (activeRuns > 0) View.VISIBLE else View.GONE
+        stopAllRunsButton.text = "停止正在运行的 Agent（$activeRuns）"
         content.removeAllViews()
-        addInfoCard("正在读取", "数据只从公开 SDK / Android Adapter 接口读取…")
+        addInfoCard("正在读取", "正在汇总本机数据…")
         when (section) {
+            Section.OVERVIEW -> loadOverview()
             Section.STATS -> loadStats()
             Section.TODO -> loadTodo()
             Section.STATE -> loadState()
@@ -168,10 +174,99 @@ class ProductCenterActivity : Activity() {
         }
     }
 
+    private fun loadOverview() {
+        worker.execute {
+            val stats = SampleRuntime.usageStats(this).snapshot()
+            val todos = SampleRuntime.todo(this).list()
+            val schedules = SampleRuntime.schedules(this).list()
+            val checkpoints = SampleRuntime.checkpoints(this).list()
+            val pendingApprovals = SampleRuntime.approvalBridge().pending().size
+            runOnUiThreadSafe {
+                if (section != Section.OVERVIEW) return@runOnUiThreadSafe
+                renderOverview(
+                    stats = stats,
+                    todos = todos,
+                    schedules = schedules,
+                    checkpoints = checkpoints,
+                    pendingApprovals = pendingApprovals
+                )
+            }
+        }
+    }
+
+    private fun renderOverview(
+        stats: UsageStatsSnapshot,
+        todos: List<TodoItem>,
+        schedules: List<ScheduleSpec>,
+        checkpoints: List<LongTaskCheckpoint>,
+        pendingApprovals: Int
+    ) {
+        content.removeAllViews()
+        addSectionLabel("数据源")
+        val statsStatus = when (stats.availability.status) {
+            ProductDataStatus.AVAILABLE ->
+                "今日前台 ${formatDuration(stats.totalForegroundMillis)} · 解锁 ${stats.unlockCount} 次"
+            else -> usageStatusText(stats.availability.status)
+        }
+        addWorkbenchRow(
+            "使用统计",
+            statsStatus,
+            "查看"
+        ) { openSection(Section.STATS) }
+        val committed = todos.count { item -> item.state == TodoState.COMMITTED }
+        val drafts = todos.count { item -> item.state == TodoState.DRAFT }
+        addWorkbenchRow(
+            "待办事项",
+            "$committed 个待办 · $drafts 个草稿",
+            "查看"
+        ) { openSection(Section.TODO) }
+        addWorkbenchRow(
+            "权限与能力",
+            "Phone Use、使用情况、通知和语音权限",
+            "查看"
+        ) { openSection(Section.PERMISSIONS) }
+
+        addSectionLabel("周期任务")
+        val activeLongTasks = checkpoints.count { checkpoint ->
+            checkpoint.status in setOf(
+                LongTaskStatus.READY,
+                LongTaskStatus.RUNNING,
+                LongTaskStatus.PAUSED
+            )
+        }
+        addWorkbenchRow(
+            "自动任务",
+            "${schedules.count { it.enabled }}/${schedules.size} 项已开启 · " +
+                "$activeLongTasks 个长期任务可继续\n" +
+                "Heartbeat、Dream、Proactive、Cron、LongTask",
+            "管理"
+        ) { openSection(Section.AUTOMATION) }
+
+        addSectionLabel("运行与开发")
+        val activeRuns = SampleRuntime.activeRunSnapshot().size
+        addWorkbenchRow(
+            "运行记录",
+            "$activeRuns 个运行中 · $pendingApprovals 项待审批",
+            "查看"
+        ) { openSection(Section.DEBUG) }
+        addWorkbenchRow(
+            "本地数据",
+            "按域导出、保留和删除；凭据不进入导出",
+            "管理"
+        ) { openSection(Section.DATA) }
+    }
+
+    private fun openSection(target: Section) {
+        section = target
+        render()
+    }
+
     private fun loadStats() {
         worker.execute {
             val snapshot = SampleRuntime.usageStats(this).snapshot()
-            runOnUiThreadSafe { renderStats(snapshot) }
+            runOnUiThreadSafe {
+                if (section == Section.STATS) renderStats(snapshot)
+            }
         }
     }
 
@@ -180,7 +275,7 @@ class ProductCenterActivity : Activity() {
         val availability = when (snapshot.availability.status) {
             ProductDataStatus.AVAILABLE ->
                 if (snapshot.isRealZero) "可用 · 今日真实零数据" else "可用"
-            else -> "${snapshot.availability.status} · ${snapshot.availability.reason}"
+            else -> usageStatusText(snapshot.availability.status)
         }
         addInfoCard(
             "今日 Stats",
@@ -224,7 +319,9 @@ class ProductCenterActivity : Activity() {
     private fun loadTodo() {
         worker.execute {
             val items = SampleRuntime.todo(this).list(includeArchived = true)
-            runOnUiThreadSafe { renderTodo(items) }
+            runOnUiThreadSafe {
+                if (section == Section.TODO) renderTodo(items)
+            }
         }
     }
 
@@ -362,7 +459,9 @@ class ProductCenterActivity : Activity() {
     private fun loadState() {
         worker.execute {
             val snapshot = SampleRuntime.state(this).snapshot()
-            runOnUiThreadSafe { renderState(snapshot) }
+            runOnUiThreadSafe {
+                if (section == Section.STATE) renderState(snapshot)
+            }
         }
     }
 
@@ -642,7 +741,9 @@ class ProductCenterActivity : Activity() {
             val checkpoints = SampleRuntime.checkpoints(this).list()
             val receipts = SampleRuntime.occurrenceSnapshot()
             runOnUiThreadSafe {
-                renderAutomation(schedules, checkpoints, receipts)
+                if (section == Section.AUTOMATION) {
+                    renderAutomation(schedules, checkpoints, receipts)
+                }
             }
         }
     }
@@ -1012,7 +1113,9 @@ class ProductCenterActivity : Activity() {
     private fun loadPermissions() {
         worker.execute {
             val snapshots = SampleRuntime.permissions(this).snapshots()
-            runOnUiThreadSafe { renderPermissions(snapshots) }
+            runOnUiThreadSafe {
+                if (section == Section.PERMISSIONS) renderPermissions(snapshots)
+            }
         }
     }
 
@@ -1127,7 +1230,9 @@ class ProductCenterActivity : Activity() {
                 credentialAvailable = providerCredentialAvailable()
             )
             runOnUiThreadSafe {
-                renderDebug(traces, approvals, receipts, selfCheck)
+                if (section == Section.DEBUG) {
+                    renderDebug(traces, approvals, receipts, selfCheck)
+                }
             }
         }
     }
@@ -1218,7 +1323,9 @@ class ProductCenterActivity : Activity() {
                 feedback = SampleRuntime.signals(this).query().size +
                     SampleRuntime.outcomes(this).query().size
             )
-            runOnUiThreadSafe { renderData(inventory) }
+            runOnUiThreadSafe {
+                if (section == Section.DATA) renderData(inventory)
+            }
         }
     }
 
@@ -1485,7 +1592,7 @@ class ProductCenterActivity : Activity() {
     ) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = getDrawable(R.drawable.bg_surface_soft)
+            background = getDrawable(R.drawable.bg_surface_card)
             setPadding(dp(16), dp(14), dp(16), dp(14))
             clipChildren = false
             clipToPadding = false
@@ -1549,6 +1656,62 @@ class ProductCenterActivity : Activity() {
             setTextColor(getColor(R.color.textPrimary))
             setPadding(dp(2), dp(6), dp(2), dp(8))
         })
+    }
+
+    private fun addWorkbenchRow(
+        title: String,
+        body: String,
+        actionLabel: String,
+        action: () -> Unit
+    ) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = getDrawable(R.drawable.bg_settings_row)
+            setPadding(dp(16), dp(13), dp(12), dp(13))
+        }
+        val copy = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        copy.addView(TextView(this).apply {
+            text = title
+            textSize = 15f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(getColor(R.color.textPrimary))
+        })
+        copy.addView(TextView(this).apply {
+            text = body
+            textSize = 12f
+            setTextColor(getColor(R.color.textSecondary))
+            setLineSpacing(0f, 1.08f)
+            setPadding(0, dp(4), 0, 0)
+        })
+        card.addView(
+            copy,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        )
+        card.addView(
+            Button(this).apply {
+                removeClippedShadow()
+                text = actionLabel
+                textSize = 11.5f
+                minWidth = 0
+                background = getDrawable(R.drawable.bg_secondary_button)
+                setTextColor(getColor(R.color.textPrimary))
+                setPadding(dp(12), 0, dp(12), 0)
+                setOnClickListener { action() }
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply {
+                marginStart = dp(10)
+            }
+        )
+        content.addView(
+            card,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8) }
+        )
     }
 
     private fun cadence(target: ScheduleTargetType, now: Long): ScheduleCadence =
@@ -1758,6 +1921,15 @@ class ProductCenterActivity : Activity() {
         return if (minutes < 60) "${minutes} 分钟" else "${minutes / 60}小时${minutes % 60}分"
     }
 
+    private fun usageStatusText(status: ProductDataStatus): String = when (status) {
+        ProductDataStatus.AVAILABLE -> "可用"
+        ProductDataStatus.DISABLED -> "使用统计未开启"
+        ProductDataStatus.PERMISSION_REQUIRED -> "需要授予使用情况访问权限"
+        ProductDataStatus.NOT_DECLARED -> "应用未声明使用统计能力"
+        ProductDataStatus.SERVICE_DISABLED -> "系统使用统计服务不可用"
+        ProductDataStatus.UNAVAILABLE -> "暂时无法读取使用统计"
+    }
+
     private fun runOnUiThreadSafe(block: () -> Unit) {
         runOnUiThread {
             if (!isFinishing && !isDestroyed) block()
@@ -1785,16 +1957,23 @@ class ProductCenterActivity : Activity() {
         val title: String,
         val subtitle: String
     ) {
-        STATS("stats", "Stats", "Stats", "使用概览、timeline 边界与数据披露"),
-        TODO("todo", "Todo", "Todo", "草稿、审批、effect 与快速完成"),
-        STATE("state", "State", "Obsidian / Local State", "记忆、技能、人格候选与回滚资产"),
-        AUTOMATION("automation", "自动化", "Automation", "Heartbeat、Dream、Proactive、Cron、LongTask"),
-        PERMISSIONS("permissions", "权限", "Permissions", "能力状态、用途、数据披露与系统设置"),
-        DEBUG("debug", "调试", "Debug & Replay", "Run、context、tool、approval、checkpoint 与脱敏导出"),
-        DATA("data", "数据", "Data & Retention", "按域导出、保留策略、删除与凭据边界");
+        OVERVIEW("workbench", "总览", "工作台", "数据源、周期任务与运行记录"),
+        STATS("stats", "统计", "使用统计", "聚合概览、明细边界与数据披露"),
+        TODO("todo", "待办", "待办事项", "草稿、审批、变更记录与快速完成"),
+        STATE("state", "状态", "候选与版本", "记忆、技能、人格候选与回滚资产"),
+        AUTOMATION(
+            "automation",
+            "自动任务",
+            "自动任务",
+            "Heartbeat、Dream、Proactive、Cron、LongTask"
+        ),
+        PERMISSIONS("permissions", "权限", "权限与能力", "能力状态、用途、数据披露与系统设置"),
+        DEBUG("debug", "调试", "运行与回放", "运行、上下文、工具、审批与检查点"),
+        DATA("data", "数据", "本地数据", "按域导出、保留、删除与凭据边界");
 
         companion object {
-            fun fromId(id: String?): Section = entries.firstOrNull { it.id == id } ?: STATS
+            fun fromId(id: String?): Section =
+                entries.firstOrNull { it.id == id } ?: OVERVIEW
         }
     }
 

@@ -96,7 +96,6 @@ import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
-import java.util.concurrent.atomic.AtomicBoolean
 
 /** Productized Android sample for the bounded Agent Harness runtime. */
 class MainActivity : Activity() {
@@ -122,6 +121,7 @@ class MainActivity : Activity() {
     private lateinit var newChatButton: Button
     private lateinit var settingsButton: Button
     private lateinit var providerSelector: Button
+    private lateinit var phoneUseCard: View
     private lateinit var phoneUseSettingsButton: Button
     private lateinit var phoneUseDescription: TextView
     private lateinit var transcriptScroll: ScrollView
@@ -262,6 +262,7 @@ class MainActivity : Activity() {
         newChatButton = findViewById(R.id.newChatButton)
         settingsButton = findViewById(R.id.settingsButton)
         providerSelector = findViewById(R.id.providerSelector)
+        phoneUseCard = findViewById(R.id.phoneUseCard)
         phoneUseSettingsButton = findViewById(R.id.phoneUseSettingsButton)
         phoneUseDescription = findViewById(R.id.phoneUseDescription)
         transcriptScroll = findViewById(R.id.transcriptScroll)
@@ -282,6 +283,14 @@ class MainActivity : Activity() {
         voiceButton.removeClippedShadow()
         toolDetailsButton.removeClippedShadow()
         speakButton.removeClippedShadow()
+        sessionButton.removeClippedShadow()
+        newChatButton.removeClippedShadow()
+        settingsButton.removeClippedShadow()
+        providerSelector.removeClippedShadow()
+        phoneUseSettingsButton.removeClippedShadow()
+        sendButton.removeClippedShadow()
+        emptySetupButton.removeClippedShadow()
+        bindSampleNavigation(SampleTab.CHAT)
         updateToolDetailsButton()
     }
 
@@ -734,7 +743,10 @@ class MainActivity : Activity() {
             } else {
                 val spinner = Spinner(this, Spinner.MODE_DROPDOWN).apply {
                     val choices = kind.models.map { preset ->
-                        "${preset.id} — ${preset.label}"
+                        buildString {
+                            append("${preset.id} — ${preset.label}")
+                            if (!preset.supportsImageInput) append(" · 仅文本")
+                        }
                     }
                     adapter = ArrayAdapter(
                         this@MainActivity,
@@ -1169,6 +1181,7 @@ class MainActivity : Activity() {
     private fun updatePhoneUseUi() {
         val connected = HarnessAccessibilityService.connectedInstance() != null
         val enabled = AccessibilityAvailability.isServiceEnabled(this)
+        phoneUseCard.visibility = if (connected) View.GONE else View.VISIBLE
         phoneUseDescription.text = when {
             connected ->
                 "已授权。模型只在任务确实需要操作手机时进入；高风险动作仍需你确认。"
@@ -1298,6 +1311,15 @@ class MainActivity : Activity() {
             appendLine(LineKind.ERROR, "${profile.kind.title} 的当前适配器未启用附件输入。")
             return
         }
+        if (turnAttachment?.mediaType?.startsWith("image/") == true &&
+            !profile.kind.supportsImageInput(profile.model)
+        ) {
+            appendLine(
+                LineKind.ERROR,
+                "${profile.kind.modelLabel(profile.model)} 当前仅支持文本，不能发送图片附件。"
+            )
+            return
+        }
         val readiness = providerReadiness(profile.kind)
         if (!readiness.ready) {
             appendLine(LineKind.ERROR, readiness.detail)
@@ -1319,9 +1341,9 @@ class MainActivity : Activity() {
         inputField.setText("")
         setBusy(true)
         val turnId = ++turnSequence
-        val phoneUseActivated = AtomicBoolean(false)
+        val runUiGate = SampleRunUiGate()
         val listener = AgentRunListener { event ->
-            onRunEvent(turnId, phoneUseActivated, event)
+            onRunEvent(turnId, runUiGate, event)
         }
         val request = buildRunRequest(
             providerKind = profile.kind,
@@ -1338,14 +1360,14 @@ class MainActivity : Activity() {
             return
         }
         SampleRuntime.registerRun(handle)
-        activeTurn = ActiveTurn(turnId, handle, phoneUseActivated)
+        activeTurn = ActiveTurn(turnId, handle, runUiGate)
         selectedAttachment = null
         renderAttachment()
     }
 
     private fun onRunEvent(
         turnId: Long,
-        phoneUseActivated: AtomicBoolean,
+        runUiGate: SampleRunUiGate,
         event: AgentRunEvent
     ) {
         when (event) {
@@ -1353,27 +1375,45 @@ class MainActivity : Activity() {
                 val trace = event.event
                 when (trace) {
                     is AgentHarnessTraceEvent.ToolLoopActivated -> {
-                        phoneUseActivated.set(true)
-                        postTurnUi(turnId) {
-                            appendLine(LineKind.INFO, getString(R.string.msg_phone_use_started))
-                            statusView.text = getString(R.string.status_phone_use)
-                            statusDot.setTextColor(getColor(R.color.warning))
-                        }
+                        runUiGate.activatePhoneUse()
                     }
                     is AgentHarnessTraceEvent.ToolExecuted -> {
-                        postTurnUi(turnId) {
-                            appendLine(LineKind.TOOL, renderToolTrace(trace))
+                        val renderedTrace = renderToolTrace(trace)
+                        if (runUiGate.isPhoneUseActive()) {
+                            runUiGate.deferToolTrace(renderedTrace)
+                        } else {
+                            postToUi {
+                                val turn = activeTurn?.takeIf { candidate ->
+                                    candidate.id == turnId
+                                }
+                                if (turn != null) {
+                                    if (runUiGate.allowsLiveMutation()) {
+                                        appendLine(LineKind.TOOL, renderedTrace)
+                                    } else {
+                                        runUiGate.deferToolTrace(renderedTrace)
+                                    }
+                                }
+                            }
                         }
                     }
                     is AgentHarnessTraceEvent.ProviderDisplay -> {
                         when (val display = trace.event) {
-                            is AgentProviderDisplayEvent.TextDelta -> postTurnUi(turnId) {
+                            is AgentProviderDisplayEvent.TextDelta -> postTurnUi(
+                                turnId,
+                                suppressDuringPhoneUse = true
+                            ) {
                                 appendStreamingDelta(turnId, display.text)
                             }
-                            is AgentProviderDisplayEvent.ActionNarration -> postTurnUi(turnId) {
+                            is AgentProviderDisplayEvent.ActionNarration -> postTurnUi(
+                                turnId,
+                                suppressDuringPhoneUse = true
+                            ) {
                                 statusView.text = display.text
                             }
-                            is AgentProviderDisplayEvent.ToolStatus -> postTurnUi(turnId) {
+                            is AgentProviderDisplayEvent.ToolStatus -> postTurnUi(
+                                turnId,
+                                suppressDuringPhoneUse = true
+                            ) {
                                 statusView.text = "${display.toolName} · ${display.status}"
                             }
                             is AgentProviderDisplayEvent.Usage -> Unit
@@ -1393,6 +1433,12 @@ class MainActivity : Activity() {
         val turn = activeTurn?.takeIf { candidate -> candidate.id == turnId } ?: return
         activeTurn = null
         SampleRuntime.unregisterRun(turn.handle.runId)
+        if (turn.runUiGate.isPhoneUseActive()) {
+            appendLine(LineKind.INFO, getString(R.string.msg_phone_use_started))
+        }
+        turn.runUiGate.drainDeferredToolTraces().forEach { trace ->
+            appendLine(LineKind.TOOL, trace)
+        }
         when (outcome) {
             is AgentRunOutcome.Success -> {
                 lastAssistantText = outcome.result.output
@@ -1409,7 +1455,7 @@ class MainActivity : Activity() {
             }
             is AgentRunOutcome.Failure -> appendLine(
                 LineKind.ERROR,
-                renderRunFailure(outcome.error, turn.phoneUseActivated.get())
+                renderRunFailure(outcome.error, turn.runUiGate.isPhoneUseActive())
             )
             is AgentRunOutcome.Cancelled -> Unit
             is AgentRunOutcome.Expired -> appendLine(LineKind.ERROR, "本轮运行超时，已安全停止。")
@@ -1424,6 +1470,9 @@ class MainActivity : Activity() {
         SampleRuntime.unregisterRun(turn.handle.runId)
         dialogGate.cancelPending()
         SampleRuntime.approvalBridge().cancelAll()
+        turn.runUiGate.drainDeferredToolTraces().forEach { trace ->
+            appendLine(LineKind.TOOL, trace)
+        }
         turn.streamingBubble?.let { bubble ->
             bubble.text = getString(
                 R.string.transcript_line,
@@ -1855,9 +1904,18 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun postTurnUi(turnId: Long, action: () -> Unit) {
+    private fun postTurnUi(
+        turnId: Long,
+        suppressDuringPhoneUse: Boolean = false,
+        action: () -> Unit
+    ) {
         postToUi {
-            if (activeTurn?.id == turnId) action()
+            val turn = activeTurn?.takeIf { candidate -> candidate.id == turnId }
+            if (turn != null &&
+                (!suppressDuringPhoneUse || turn.runUiGate.allowsLiveMutation())
+            ) {
+                action()
+            }
         }
     }
 
@@ -1978,7 +2036,7 @@ class MainActivity : Activity() {
     private data class ActiveTurn(
         val id: Long,
         val handle: AgentRunHandle,
-        val phoneUseActivated: AtomicBoolean,
+        val runUiGate: SampleRunUiGate,
         val streamingText: StringBuilder = StringBuilder(),
         var streamingBubble: TextView? = null
     )

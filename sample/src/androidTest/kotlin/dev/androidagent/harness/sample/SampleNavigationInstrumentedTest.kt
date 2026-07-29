@@ -17,35 +17,32 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SampleNavigationInstrumentedTest {
     @Test
-    fun homeExposesEveryDocumentedProductSurfaceWithoutClippedQuickActions() {
+    fun homeUsesFourStableDestinationsWithoutClippedPrimaryActions() {
         ActivityScenario.launch(HomeActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val quickActions = listOf(
-                    R.id.homeHouseButton,
+                val primaryActions = listOf(
                     R.id.homeModelButton,
                     R.id.homeStatsButton,
                     R.id.homeTodoButton,
-                    R.id.homeStateButton,
-                    R.id.homeAutomationButton,
-                    R.id.homePermissionsButton,
-                    R.id.homeDebugButton,
-                    R.id.homeDataButton
+                    R.id.continueChatButton
                 ).map { id -> activity.findViewById<View>(id) }
-                assertTrue(quickActions.all { view -> view.visibility == View.VISIBLE })
-                quickActions.forEach { view ->
+                assertTrue(primaryActions.all { view -> view.visibility == View.VISIBLE })
+                primaryActions.forEach { view ->
                     assertEquals(0f, view.elevation)
                     assertEquals(0f, view.translationZ)
                     assertNull(view.stateListAnimator)
                     assertNotNull(view.background)
                 }
                 listOf(
-                    R.id.homeStatsSummary,
-                    R.id.homeTodoSummary,
-                    R.id.homeTodoQuickContainer,
-                    R.id.homeAgentSummary
+                    R.id.navHome,
+                    R.id.navChat,
+                    R.id.navAgent,
+                    R.id.navWorkbench
                 ).forEach { id ->
                     assertEquals(View.VISIBLE, activity.findViewById<View>(id).visibility)
                 }
+                assertTrue(activity.findViewById<View>(R.id.navHome).isSelected)
+                assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.homeAgentSummary).visibility)
             }
         }
     }
@@ -64,14 +61,12 @@ class SampleNavigationInstrumentedTest {
                         activity.findViewById<android.widget.TextView>(R.id.productTitle).text
                             .toString()
                     )
+                    assertEquals(0, activity.findViewById<ViewGroup>(R.id.productNavigation).childCount)
                     assertEquals(
-                        ProductCenterActivity.Section.entries.size,
-                        activity.findViewById<ViewGroup>(R.id.productNavigation).childCount
-                    )
-                    assertEquals(
-                        View.VISIBLE,
+                        if (SampleRuntime.activeRunSnapshot().isEmpty()) View.GONE else View.VISIBLE,
                         activity.findViewById<View>(R.id.stopAllRunsButton).visibility
                     )
+                    assertTrue(activity.findViewById<View>(R.id.navWorkbench).isSelected)
                 }
             }
         }
@@ -91,6 +86,9 @@ class SampleNavigationInstrumentedTest {
                     assertEquals(View.VISIBLE, activity.findViewById<View>(id).visibility)
                 }
                 assertNotNull(activity.findViewById<View>(R.id.attachmentPreview))
+                assertEquals(View.GONE, activity.findViewById<View>(R.id.homeButton).visibility)
+                assertEquals(View.GONE, activity.findViewById<View>(R.id.houseButton).visibility)
+                assertTrue(activity.findViewById<View>(R.id.navChat).isSelected)
             }
         }
     }

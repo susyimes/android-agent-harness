@@ -167,7 +167,7 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | 编排：Provider/Tool | 完成 | run-scoped Provider、capability、8/80 步、工具/时间/重复失败/input/output token 预算、Tool Envelope | 自定义 Provider 不上报 usage 时使用保守字符估算 |
 | 上下文引擎：CCP V2 | 局部 | `ContextNeedSpec`、命名 source 缺失检测、候选池、trust/privacy/risk/freshness、冲突、确定性压缩与预算审计、`EvidencePack`、真实 `RouteGate` 终止/继续、renderer | Direct Provider 的文本 policy marker 隔离仍是已知未修安全项；无内置向量数据库 |
 | 记忆/人格：House/State | 完成 | House 兼容层、State Vault、events/evidence/effects/brief/psyche、Android file adapter、迁移、retention | “Obsidian”是逻辑产品视图，不兼容外部 vault 格式 |
-| 记忆/人格：Remote AgentBrief | 基础完成 | 每轮规则基线、隔离 Provider 连接、隐私/字符预算、4 秒 sample 超时、迟到结果丢弃、State Vault provenance、CCP 当前 Brief 注入 | 当前远端输出是纯文本摘要；尚未实现 mirror-android 的完整 typed brief/local-model background refresh |
+| 记忆/人格：Remote AgentBrief | 基础完成 | 每轮规则基线、隔离 Provider 连接、隐私/字符预算、12 秒 sample 超时、迟到结果丢弃、State Vault provenance、CCP 当前 Brief 注入 | 当前远端输出是纯文本摘要；尚未实现 mirror-android 的完整 typed brief/local-model background refresh |
 | 记忆/人格：Memory | 完成 | Agent 默认只调用 `agent_memory_propose`；pending candidate、dedupe/conflict/eval/approval/promotion/rollback | 旧 direct append 仅在显式兼容 flag 下注册 |
 | 记忆/人格：Skill | 完成 | Agent 写 disabled House draft并同步 Skill Inbox；eval、审批、revision、启用和回滚 | 不执行任意 skill 脚本 |
 | 记忆/人格：Persona | 完成 | `agent_persona_propose`、Psyche、Persona Inbox、hash/eval/approval/promotion/rollback | Agent 提议不能直接改变主动性或权限 |

@@ -43,13 +43,25 @@ class AgentHouseActivity : Activity() {
         houseName = findViewById(R.id.houseName)
         houseMeta = findViewById(R.id.houseMeta)
         entries = findViewById(R.id.houseEntries)
-        findViewById<Button>(R.id.houseBackButton).setOnClickListener { finish() }
-        findViewById<Button>(R.id.renameHouseButton).setOnClickListener { showRenameDialog() }
-        findViewById<Button>(R.id.houseReviewButton).setOnClickListener {
+        bindSampleNavigation(SampleTab.AGENT)
+        findViewById<Button>(R.id.houseBackButton).apply {
+            removeClippedShadow()
+            setOnClickListener {
+                startActivity(Intent(this@AgentHouseActivity, SettingsActivity::class.java))
+            }
+        }
+        findViewById<Button>(R.id.renameHouseButton).apply {
+            removeClippedShadow()
+            setOnClickListener { showRenameDialog() }
+        }
+        findViewById<Button>(R.id.houseReviewButton).apply {
+            removeClippedShadow()
+            setOnClickListener {
             startActivity(
-                Intent(this, ProductCenterActivity::class.java)
+                Intent(this@AgentHouseActivity, ProductCenterActivity::class.java)
                     .putExtra(ProductCenterActivity.EXTRA_SECTION, "state")
             )
+            }
         }
     }
 
@@ -77,14 +89,14 @@ class AgentHouseActivity : Activity() {
             "${snapshot.dailyMemories.size} 篇每日记忆"
         entries.removeAllViews()
 
-        addSection("Core Files", "身份、边界与长期上下文")
+        addSection("核心设定", "身份、人格、协作方式与长期上下文")
         snapshot.coreFiles.forEach(::addCoreFile)
 
-        addSection("Skills", "Agent 草案先进入候选评估；批准晋升后才能作为已启用资产")
+        addSection("技能", "Agent 提出的技能先进入候选评估，批准后才会启用")
         if (snapshot.skills.isEmpty()) addEmpty("还没有技能草案。Agent 会在确有复用价值时创建。")
         snapshot.skills.forEach(::addSkill)
 
-        addSection("Legacy Journal", "兼容旧版每日记忆；新记忆只进入 State 候选审核")
+        addSection("记忆", "保留旧版每日记忆；新记忆统一进入候选审核")
         if (snapshot.dailyMemories.isEmpty()) addEmpty("还没有每日记忆。Agent 会按需沉淀长期有用的信息。")
         snapshot.dailyMemories.forEach(::addMemory)
     }
@@ -300,7 +312,7 @@ class AgentHouseActivity : Activity() {
             setPadding(dp(16), dp(10), dp(16), dp(10))
         }
         AlertDialog.Builder(this)
-            .setTitle("给房子改名")
+            .setTitle("修改 Agent 名称")
             .setView(input)
             .setPositiveButton("保存") { _, _ ->
                 onDisk(

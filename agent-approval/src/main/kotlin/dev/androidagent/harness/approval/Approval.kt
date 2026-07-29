@@ -261,7 +261,13 @@ class AgentApprovalCoordinator(
                     decidedAtEpochMillis = now
                 )
             )
-            return AgentEffectAuthorization.Allowed(token = null)
+            return AgentEffectAuthorization.Allowed(
+                token = issueToken(
+                    intent = intent,
+                    approvalId = idGenerator.nextId("policy-grant"),
+                    expiresAtEpochMillis = now + requestTtlMillis
+                )
+            )
         }
         if (requirement == AgentApprovalRequirement.FORBIDDEN) {
             val rejected = AgentEffectAuthorization.Rejected(
@@ -324,14 +330,9 @@ class AgentApprovalCoordinator(
                 message = effectiveDecision.rejectionMessage()
             )
         }
-        val token = AgentApprovalToken(
+        val token = issueToken(
+            intent = intent,
             approvalId = request.id,
-            runId = intent.runId,
-            sessionId = intent.sessionId,
-            toolCallId = intent.toolCallId,
-            argumentHash = intent.argumentHash,
-            intentHash = AgentEffectHasher.hashIntent(intent),
-            grantedScope = intent.capability.sideEffect.name,
             expiresAtEpochMillis = request.expiresAtEpochMillis
         )
         return if (token.isValidFor(intent, decidedAt)) {
@@ -343,6 +344,21 @@ class AgentApprovalCoordinator(
             )
         }
     }
+
+    private fun issueToken(
+        intent: AgentEffectIntent,
+        approvalId: String,
+        expiresAtEpochMillis: Long
+    ) = AgentApprovalToken(
+        approvalId = approvalId,
+        runId = intent.runId,
+        sessionId = intent.sessionId,
+        toolCallId = intent.toolCallId,
+        argumentHash = intent.argumentHash,
+        intentHash = AgentEffectHasher.hashIntent(intent),
+        grantedScope = intent.capability.sideEffect.name,
+        expiresAtEpochMillis = expiresAtEpochMillis
+    )
 
     /**
      * Returns an equivalent coordinator that also reports request lifecycle.

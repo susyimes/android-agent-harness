@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -33,26 +34,32 @@ class SettingsActivity : Activity() {
         accessibilityStatus = findViewById(R.id.settingsAccessibilityStatus)
         dataStatus = findViewById(R.id.settingsDataStatus)
 
-        findViewById<Button>(R.id.settingsBackButton).setOnClickListener { finish() }
-        findViewById<Button>(R.id.configureProviderButton).setOnClickListener {
+        findViewById<Button>(R.id.settingsBackButton).apply {
+            removeClippedShadow()
+            setOnClickListener { finish() }
+        }
+        findViewById<View>(R.id.configureProviderButton).setOnClickListener {
             startActivity(
                 Intent(this, MainActivity::class.java)
                     .putExtra(MainActivity.EXTRA_OPEN_PROVIDER_SETTINGS, true)
             )
         }
-        findViewById<Button>(R.id.openAccessibilityButton).setOnClickListener {
+        findViewById<View>(R.id.openAccessibilityButton).setOnClickListener {
             startActivity(AccessibilityAvailability.settingsIntent())
         }
-        findViewById<Button>(R.id.configureApprovalModeButton).setOnClickListener {
+        findViewById<View>(R.id.configureApprovalModeButton).setOnClickListener {
             showApprovalModeDialog()
         }
-        findViewById<Button>(R.id.settingsHouseButton).setOnClickListener {
+        findViewById<View>(R.id.settingsHouseButton).setOnClickListener {
             startActivity(Intent(this, AgentHouseActivity::class.java))
         }
-        findViewById<Button>(R.id.settingsControlCenterButton).setOnClickListener {
-            startActivity(Intent(this, ProductCenterActivity::class.java))
+        findViewById<View>(R.id.settingsControlCenterButton).setOnClickListener {
+            startActivity(
+                Intent(this, ProductCenterActivity::class.java)
+                    .putExtra(ProductCenterActivity.EXTRA_SECTION, "workbench")
+            )
         }
-        findViewById<Button>(R.id.clearSessionsButton).setOnClickListener {
+        findViewById<View>(R.id.clearSessionsButton).setOnClickListener {
             confirmClearSessions()
         }
     }

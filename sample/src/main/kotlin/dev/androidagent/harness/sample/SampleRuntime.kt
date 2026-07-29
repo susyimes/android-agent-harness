@@ -153,7 +153,7 @@ object SampleRuntime {
         }
     }
 
-    private const val REMOTE_AGENT_BRIEF_TIMEOUT_MILLIS = 4_000L
+    private const val REMOTE_AGENT_BRIEF_TIMEOUT_MILLIS = 12_000L
 
     fun todo(context: Context): FileTodoRepository {
         return todo ?: synchronized(this) {

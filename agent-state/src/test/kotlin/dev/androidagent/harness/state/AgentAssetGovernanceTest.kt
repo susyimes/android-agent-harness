@@ -6,6 +6,8 @@ import dev.androidagent.harness.SequentialAgentIdGenerator
 import dev.androidagent.harness.approval.AgentApprovalCoordinator
 import dev.androidagent.harness.approval.AgentApprovalDecision
 import dev.androidagent.harness.approval.AgentApprovalGate
+import dev.androidagent.harness.approval.AgentApprovalPolicy
+import dev.androidagent.harness.approval.AgentApprovalRequirement
 import dev.androidagent.harness.context.ContextEngineRequest
 import dev.androidagent.harness.context.ContextPrivacy
 import dev.androidagent.harness.context.ContextTaskType
@@ -64,6 +66,38 @@ class AgentAssetGovernanceTest {
         assertEquals(AgentStateEffectStatus.DENIED, result.effect.status)
         assertTrue(vault.read { revisions().isEmpty() })
         assertTrue(approvedContext(vault).isEmpty())
+    }
+
+    @Test
+    fun explicitNoApprovalPolicyPromotesWithoutOpeningTheGate() {
+        var prompted = false
+        val vault = InMemoryAgentStateVault(clock)
+        val governance = AgentAssetGovernance(
+            vault = vault,
+            approvals = AgentApprovalCoordinator(
+                gate = AgentApprovalGate {
+                    prompted = true
+                    AgentApprovalDecision.DENIED
+                },
+                policy = AgentApprovalPolicy { AgentApprovalRequirement.NOT_REQUIRED },
+                clock = clock,
+                idGenerator = ids
+            ),
+            evaluator = RuleBasedAgentCandidateEvaluator { clock.nowEpochMillis() },
+            clock = clock,
+            idGenerator = ids
+        )
+        val receipt = governance.memorySink.propose(memory("No prompt mode is explicit host policy."))
+        governance.validateAndEvaluate(receipt.candidateId)
+
+        val promotion = governance.promote(receipt.candidateId)
+
+        assertTrue(promotion.promoted)
+        assertFalse(prompted)
+        assertEquals(
+            "No prompt mode is explicit host policy.",
+            requireNotNull(promotion.revision).content
+        )
     }
 
     @Test

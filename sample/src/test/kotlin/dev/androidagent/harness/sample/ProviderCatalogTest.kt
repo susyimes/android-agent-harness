@@ -47,6 +47,10 @@ class ProviderCatalogTest {
             ),
             ProviderKind.ARK_PLAN.models.map { preset -> preset.id }.toSet()
         )
+        assertTrue(!ProviderKind.ARK_PLAN.supportsImageInput("glm-5.2"))
+        assertTrue(!ProviderKind.ARK_PLAN.supportsImageInput("deepseek-v4-flash"))
+        assertTrue(ProviderKind.ARK_PLAN.supportsImageInput("doubao-seed-2.0-pro"))
+        assertTrue(ProviderKind.KIMI_PLAN.supportsImageInput("k3"))
     }
 
     @Test

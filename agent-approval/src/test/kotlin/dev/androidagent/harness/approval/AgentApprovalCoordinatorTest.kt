@@ -190,6 +190,46 @@ class AgentApprovalCoordinatorTest {
         assertNotNull(result.envelope)
     }
 
+    @Test
+    fun policyAuthorizedEffectGetsExactConsumableTokenWithoutPrompt() {
+        var prompted = false
+        val journal = InMemoryAgentApprovalJournal()
+        val coordinator = AgentApprovalCoordinator(
+            gate = AgentApprovalGate {
+                prompted = true
+                AgentApprovalDecision.DENIED
+            },
+            policy = AgentApprovalPolicy { AgentApprovalRequirement.NOT_REQUIRED },
+            journal = journal,
+            clock = FixedAgentClock(100L),
+            idGenerator = SequentialAgentIdGenerator("policy")
+        )
+        val intent = AgentEffectIntent(
+            runId = "run-1",
+            sessionId = "session-1",
+            toolCallId = "call-1",
+            toolName = "write_note",
+            capability = recordingTool().spec.capability,
+            targetRef = "note=hello",
+            argumentHash = AgentEffectHasher.hash(
+                "write_note",
+                mapOf("note" to "hello")
+            ),
+            summary = "Write note without an approval prompt."
+        )
+
+        val authorization = coordinator.authorize(intent) as AgentEffectAuthorization.Allowed
+        val token = requireNotNull(authorization.token)
+
+        assertFalse(prompted)
+        assertTrue(coordinator.consume(token, intent))
+        assertFalse(coordinator.consume(token, intent))
+        val record = journal.snapshot().single()
+        assertEquals(AgentApprovalRequirement.NOT_REQUIRED, record.requirement)
+        assertEquals(null, record.request)
+        assertEquals(null, record.decision)
+    }
+
     private fun recordingTool(): AgentTool {
         return object : AgentTool {
             override val spec = AgentToolSpec(

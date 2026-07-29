@@ -6,6 +6,8 @@ import dev.androidagent.harness.SequentialAgentIdGenerator
 import dev.androidagent.harness.approval.AgentApprovalCoordinator
 import dev.androidagent.harness.approval.AgentApprovalDecision
 import dev.androidagent.harness.approval.AgentApprovalGate
+import dev.androidagent.harness.approval.AgentApprovalPolicy
+import dev.androidagent.harness.approval.AgentApprovalRequirement
 import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
@@ -197,6 +199,33 @@ class SchedulingTest {
             approvals(AgentApprovalDecision.APPROVED)
         ).apply(spec(), "run", "session")
         assertTrue(approved.accepted)
+        assertEquals(1, backend.scheduled.size)
+    }
+
+    @Test
+    fun explicitNoApprovalPolicyAppliesScheduleWithoutOpeningTheGate() {
+        var prompted = false
+        val repository = InMemoryScheduleRepository()
+        val backend = RecordingBackend()
+        val coordinator = AgentApprovalCoordinator(
+            gate = AgentApprovalGate {
+                prompted = true
+                AgentApprovalDecision.DENIED
+            },
+            policy = AgentApprovalPolicy { AgentApprovalRequirement.NOT_REQUIRED },
+            clock = FixedAgentClock(100L),
+            idGenerator = SequentialAgentIdGenerator("policy")
+        )
+
+        val receipt = GovernedScheduleService(
+            repository,
+            backend,
+            coordinator
+        ).apply(spec(), "run", "session")
+
+        assertTrue(receipt.accepted)
+        assertFalse(prompted)
+        assertEquals(1, repository.list().size)
         assertEquals(1, backend.scheduled.size)
     }
 

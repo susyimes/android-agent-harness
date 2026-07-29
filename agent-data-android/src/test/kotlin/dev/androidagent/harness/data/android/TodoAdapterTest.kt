@@ -7,6 +7,8 @@ import dev.androidagent.harness.SequentialAgentIdGenerator
 import dev.androidagent.harness.approval.AgentApprovalCoordinator
 import dev.androidagent.harness.approval.AgentApprovalDecision
 import dev.androidagent.harness.approval.AgentApprovalGate
+import dev.androidagent.harness.approval.AgentApprovalPolicy
+import dev.androidagent.harness.approval.AgentApprovalRequirement
 import dev.androidagent.harness.context.ContextEngineRequest
 import dev.androidagent.harness.context.ContextTaskType
 import dev.androidagent.harness.context.RuleBasedContextNeedAnalyzer
@@ -88,6 +90,36 @@ class TodoAdapterTest {
 
         assertTrue(stale is TodoMutationResult.Rejected)
         assertEquals(committed.item.title, repository.read(draft.id)!!.title)
+    }
+
+    @Test
+    fun explicitNoApprovalPolicyCommitsTodoWithoutOpeningTheGate() {
+        var prompted = false
+        val root = temporaryFolder.newFolder("todo-no-prompt")
+        val clock = FixedAgentClock(100L)
+        val ids = SequentialAgentIdGenerator("todo")
+        val repository = FileTodoRepository(root, clock, ids)
+        val draft = repository.createDraft("No prompt commit", source = "user")
+        val coordinator = AgentApprovalCoordinator(
+            gate = AgentApprovalGate {
+                prompted = true
+                AgentApprovalDecision.DENIED
+            },
+            policy = AgentApprovalPolicy { AgentApprovalRequirement.NOT_REQUIRED },
+            clock = clock,
+            idGenerator = ids
+        )
+
+        val result = repository.commitDraft(
+            draft.id,
+            "run",
+            "session",
+            coordinator
+        )
+
+        assertTrue(result is TodoMutationResult.Applied)
+        assertFalse(prompted)
+        assertEquals(TodoState.COMMITTED, repository.read(draft.id)!!.state)
     }
 
     @Test
