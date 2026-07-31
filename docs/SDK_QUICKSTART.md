@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.5.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
+Android Agent Harness v0.5.1 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,7 +9,7 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.5.0`.
+The repository uses group `dev.androidagent.harness` and version `0.5.1`.
 
 ```sh
 ./gradlew publishSdk
@@ -25,10 +25,10 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.0"
-    implementation "dev.androidagent.harness:context-engine:0.5.0"
-    implementation "dev.androidagent.harness:agent-state:0.5.0"
-    implementation "dev.androidagent.harness:provider-openai:0.5.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.1"
+    implementation "dev.androidagent.harness:context-engine:0.5.1"
+    implementation "dev.androidagent.harness:agent-state:0.5.1"
+    implementation "dev.androidagent.harness:provider-openai:0.5.1"
 }
 ```
 
@@ -309,7 +309,7 @@ An action invalidates the snapshot even when the platform reports failure. Stale
 Add the optional AAR:
 
 ```groovy
-implementation "dev.androidagent.harness:web4agent-android:0.5.0"
+implementation "dev.androidagent.harness:web4agent-android:0.5.1"
 ```
 
 Build one process-local runtime and register its complete tool bundle:
@@ -344,8 +344,42 @@ cookies, popups, and autoplay. Install a different
 `Web4AgentConfiguration` before the first session only when the host explicitly
 accepts the wider boundary.
 
-`web4agent_act` and `web4agent_eval` authorize and consume an exact approval
-token before execution. Page content is untrusted external evidence; include
+`web4agent_observe` and `web4agent_inspect` return a host-owned `pageEpoch`,
+`observationId`, and `documentFingerprint`; matching DOM entries also return a
+`targetFingerprint`. Copy those exact values into the next governed call:
+
+```json
+{
+  "action": "click",
+  "selector": "#confirm",
+  "observation_id": "web-observation-...",
+  "expected_page_epoch": "17",
+  "target_fingerprint": "64 lowercase hex characters"
+}
+```
+
+Every `web4agent_act` and `web4agent_eval` requires `observation_id` and
+`expected_page_epoch`; click and type additionally require
+`target_fingerprint`. The runtime binds the page lease and fingerprints into
+the exact approval intent. After consuming the one-use approval token, it
+revalidates the host epoch plus the document/target fingerprint in the WebView
+main-thread task that performs the effect. Navigation, reload, DOM replacement,
+target recycling, Activity detach, Stop/session close, or session replacement
+therefore returns `STALE_TARGET` or `SESSION_CLOSED` with `occurred=false` and
+requires a new observe/inspect plus a new approval.
+
+The old public `Web4AgentRuntime.install/getInstance` and `Web4AgentSession`
+signatures remain binary compatible. Governed act/eval intentionally fail with
+`EXACT_EFFECT_UNSUPPORTED` when a custom `Web4AgentSessionProvider` does not use
+the runtime's strict internal session implementation. Direct session act/eval
+methods are host APIs and do not add an approval boundary by themselves.
+
+Untrusted `alert`, `confirm`, `prompt`, and `beforeunload` callbacks are
+cancelled by the Harness WebChromeClient without creating a native dialog
+window. The bounded console policy event includes only dialog type and origin,
+not the untrusted message or prompt default.
+
+Page content is untrusted external evidence; include
 `Web4AgentGuidance.contextProvider()` or equivalent host policy so DOM text and
 console messages cannot override user/host instructions. Structured readers
 apply best-effort password/common-secret field redaction, but hosts should not

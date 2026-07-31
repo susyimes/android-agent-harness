@@ -10,6 +10,8 @@ import dev.androidagent.harness.AgentToolResultStatus
 import dev.androidagent.harness.AgentToolRisk
 import dev.androidagent.harness.AgentToolSideEffect
 import dev.androidagent.harness.approval.AgentApprovalCoordinator
+import dev.androidagent.harness.approval.AgentApprovalDecision
+import dev.androidagent.harness.approval.AgentApprovalGate
 import dev.androidagent.harness.approval.AgentApprovalPolicy
 import dev.androidagent.harness.approval.AgentApprovalRequirement
 import org.junit.Assert.assertEquals
@@ -82,7 +84,9 @@ class Web4AgentToolSetTest {
                 toolName = "web4agent_eval",
                 arguments = mapOf(
                     "purpose" to "read test value",
-                    "script" to "return document.title"
+                    "script" to "return document.title",
+                    "observation_id" to backend.observationId,
+                    "expected_page_epoch" to backend.pageEpoch.toString()
                 )
             ),
             sessionId = "chat",
@@ -98,7 +102,16 @@ class Web4AgentToolSetTest {
     @Test
     fun approvedActionConsumesAnExactTokenAndRecordsItsEffect() {
         val backend = FakeSession()
-        val registry = registry(backend, approvals = allowAllCoordinator())
+        var approvedTargetRef: String? = null
+        val registry = registry(
+            backend,
+            approvals = AgentApprovalCoordinator(
+                gate = AgentApprovalGate { request ->
+                    approvedTargetRef = request.targetRef
+                    AgentApprovalDecision.APPROVED
+                }
+            )
+        )
 
         val result = registry.execute(
             AgentToolCall(
@@ -106,7 +119,10 @@ class Web4AgentToolSetTest {
                 toolName = "web4agent_act",
                 arguments = mapOf(
                     "action" to "click",
-                    "element_id" to "w4"
+                    "element_id" to "w4",
+                    "observation_id" to backend.observationId,
+                    "expected_page_epoch" to backend.pageEpoch.toString(),
+                    "target_fingerprint" to backend.targetFingerprint
                 )
             ),
             sessionId = "chat",
@@ -118,6 +134,85 @@ class Web4AgentToolSetTest {
         assertEquals("w4", backend.lastAction?.elementId)
         assertEquals(true, result.envelope?.effect?.occurred)
         assertEquals(AgentToolSideEffect.EXTERNAL_WRITE, result.envelope?.effect?.sideEffect)
+        assertTrue(approvedTargetRef.orEmpty().contains(backend.observationId))
+        assertTrue(approvedTargetRef.orEmpty().contains("d".repeat(64)))
+        assertTrue(approvedTargetRef.orEmpty().contains(backend.targetFingerprint))
+    }
+
+    @Test
+    fun actionApprovalCannotCrossAPageEpochAndAReobserveCanRetry() {
+        val backend = FakeSession()
+        val approvals = AgentApprovalCoordinator(
+            gate = AgentApprovalGate {
+                backend.driftPage()
+                AgentApprovalDecision.APPROVED
+            }
+        )
+        val registry = registry(backend, approvals = approvals)
+
+        val stale = registry.execute(
+            AgentToolCall(
+                id = "act-stale",
+                toolName = "web4agent_act",
+                arguments = backend.clickArguments()
+            ),
+            sessionId = "chat",
+            runId = "run"
+        )
+
+        assertTrue(stale.isError)
+        assertEquals(0, backend.actCount)
+        assertEquals(false, stale.envelope?.effect?.occurred)
+        assertTrue(stale.envelope?.dataJson.orEmpty().contains("STALE_TARGET"))
+
+        val retried = registry(
+            backend,
+            approvals = allowAllCoordinator()
+        ).execute(
+            AgentToolCall(
+                id = "act-reobserved",
+                toolName = "web4agent_act",
+                arguments = backend.clickArguments()
+            ),
+            sessionId = "chat",
+            runId = "run"
+        )
+
+        assertFalse(retried.isError)
+        assertEquals(1, backend.actCount)
+        assertEquals(true, retried.envelope?.effect?.occurred)
+    }
+
+    @Test
+    fun evalApprovalCannotCrossAPageEpoch() {
+        val backend = FakeSession()
+        val approvals = AgentApprovalCoordinator(
+            gate = AgentApprovalGate {
+                backend.driftPage()
+                AgentApprovalDecision.APPROVED
+            }
+        )
+        val registry = registry(backend, approvals = approvals)
+
+        val result = registry.execute(
+            AgentToolCall(
+                id = "eval-stale",
+                toolName = "web4agent_eval",
+                arguments = mapOf(
+                    "purpose" to "read test value",
+                    "script" to "return document.title",
+                    "observation_id" to backend.observationId,
+                    "expected_page_epoch" to backend.pageEpoch.toString()
+                )
+            ),
+            sessionId = "chat",
+            runId = "run"
+        )
+
+        assertTrue(result.isError)
+        assertEquals(0, backend.evalCount)
+        assertEquals(false, result.envelope?.effect?.occurred)
+        assertTrue(result.envelope?.dataJson.orEmpty().contains("STALE_TARGET"))
     }
 
     @Test
@@ -187,11 +282,29 @@ class Web4AgentToolSetTest {
         )
     }
 
-    private class FakeSession : Web4AgentSession {
+    private class FakeSession : Web4AgentExactEffectSession {
         override var sessionId: String = "unset"
         var lastOpen: Web4AgentOpenRequest? = null
         var lastAction: Web4AgentAction? = null
         var evalCount = 0
+        var actCount = 0
+        var pageEpoch = 7L
+            private set
+        val targetFingerprint = "a".repeat(64)
+        val observationId: String
+            get() = "observation-$pageEpoch"
+
+        fun driftPage() {
+            pageEpoch += 1L
+        }
+
+        fun clickArguments(): Map<String, String> = mapOf(
+            "action" to "click",
+            "element_id" to "w4",
+            "observation_id" to observationId,
+            "expected_page_epoch" to pageEpoch.toString(),
+            "target_fingerprint" to targetFingerprint
+        )
 
         override fun open(request: Web4AgentOpenRequest): Web4AgentActionResult {
             lastOpen = request
@@ -207,7 +320,7 @@ class Web4AgentToolSetTest {
                 url = "https://web4agent.invalid/",
                 title = "Harness Web",
                 loading = false,
-                dataJson = """{"ok":true,"title":"Harness Web"}"""
+                dataJson = """{"ok":true,"title":"Harness Web","pageEpoch":$pageEpoch,"observationId":"$observationId","documentFingerprint":"${"d".repeat(64)}"}"""
             )
         }
 
@@ -225,8 +338,80 @@ class Web4AgentToolSetTest {
         }
 
         override fun act(action: Web4AgentAction): Web4AgentActionResult {
+            actCount += 1
             lastAction = action
             return Web4AgentActionResult(true, "acted", """{"ok":true}""")
+        }
+
+        override fun prepareExactEffect(
+            kind: Web4AgentEffectKind,
+            binding: Web4AgentExpectedBinding,
+            requireTarget: Boolean
+        ): Web4AgentEffectPreparation {
+            if (
+                binding.pageEpoch != pageEpoch ||
+                binding.observationId != observationId ||
+                (requireTarget && binding.targetFingerprint != targetFingerprint)
+            ) {
+                return Web4AgentEffectPreparation.Rejected(
+                    Web4AgentExactEffectErrors.STALE_TARGET,
+                    "fake page changed"
+                )
+            }
+            return Web4AgentEffectPreparation.Ready(
+                Web4AgentPreparedEffect(
+                    leaseId = "lease-${kind.name}-$pageEpoch",
+                    sessionId = sessionId,
+                    kind = kind,
+                    pageEpoch = pageEpoch,
+                    observationId = observationId,
+                    documentFingerprint = "d".repeat(64),
+                    targetFingerprint = binding.targetFingerprint,
+                    documentMaterial = "document-$pageEpoch",
+                    targetMaterial = binding.targetFingerprint?.let { "target-$pageEpoch" },
+                    createdAtEpochMillis = 1_000L
+                )
+            )
+        }
+
+        override fun evaluatePrepared(
+            lease: Web4AgentPreparedEffect,
+            request: Web4AgentEvalRequest
+        ): Web4AgentExactJsonExecution {
+            if (lease.pageEpoch != pageEpoch) {
+                return Web4AgentExactJsonExecution(
+                    Web4AgentJsonResult(
+                        false,
+                        Web4AgentExactEffectErrors.json(
+                            Web4AgentExactEffectErrors.STALE_TARGET,
+                            "fake page changed"
+                        ),
+                        "fake page changed"
+                    ),
+                    occurred = false
+                )
+            }
+            return Web4AgentExactJsonExecution(evaluate(request), occurred = true)
+        }
+
+        override fun actPrepared(
+            lease: Web4AgentPreparedEffect,
+            action: Web4AgentAction
+        ): Web4AgentExactActionExecution {
+            if (lease.pageEpoch != pageEpoch) {
+                return Web4AgentExactActionExecution(
+                    Web4AgentActionResult(
+                        false,
+                        "fake page changed",
+                        Web4AgentExactEffectErrors.json(
+                            Web4AgentExactEffectErrors.STALE_TARGET,
+                            "fake page changed"
+                        )
+                    ),
+                    occurred = false
+                )
+            }
+            return Web4AgentExactActionExecution(act(action), occurred = true)
         }
 
         override fun console(limit: Int): List<Web4AgentConsoleEntry> = listOf(

@@ -213,12 +213,22 @@ class Web4AgentToolSet(
         override val spec = AgentToolSpec(
             name = "web4agent_eval",
             description = "Runs host-approved free-form JavaScript in the current Web4Agent page. " +
-                "The script executes as a function body; use return to send a value back.",
-            requiredArguments = setOf("script", "purpose"),
+                "The script executes only when observation_id and expected_page_epoch still match; " +
+                "use return to send a value back.",
+            requiredArguments = setOf(
+                "script",
+                "purpose",
+                "observation_id",
+                "expected_page_epoch"
+            ),
             optionalArguments = setOf("timeout_ms"),
             argumentSchemas = mapOf(
                 "script" to stringSchema("JavaScript function body to execute."),
                 "purpose" to stringSchema("Short human-readable reason for this script."),
+                "observation_id" to stringSchema("Host observation id from observe or inspect."),
+                "expected_page_epoch" to integerSchema(
+                    "Host page epoch from the same observe or inspect result."
+                ),
                 "timeout_ms" to integerSchema("Execution timeout from 100 to 30000 milliseconds.")
             ),
             capability = EVAL_CAPABILITY
@@ -234,15 +244,41 @@ class Web4AgentToolSet(
                     timeoutMillis = timeout
                 )
             }.getOrElse { error -> return invalid(error.message ?: "Invalid eval request.") }
+            val binding = invocation.exactBinding()
+                ?: return exactBindingFailure(
+                    invocation,
+                    spec,
+                    "web-session:${invocation.sessionId}",
+                    "web4agent_eval requires a valid observation_id and expected_page_epoch."
+                )
+            val exactSession = exactSession(invocation)
+                ?: return exactUnsupportedFailure(invocation, spec, binding)
+            val lease = when (
+                val preparation = exactSession.prepareExactEffect(
+                    Web4AgentEffectKind.EVALUATE,
+                    binding,
+                    requireTarget = false
+                )
+            ) {
+                is Web4AgentEffectPreparation.Ready -> preparation.lease
+                is Web4AgentEffectPreparation.Rejected -> {
+                    return exactPreparationFailure(invocation, spec, binding, preparation)
+                }
+            }
             return executeGoverned(
                 invocation = invocation,
                 spec = spec,
-                targetRef = "web-session:${invocation.sessionId}",
+                targetRef = lease.targetRef(),
                 summary = "Run Web4Agent JavaScript: ${request.purpose.take(500)}",
                 occurredOnFailure = true
             ) {
-                val backend = sessions.session(invocation.sessionId).evaluate(request)
-                BackendResult(backend.ok, backend.summary, backend.dataJson)
+                val backend = exactSession.evaluatePrepared(lease, request)
+                BackendResult(
+                    backend.result.ok,
+                    backend.result.summary,
+                    backend.result.dataJson,
+                    backend.occurred
+                )
             }
         }
     }
@@ -251,8 +287,9 @@ class Web4AgentToolSet(
         override val spec = AgentToolSpec(
             name = "web4agent_act",
             description = "Performs one host-approved page action: click, type, scroll, back, forward, " +
-                "reload, wait_for_selector, or wait_for_text. Observe again after a change.",
-            requiredArguments = setOf("action"),
+                "reload, wait_for_selector, or wait_for_text. Every action binds an observation and " +
+                "page epoch; click/type also bind target_fingerprint. Observe again after a change.",
+            requiredArguments = setOf("action", "observation_id", "expected_page_epoch"),
             optionalArguments = setOf(
                 "element_id",
                 "selector",
@@ -261,7 +298,8 @@ class Web4AgentToolSet(
                 "value",
                 "direction",
                 "distance_px",
-                "timeout_ms"
+                "timeout_ms",
+                "target_fingerprint"
             ),
             argumentSchemas = mapOf(
                 "action" to AgentToolArgumentSchema(
@@ -280,6 +318,13 @@ class Web4AgentToolSet(
                     enumValues = listOf("up", "down", "left", "right")
                 ),
                 "distance_px" to integerSchema("Scroll distance from 1 to 10000 pixels."),
+                "observation_id" to stringSchema("Host observation id from observe or inspect."),
+                "expected_page_epoch" to integerSchema(
+                    "Host page epoch from the same observe or inspect result."
+                ),
+                "target_fingerprint" to stringSchema(
+                    "Exact target fingerprint returned for a click/type target."
+                ),
                 "timeout_ms" to integerSchema("Action/wait timeout from 100 to 30000 milliseconds.")
             ),
             capability = ACT_CAPABILITY
@@ -305,15 +350,41 @@ class Web4AgentToolSet(
             }.getOrElse { error -> return invalid(error.message ?: "Invalid action.") }
             val target = action.elementId ?: action.selector ?: action.xpath ?: action.text
                 ?: action.type
+            val binding = invocation.exactBinding()
+                ?: return exactBindingFailure(
+                    invocation,
+                    spec,
+                    "web:${invocation.sessionId}:${target.take(500)}",
+                    "web4agent_act requires a valid observation_id and expected_page_epoch."
+                )
+            val exactSession = exactSession(invocation)
+                ?: return exactUnsupportedFailure(invocation, spec, binding)
+            val lease = when (
+                val preparation = exactSession.prepareExactEffect(
+                    Web4AgentEffectKind.ACTION,
+                    binding,
+                    requireTarget = action.type == "click" || action.type == "type"
+                )
+            ) {
+                is Web4AgentEffectPreparation.Ready -> preparation.lease
+                is Web4AgentEffectPreparation.Rejected -> {
+                    return exactPreparationFailure(invocation, spec, binding, preparation)
+                }
+            }
             return executeGoverned(
                 invocation = invocation,
                 spec = spec,
-                targetRef = "web:${invocation.sessionId}:${target.take(500)}",
+                targetRef = lease.targetRef(),
                 summary = "Run Web4Agent ${action.type} on ${target.take(500)}.",
                 occurredOnFailure = false
             ) {
-                val backend = sessions.session(invocation.sessionId).act(action)
-                BackendResult(backend.ok, backend.summary, backend.dataJson)
+                val backend = exactSession.actPrepared(lease, action)
+                BackendResult(
+                    backend.result.ok,
+                    backend.result.summary,
+                    backend.result.dataJson,
+                    backend.occurred
+                )
             }
         }
     }
@@ -457,6 +528,129 @@ class Web4AgentToolSet(
         )
     }
 
+    private fun AgentToolInvocation.exactBinding(): Web4AgentExpectedBinding? {
+        val epoch = arguments["expected_page_epoch"]?.toLongOrNull()
+            ?.takeIf { value -> value > 0L }
+            ?: return null
+        val observationId = nonBlank("observation_id")
+            ?.takeIf { value -> value.length <= 256 }
+            ?: return null
+        val targetFingerprint = nonBlank("target_fingerprint")
+        if (
+            targetFingerprint != null &&
+            !Regex("[0-9a-f]{64}").matches(targetFingerprint)
+        ) {
+            return null
+        }
+        return Web4AgentExpectedBinding(epoch, observationId, targetFingerprint)
+    }
+
+    private fun exactSession(
+        invocation: AgentToolInvocation
+    ): Web4AgentExactEffectSession? {
+        return runCatching { sessions.session(invocation.sessionId) }
+            .getOrNull() as? Web4AgentExactEffectSession
+    }
+
+    private fun exactBindingFailure(
+        invocation: AgentToolInvocation,
+        spec: AgentToolSpec,
+        targetRef: String,
+        summary: String
+    ): AgentToolResult {
+        val intent = effectIntent(invocation, spec, targetRef, summary)
+        return effectResult(
+            intent = intent,
+            status = AgentToolResultStatus.FAILURE,
+            summary = summary,
+            dataJson = Web4AgentExactEffectErrors.json(
+                Web4AgentExactEffectErrors.EXACT_BINDING_REQUIRED,
+                summary
+            ),
+            occurred = false
+        )
+    }
+
+    private fun exactUnsupportedFailure(
+        invocation: AgentToolInvocation,
+        spec: AgentToolSpec,
+        binding: Web4AgentExpectedBinding
+    ): AgentToolResult {
+        val summary = "The Web4Agent session provider cannot atomically revalidate exact effects."
+        val intent = effectIntent(invocation, spec, binding.targetRef(invocation.sessionId), summary)
+        return effectResult(
+            intent = intent,
+            status = AgentToolResultStatus.UNAVAILABLE,
+            summary = summary,
+            dataJson = Web4AgentExactEffectErrors.json(
+                Web4AgentExactEffectErrors.UNSUPPORTED_SESSION,
+                summary
+            ),
+            occurred = false
+        )
+    }
+
+    private fun exactPreparationFailure(
+        invocation: AgentToolInvocation,
+        spec: AgentToolSpec,
+        binding: Web4AgentExpectedBinding,
+        rejection: Web4AgentEffectPreparation.Rejected
+    ): AgentToolResult {
+        val intent = effectIntent(
+            invocation,
+            spec,
+            binding.targetRef(invocation.sessionId),
+            rejection.summary
+        )
+        val status = if (rejection.code == Web4AgentExactEffectErrors.SESSION_CLOSED) {
+            AgentToolResultStatus.UNAVAILABLE
+        } else {
+            AgentToolResultStatus.FAILURE
+        }
+        return effectResult(
+            intent = intent,
+            status = status,
+            summary = rejection.summary,
+            dataJson = Web4AgentExactEffectErrors.json(rejection.code, rejection.summary),
+            occurred = false
+        )
+    }
+
+    private fun Web4AgentExpectedBinding.targetRef(sessionId: String): String = buildString {
+        append("web:").append(sessionId)
+        append(":epoch:").append(pageEpoch)
+        append(":observation:").append(observationId.take(256))
+        targetFingerprint?.let { fingerprint ->
+            append(":target:").append(fingerprint)
+        }
+    }
+
+    private fun Web4AgentPreparedEffect.targetRef(): String = buildString {
+        append("web:").append(sessionId)
+        append(":epoch:").append(pageEpoch)
+        append(":observation:").append(observationId.take(256))
+        append(":document:").append(documentFingerprint)
+        targetFingerprint?.let { fingerprint ->
+            append(":target:").append(fingerprint)
+        }
+    }
+
+    private fun effectIntent(
+        invocation: AgentToolInvocation,
+        spec: AgentToolSpec,
+        targetRef: String,
+        summary: String
+    ): AgentEffectIntent = AgentEffectIntent(
+        runId = invocation.runId,
+        sessionId = invocation.sessionId,
+        toolCallId = invocation.callId,
+        toolName = spec.name,
+        capability = spec.capability,
+        targetRef = targetRef,
+        argumentHash = AgentEffectHasher.hash(spec.name, invocation.arguments),
+        summary = summary
+    )
+
     private fun executeGoverned(
         invocation: AgentToolInvocation,
         spec: AgentToolSpec,
@@ -465,16 +659,7 @@ class Web4AgentToolSet(
         occurredOnFailure: Boolean,
         operation: () -> BackendResult
     ): AgentToolResult {
-        val intent = AgentEffectIntent(
-            runId = invocation.runId,
-            sessionId = invocation.sessionId,
-            toolCallId = invocation.callId,
-            toolName = spec.name,
-            capability = spec.capability,
-            targetRef = targetRef,
-            argumentHash = AgentEffectHasher.hash(spec.name, invocation.arguments),
-            summary = summary
-        )
+        val intent = effectIntent(invocation, spec, targetRef, summary)
         val authorization = approvals.authorize(intent)
         val token = (authorization as? AgentEffectAuthorization.Allowed)?.token
         if (token == null) {
@@ -516,7 +701,7 @@ class Web4AgentToolSet(
             },
             summary = backend.summary,
             dataJson = backend.dataJson,
-            occurred = backend.ok || occurredOnFailure
+            occurred = backend.occurred ?: (backend.ok || occurredOnFailure)
         )
     }
 
@@ -630,7 +815,8 @@ class Web4AgentToolSet(
     private data class BackendResult(
         val ok: Boolean,
         val summary: String,
-        val dataJson: String
+        val dataJson: String,
+        val occurred: Boolean? = null
     )
 
     private companion object {

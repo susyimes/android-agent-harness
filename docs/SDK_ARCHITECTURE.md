@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.5.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.5.1 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -218,8 +218,10 @@ provider calls device_observe
 ```text
 provider calls web4agent_open
   → runtime binds a visible WebView to the Agent session id
-  → observe/read/inspect returns bounded untrusted page evidence
-  → act or eval consumes an exact host approval when policy requires it
+  → observe/inspect issues a host page epoch, observation id, and fingerprints
+  → act or eval binds that one-page lease into the exact host approval
+  → token consumption is followed by main-thread atomic lease revalidation
+  → stale page/target returns occurred=false without the requested effect
   → provider observes the changed page
   → finish closes or explicitly leaves the session visible
 ```
@@ -229,7 +231,11 @@ a second Agent, an Accessibility wrapper around Chrome, or a background hidden
 browser. The default configuration keeps JavaScript and DOM storage while
 blocking cleartext/mixed/local-file boundaries. Page text and JavaScript results
 are marked sensitive; captures remain behind exact-scope TTL raw-payload
-references.
+references. The host epoch advances on main-frame/history changes, DOM mutation,
+live form input/change, Activity detach/attach, effect completion, close, and
+replacement; the document guard also hashes the complete serialized DOM and
+live form-control state. JavaScript dialogs are cancelled by the Harness
+WebChromeClient rather than delegated to Android's native modal-window default.
 
 ## Persistence domains
 

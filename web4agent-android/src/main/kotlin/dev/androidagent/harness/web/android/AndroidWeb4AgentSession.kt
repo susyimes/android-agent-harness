@@ -15,6 +15,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -25,12 +28,14 @@ import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import kotlin.math.roundToInt
+import org.json.JSONObject
 
 internal data class Web4AgentPageState(
     val url: String,
@@ -45,10 +50,28 @@ internal class AndroidWeb4AgentSession(
     private val configuration: Web4AgentConfiguration,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis,
     private val onClosed: (String) -> Unit = {}
-) : Web4AgentSession {
+) : Web4AgentExactEffectSession {
     private val main = Handler(Looper.getMainLooper())
     private val loadMonitor = Object()
     private val consoleEntries = ArrayDeque<Web4AgentConsoleEntry>()
+    private val exactEffectLock = Object()
+    private val observations = LinkedHashMap<String, ExactObservation>()
+    private val preparedEffects = LinkedHashMap<String, Web4AgentPreparedEffect>()
+
+    @Volatile
+    private var closed = false
+
+    @Volatile
+    private var pageEpoch = 1L
+
+    @Volatile
+    private var activeDocumentToken = UUID.randomUUID().toString()
+
+    @Volatile
+    private var installedObserverToken: String? = null
+
+    @Volatile
+    private var activeEffectLeaseId: String? = null
 
     @Volatile
     private var webView: WebView? = null
@@ -76,6 +99,7 @@ internal class AndroidWeb4AgentSession(
             lastError = null
         }
         onMain {
+            beginDocumentTransition()
             when (resolved) {
                 is ResolvedOpen.Html -> view.loadDataWithBaseURL(
                     INLINE_BASE_URL,
@@ -103,11 +127,13 @@ internal class AndroidWeb4AgentSession(
     }
 
     override fun observe(request: Web4AgentObservationRequest): Web4AgentObservation {
-        val json = evaluateJavascript(
+        ensureEpochObserver()
+        val json = bindObservation(
+            evaluateJavascript(
             Web4AgentScripts.observe(request, configuration.maxResultChars),
             configuration.defaultTimeoutMillis
+            )
         )
-            .take(configuration.maxResultChars)
         val state = pageState()
         return Web4AgentObservation(
             url = state.url,
@@ -128,10 +154,13 @@ internal class AndroidWeb4AgentSession(
     }
 
     override fun inspect(request: Web4AgentInspectRequest): Web4AgentJsonResult {
+        ensureEpochObserver()
         return jsonResult(
-            evaluateJavascript(
-                Web4AgentScripts.inspect(request, configuration.maxResultChars),
-                configuration.defaultTimeoutMillis
+            bindObservation(
+                evaluateJavascript(
+                    Web4AgentScripts.inspect(request, configuration.maxResultChars),
+                    configuration.defaultTimeoutMillis
+                )
             ),
             "Inspected matching DOM content."
         )
@@ -188,6 +217,189 @@ internal class AndroidWeb4AgentSession(
         }
     }
 
+    override fun prepareExactEffect(
+        kind: Web4AgentEffectKind,
+        binding: Web4AgentExpectedBinding,
+        requireTarget: Boolean
+    ): Web4AgentEffectPreparation = synchronized(exactEffectLock) {
+        if (closed) {
+            return@synchronized Web4AgentEffectPreparation.Rejected(
+                Web4AgentExactEffectErrors.SESSION_CLOSED,
+                "Web4Agent session is closed."
+            )
+        }
+        if (binding.pageEpoch != pageEpoch) {
+            return@synchronized stalePreparation("The Web4Agent page epoch changed.")
+        }
+        val observation = observations[binding.observationId]
+            ?: return@synchronized stalePreparation(
+                "The Web4Agent observation is missing, expired, or belongs to another page epoch."
+            )
+        if (
+            observation.observationId != binding.observationId ||
+            observation.pageEpoch != binding.pageEpoch ||
+            nowEpochMillis() - observation.createdAtEpochMillis > EXACT_LEASE_TTL_MILLIS
+        ) {
+            return@synchronized stalePreparation("The Web4Agent observation is stale.")
+        }
+        val targetMaterial = binding.targetFingerprint?.let { fingerprint ->
+            observation.targetMaterials[fingerprint]
+                ?: return@synchronized stalePreparation(
+                    "The approved Web4Agent target fingerprint is not part of this observation."
+                )
+        }
+        if (requireTarget && targetMaterial == null) {
+            return@synchronized Web4AgentEffectPreparation.Rejected(
+                Web4AgentExactEffectErrors.EXACT_BINDING_REQUIRED,
+                "This Web4Agent action requires a target_fingerprint from observe or inspect."
+            )
+        }
+        val prepared = Web4AgentPreparedEffect(
+            leaseId = "web-lease-${UUID.randomUUID()}",
+            sessionId = sessionId,
+            kind = kind,
+            pageEpoch = binding.pageEpoch,
+            observationId = binding.observationId,
+            documentFingerprint = observation.documentFingerprint,
+            targetFingerprint = binding.targetFingerprint,
+            documentMaterial = observation.documentMaterial,
+            targetMaterial = targetMaterial,
+            createdAtEpochMillis = nowEpochMillis()
+        )
+        preparedEffects[prepared.leaseId] = prepared
+        trimExactLedgers()
+        Web4AgentEffectPreparation.Ready(prepared)
+    }
+
+    override fun evaluatePrepared(
+        lease: Web4AgentPreparedEffect,
+        request: Web4AgentEvalRequest
+    ): Web4AgentExactJsonExecution {
+        require(request.script.length <= configuration.maxScriptChars) {
+            "JavaScript exceeds ${configuration.maxScriptChars} characters."
+        }
+        consumePreparedEffect(lease, Web4AgentEffectKind.EVALUATE)?.let { rejected ->
+            return Web4AgentExactJsonExecution(
+                result = exactJsonFailure(rejected.code, rejected.summary),
+                occurred = false
+            )
+        }
+        val json = try {
+            evaluateExactJavascript(
+                lease = lease,
+                script = Web4AgentScripts.evaluate(
+                    request,
+                    configuration.maxResultChars,
+                    lease.documentMaterial
+                ),
+                timeoutMillis = request.timeoutMillis
+            )
+        } catch (error: IllegalStateException) {
+            if (closed) {
+                return Web4AgentExactJsonExecution(
+                    exactJsonFailure(
+                        Web4AgentExactEffectErrors.SESSION_CLOSED,
+                        "Web4Agent session closed before JavaScript execution."
+                    ),
+                    occurred = false
+                )
+            }
+            throw error
+        }
+        val stale = isStaleTarget(json)
+        if (!stale) {
+            appendConsole(
+                Web4AgentConsoleEntry(
+                    level = "agent",
+                    message = request.purpose.take(1_000),
+                    sourceId = "web4agent_eval",
+                    lineNumber = 0,
+                    createdAtEpochMillis = nowEpochMillis()
+                )
+            )
+        }
+        val backend = if (stale) {
+            exactJsonFailure(
+                Web4AgentExactEffectErrors.STALE_TARGET,
+                "Web4Agent page changed after approval; JavaScript was not executed."
+            )
+        } else {
+            jsonResult(json, "Executed Web4Agent JavaScript for ${request.purpose}.")
+        }
+        return Web4AgentExactJsonExecution(backend, occurred = !stale)
+    }
+
+    override fun actPrepared(
+        lease: Web4AgentPreparedEffect,
+        action: Web4AgentAction
+    ): Web4AgentExactActionExecution {
+        consumePreparedEffect(lease, Web4AgentEffectKind.ACTION)?.let { rejected ->
+            return Web4AgentExactActionExecution(
+                result = exactActionFailure(rejected.code, rejected.summary),
+                occurred = false
+            )
+        }
+        return try {
+            when (action.type) {
+            "back" -> navigatePrepared(lease, action.type) { view ->
+                if (view.canGoBack()) view.goBack() else error("No back history.")
+            }
+            "forward" -> navigatePrepared(lease, action.type) { view ->
+                if (view.canGoForward()) view.goForward() else error("No forward history.")
+            }
+            "reload" -> navigatePrepared(lease, action.type) { view -> view.reload() }
+            "wait_for_selector", "wait_for_text" -> waitPrepared(lease, action)
+            else -> {
+                val json = evaluateExactJavascript(
+                    lease = lease,
+                    script = Web4AgentScripts.action(
+                        action,
+                        lease.documentMaterial,
+                        lease.targetMaterial
+                    ),
+                    timeoutMillis = action.timeoutMillis
+                ).take(configuration.maxResultChars)
+                val stale = isStaleTarget(json)
+                if (stale) {
+                    Web4AgentExactActionExecution(
+                        exactActionFailure(
+                            Web4AgentExactEffectErrors.STALE_TARGET,
+                            "Web4Agent page or target changed after approval; the action was not executed."
+                        ),
+                        occurred = false
+                    )
+                } else {
+                    val ok = isSuccessful(json)
+                    Web4AgentExactActionExecution(
+                        Web4AgentActionResult(
+                            ok = ok,
+                            summary = if (ok) {
+                                "Web4Agent completed ${action.type}."
+                            } else {
+                                "Web4Agent ${action.type} failed."
+                            },
+                            dataJson = json
+                        ),
+                        occurred = ok
+                    )
+                }
+            }
+            }
+        } catch (error: IllegalStateException) {
+            if (closed) {
+                Web4AgentExactActionExecution(
+                    exactActionFailure(
+                        Web4AgentExactEffectErrors.SESSION_CLOSED,
+                        "Web4Agent session closed before the action executed."
+                    ),
+                    occurred = false
+                )
+            } else {
+                throw error
+            }
+        }
+    }
+
     override fun console(limit: Int): List<Web4AgentConsoleEntry> {
         require(limit in 1..200)
         return synchronized(consoleEntries) {
@@ -237,11 +449,33 @@ internal class AndroidWeb4AgentSession(
 
     override fun finish(keepSession: Boolean): Web4AgentActionResult {
         if (keepSession) {
+            if (closed) {
+                return exactActionFailure(
+                    Web4AgentExactEffectErrors.SESSION_CLOSED,
+                    "Web4Agent session is already closed."
+                )
+            }
             val state = pageState()
             return Web4AgentActionResult(
                 ok = true,
                 summary = "Web4Agent session remains visible.",
                 dataJson = stateJson(true, state, "session kept")
+            )
+        }
+        val shouldClose = synchronized(exactEffectLock) {
+            if (closed) {
+                false
+            } else {
+                closed = true
+                invalidateExactStateLocked()
+                true
+            }
+        }
+        if (!shouldClose) {
+            return Web4AgentActionResult(
+                ok = true,
+                summary = "Web4Agent session was already closed.",
+                dataJson = """{"ok":true,"closed":true}"""
             )
         }
         val activity = hostActivity.get()
@@ -285,6 +519,7 @@ internal class AndroidWeb4AgentSession(
         )
         hostActivity = WeakReference(activity)
         stateObserver = observer
+        invalidateExactState()
         observer(pageStateOnMain())
     }
 
@@ -298,6 +533,7 @@ internal class AndroidWeb4AgentSession(
         contextWrapper?.baseContext = applicationContext
         hostActivity = WeakReference(null)
         stateObserver = null
+        invalidateExactState()
     }
 
     internal fun currentState(): Web4AgentPageState = pageState()
@@ -308,6 +544,7 @@ internal class AndroidWeb4AgentSession(
         val wrapper = MutableContextWrapper(applicationContext)
         contextWrapper = wrapper
         return WebView(wrapper).apply {
+            addJavascriptInterface(PageEpochBridge(), EPOCH_BRIDGE_NAME)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = configuration.allowFileAccess
@@ -352,11 +589,21 @@ internal class AndroidWeb4AgentSession(
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                    beginDocumentTransition()
                     markLoading(true, null)
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
+                    installEpochObserverOnMain(view)
                     markLoading(false, null)
+                }
+
+                override fun doUpdateVisitedHistory(
+                    view: WebView,
+                    url: String?,
+                    isReload: Boolean
+                ) {
+                    invalidateExactState()
                 }
 
                 override fun onReceivedError(
@@ -370,6 +617,35 @@ internal class AndroidWeb4AgentSession(
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onJsAlert(
+                    view: WebView,
+                    url: String?,
+                    message: String?,
+                    result: JsResult
+                ): Boolean = rejectJavaScriptDialog("alert", url, result)
+
+                override fun onJsConfirm(
+                    view: WebView,
+                    url: String?,
+                    message: String?,
+                    result: JsResult
+                ): Boolean = rejectJavaScriptDialog("confirm", url, result)
+
+                override fun onJsPrompt(
+                    view: WebView,
+                    url: String?,
+                    message: String?,
+                    defaultValue: String?,
+                    result: JsPromptResult
+                ): Boolean = rejectJavaScriptDialog("prompt", url, result)
+
+                override fun onJsBeforeUnload(
+                    view: WebView,
+                    url: String?,
+                    message: String?,
+                    result: JsResult
+                ): Boolean = rejectJavaScriptDialog("beforeunload", url, result)
+
                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                     appendConsole(
                         Web4AgentConsoleEntry(
@@ -395,7 +671,9 @@ internal class AndroidWeb4AgentSession(
     }
 
     private fun requireWebView(): WebView {
+        check(!closed) { "Web4Agent session is closed." }
         return webView ?: onMain {
+            check(!closed) { "Web4Agent session is closed." }
             webView ?: createWebView().also { created -> webView = created }
         }
     }
@@ -452,6 +730,295 @@ internal class AndroidWeb4AgentSession(
             throw IllegalStateException("Web4Agent JavaScript timed out after ${timeoutMillis}ms.")
         }.take(configuration.maxResultChars)
     }
+
+    private fun evaluateExactJavascript(
+        lease: Web4AgentPreparedEffect,
+        script: String,
+        timeoutMillis: Long
+    ): String {
+        val view = requireWebView()
+        val result = CompletableFuture<String>()
+        main.post {
+            val rejection = beginExactExecutionOnMain(lease, view)
+            if (rejection != null) {
+                result.complete(Web4AgentExactEffectErrors.json(rejection.code, rejection.summary))
+                return@post
+            }
+            view.evaluateJavascript(script) { encoded ->
+                val decoded = Web4AgentJson.decodeJavascriptString(encoded)
+                    .take(configuration.maxResultChars)
+                endExactExecution(lease)
+                result.complete(decoded)
+            }
+        }
+        return try {
+            result.get(timeoutMillis, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            endExactExecution(lease)
+            throw IllegalStateException("Web4Agent JavaScript timed out after ${timeoutMillis}ms.")
+        }
+    }
+
+    private fun navigatePrepared(
+        lease: Web4AgentPreparedEffect,
+        action: String,
+        operation: (WebView) -> Unit
+    ): Web4AgentExactActionExecution {
+        val view = requireWebView()
+        val result = CompletableFuture<Web4AgentExactActionExecution>()
+        main.post {
+            val rejection = beginExactExecutionOnMain(lease, view)
+            if (rejection != null) {
+                result.complete(
+                    Web4AgentExactActionExecution(
+                        exactActionFailure(rejection.code, rejection.summary),
+                        occurred = false
+                    )
+                )
+                return@post
+            }
+            view.evaluateJavascript(Web4AgentScripts.guard(lease.documentMaterial)) { encoded ->
+                val guard = Web4AgentJson.decodeJavascriptString(encoded)
+                if (!isSuccessful(guard)) {
+                    endExactExecution(lease)
+                    result.complete(
+                        Web4AgentExactActionExecution(
+                            exactActionFailure(
+                                Web4AgentExactEffectErrors.STALE_TARGET,
+                                "Web4Agent page changed after approval; $action was not executed."
+                            ),
+                            occurred = false
+                        )
+                    )
+                    return@evaluateJavascript
+                }
+                val navigation = runCatching {
+                    operation(view)
+                    Web4AgentExactActionExecution(
+                        Web4AgentActionResult(
+                            ok = true,
+                            summary = "Web4Agent completed $action.",
+                            dataJson = """{"ok":true,"action":${Web4AgentJson.quote(action)}}"""
+                        ),
+                        occurred = true
+                    )
+                }.getOrElse { error ->
+                    Web4AgentExactActionExecution(
+                        Web4AgentActionResult(
+                            ok = false,
+                            summary = error.message ?: "Web4Agent $action failed.",
+                            dataJson = """{"ok":false,"action":${Web4AgentJson.quote(action)},"error":${
+                                Web4AgentJson.quote(error.message ?: "failed")
+                            }}"""
+                        ),
+                        occurred = false
+                    )
+                }
+                endExactExecution(lease)
+                result.complete(navigation)
+            }
+        }
+        return try {
+            result.get(leaseTimeoutMillis(), TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            endExactExecution(lease)
+            throw IllegalStateException("Web4Agent $action timed out.")
+        }
+    }
+
+    private fun waitPrepared(
+        lease: Web4AgentPreparedEffect,
+        action: Web4AgentAction
+    ): Web4AgentExactActionExecution {
+        val guard = evaluateExactJavascript(
+            lease,
+            Web4AgentScripts.guard(lease.documentMaterial),
+            minOf(action.timeoutMillis, configuration.defaultTimeoutMillis)
+        )
+        if (!isSuccessful(guard)) {
+            return Web4AgentExactActionExecution(
+                exactActionFailure(
+                    Web4AgentExactEffectErrors.STALE_TARGET,
+                    "Web4Agent page changed after approval; ${action.type} was not started."
+                ),
+                occurred = false
+            )
+        }
+        return Web4AgentExactActionExecution(waitFor(action), occurred = false)
+    }
+
+    private fun beginExactExecutionOnMain(
+        lease: Web4AgentPreparedEffect,
+        view: WebView
+    ): Web4AgentEffectPreparation.Rejected? = synchronized(exactEffectLock) {
+        when {
+            closed || webView !== view -> Web4AgentEffectPreparation.Rejected(
+                Web4AgentExactEffectErrors.SESSION_CLOSED,
+                "Web4Agent session is closed or was replaced."
+            )
+            pageEpoch != lease.pageEpoch -> stalePreparation(
+                "Web4Agent page changed after approval."
+            )
+            activeEffectLeaseId != null -> stalePreparation(
+                "Another exact Web4Agent effect already owns this page epoch."
+            )
+            else -> {
+                activeEffectLeaseId = lease.leaseId
+                null
+            }
+        }
+    }
+
+    private fun endExactExecution(lease: Web4AgentPreparedEffect) {
+        synchronized(exactEffectLock) {
+            if (activeEffectLeaseId == lease.leaseId) {
+                activeEffectLeaseId = null
+                invalidateExactStateLocked()
+            }
+        }
+    }
+
+    private fun consumePreparedEffect(
+        lease: Web4AgentPreparedEffect,
+        expectedKind: Web4AgentEffectKind
+    ): Web4AgentEffectPreparation.Rejected? = synchronized(exactEffectLock) {
+        if (closed) {
+            return@synchronized Web4AgentEffectPreparation.Rejected(
+                Web4AgentExactEffectErrors.SESSION_CLOSED,
+                "Web4Agent session is closed."
+            )
+        }
+        val stored = preparedEffects.remove(lease.leaseId)
+        if (stored != lease || lease.sessionId != sessionId || lease.kind != expectedKind) {
+            return@synchronized stalePreparation(
+                "The one-use Web4Agent effect lease is stale or does not match this operation."
+            )
+        }
+        if (
+            pageEpoch != lease.pageEpoch ||
+            nowEpochMillis() - lease.createdAtEpochMillis > EXACT_LEASE_TTL_MILLIS
+        ) {
+            return@synchronized stalePreparation(
+                "The Web4Agent page changed or its exact-effect lease expired."
+            )
+        }
+        null
+    }
+
+    private fun bindObservation(rawJson: String): String {
+        val payload = runCatching { JSONObject(rawJson) }.getOrElse {
+            return Web4AgentExactEffectErrors.json(
+                Web4AgentExactEffectErrors.EXACT_BINDING_REQUIRED,
+                "Web4Agent could not bind this observation to a host page epoch."
+            )
+        }
+        if (!payload.optBoolean("ok", false)) return rawJson.take(configuration.maxResultChars)
+        val documentMaterial = payload.optString(INTERNAL_DOCUMENT_MATERIAL, "")
+        payload.remove(INTERNAL_DOCUMENT_MATERIAL)
+        if (documentMaterial.isBlank()) {
+            return Web4AgentExactEffectErrors.json(
+                Web4AgentExactEffectErrors.EXACT_BINDING_REQUIRED,
+                "Web4Agent document fingerprint is unavailable."
+            )
+        }
+        val targetMaterials = linkedMapOf<String, String>()
+        val elements = payload.optJSONArray("elements")
+        if (elements != null) {
+            for (index in 0 until elements.length()) {
+                val element = elements.optJSONObject(index) ?: continue
+                val material = element.optString(INTERNAL_TARGET_MATERIAL, "")
+                element.remove(INTERNAL_TARGET_MATERIAL)
+                if (material.isNotBlank()) {
+                    val fingerprint = sha256(material)
+                    element.put("targetFingerprint", fingerprint)
+                    targetMaterials.putIfAbsent(fingerprint, material)
+                }
+            }
+        }
+        val observationId = "web-observation-${UUID.randomUUID()}"
+        val documentFingerprint = sha256(documentMaterial)
+        val boundEpoch = synchronized(exactEffectLock) {
+            if (closed) {
+                return Web4AgentExactEffectErrors.json(
+                    Web4AgentExactEffectErrors.SESSION_CLOSED,
+                    "Web4Agent session closed before the observation was bound."
+                )
+            }
+            val epoch = pageEpoch
+            observations[observationId] = ExactObservation(
+                observationId = observationId,
+                pageEpoch = epoch,
+                documentFingerprint = documentFingerprint,
+                documentMaterial = documentMaterial,
+                targetMaterials = targetMaterials,
+                createdAtEpochMillis = nowEpochMillis()
+            )
+            trimExactLedgers()
+            epoch
+        }
+        payload.put("pageEpoch", boundEpoch)
+        payload.put("observationId", observationId)
+        payload.put("documentFingerprint", documentFingerprint)
+        val encoded = payload.toString()
+        return if (encoded.length <= configuration.maxResultChars) {
+            encoded
+        } else {
+            synchronized(exactEffectLock) { observations.remove(observationId) }
+            Web4AgentExactEffectErrors.json(
+                Web4AgentExactEffectErrors.EXACT_BINDING_REQUIRED,
+                "Bound Web4Agent observation exceeds the configured result limit."
+            )
+        }
+    }
+
+    private fun exactJsonFailure(code: String, summary: String): Web4AgentJsonResult {
+        return Web4AgentJsonResult(
+            ok = false,
+            dataJson = Web4AgentExactEffectErrors.json(code, summary),
+            summary = summary
+        )
+    }
+
+    private fun exactActionFailure(code: String, summary: String): Web4AgentActionResult {
+        return Web4AgentActionResult(
+            ok = false,
+            summary = summary,
+            dataJson = Web4AgentExactEffectErrors.json(code, summary)
+        )
+    }
+
+    private fun isStaleTarget(json: String): Boolean {
+        return runCatching {
+            JSONObject(json).optString("code") == Web4AgentExactEffectErrors.STALE_TARGET
+        }.getOrDefault(false)
+    }
+
+    private fun stalePreparation(summary: String): Web4AgentEffectPreparation.Rejected {
+        return Web4AgentEffectPreparation.Rejected(
+            Web4AgentExactEffectErrors.STALE_TARGET,
+            summary
+        )
+    }
+
+    private fun trimExactLedgers() {
+        while (observations.size > MAX_EXACT_OBSERVATIONS) {
+            observations.remove(observations.keys.first())
+        }
+        while (preparedEffects.size > MAX_PREPARED_EFFECTS) {
+            preparedEffects.remove(preparedEffects.keys.first())
+        }
+    }
+
+    private fun sha256(value: String): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun leaseTimeoutMillis(): Long = minOf(
+        MAIN_THREAD_TIMEOUT_MILLIS,
+        configuration.defaultTimeoutMillis
+    )
 
     private fun nativeNavigation(
         action: String,
@@ -545,6 +1112,89 @@ internal class AndroidWeb4AgentSession(
         }
     }
 
+    private fun rejectJavaScriptDialog(
+        type: String,
+        url: String?,
+        result: JsResult
+    ): Boolean {
+        val source = runCatching {
+            Uri.parse(url.orEmpty()).let { uri ->
+                val scheme = uri.scheme?.lowercase().orEmpty().take(16)
+                val host = uri.host.orEmpty().take(253)
+                when {
+                    scheme.isNotBlank() && host.isNotBlank() -> "$scheme://$host"
+                    scheme.isNotBlank() -> "$scheme:"
+                    else -> "unknown origin"
+                }
+            }
+        }.getOrDefault("unknown origin")
+        appendConsole(
+            Web4AgentConsoleEntry(
+                level = "warning",
+                message = "Blocked untrusted JavaScript $type dialog from $source.",
+                sourceId = "javascript-dialog-policy",
+                lineNumber = 0,
+                createdAtEpochMillis = nowEpochMillis()
+            )
+        )
+        result.cancel()
+        return true
+    }
+
+    private fun ensureEpochObserver() {
+        val view = requireWebView()
+        onMain { installEpochObserverOnMain(view) }
+    }
+
+    private fun installEpochObserverOnMain(view: WebView) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (closed || webView !== view) return
+        val token = activeDocumentToken
+        if (installedObserverToken == token) return
+        installedObserverToken = token
+        view.evaluateJavascript(
+            Web4AgentScripts.installEpochObserver(token, EPOCH_BRIDGE_NAME)
+        ) { encoded ->
+            if (Web4AgentJson.decodeJavascriptString(encoded) != "true" &&
+                installedObserverToken == token) {
+                installedObserverToken = null
+            }
+        }
+    }
+
+    private fun beginDocumentTransition() {
+        synchronized(exactEffectLock) {
+            if (closed) return
+            activeDocumentToken = UUID.randomUUID().toString()
+            installedObserverToken = null
+            invalidateExactStateLocked()
+        }
+    }
+
+    private fun invalidateExactState() {
+        synchronized(exactEffectLock) {
+            if (!closed) invalidateExactStateLocked()
+        }
+    }
+
+    private fun invalidateExactStateLocked() {
+        pageEpoch = if (pageEpoch == Long.MAX_VALUE) 1L else pageEpoch + 1L
+        observations.clear()
+        preparedEffects.clear()
+    }
+
+    private inner class PageEpochBridge {
+        @JavascriptInterface
+        fun changed(documentToken: String?) {
+            if (documentToken.isNullOrBlank() || documentToken.length > 128) return
+            synchronized(exactEffectLock) {
+                if (!closed && documentToken == activeDocumentToken) {
+                    invalidateExactStateLocked()
+                }
+            }
+        }
+    }
+
     private fun notifyState() {
         val observer = stateObserver ?: return
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -605,6 +1255,15 @@ internal class AndroidWeb4AgentSession(
         data class Html(val html: String) : ResolvedOpen
     }
 
+    private data class ExactObservation(
+        val observationId: String,
+        val pageEpoch: Long,
+        val documentFingerprint: String,
+        val documentMaterial: String,
+        val targetMaterials: Map<String, String>,
+        val createdAtEpochMillis: Long
+    )
+
     private companion object {
         const val INLINE_BASE_URL = "https://web4agent.invalid/"
         const val MAX_URL_CHARS = 4_096
@@ -616,5 +1275,11 @@ internal class AndroidWeb4AgentSession(
         const val DEFAULT_CAPTURE_HEIGHT = 1_920
         const val MAX_CAPTURE_WIDTH = 1_440
         const val MAX_CAPTURE_HEIGHT = 2_560
+        const val EPOCH_BRIDGE_NAME = "__AndroidAgentPageEpochHost"
+        const val INTERNAL_DOCUMENT_MATERIAL = "__androidAgentDocumentMaterial"
+        const val INTERNAL_TARGET_MATERIAL = "__androidAgentTargetMaterial"
+        const val EXACT_LEASE_TTL_MILLIS = 5 * 60_000L
+        const val MAX_EXACT_OBSERVATIONS = 32
+        const val MAX_PREPARED_EFFECTS = 32
     }
 }

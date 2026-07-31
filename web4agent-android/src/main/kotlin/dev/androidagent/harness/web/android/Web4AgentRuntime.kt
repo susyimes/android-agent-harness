@@ -51,12 +51,14 @@ class Web4AgentRuntime private constructor(
     internal fun controller(sessionId: String): AndroidWeb4AgentSession {
         require(sessionId.isNotBlank()) { "Web4Agent session id must not be blank." }
         return sessions.computeIfAbsent(sessionId) { id ->
-            AndroidWeb4AgentSession(
+            lateinit var created: AndroidWeb4AgentSession
+            created = AndroidWeb4AgentSession(
                 applicationContext,
                 id,
                 configuration,
-                onClosed = { closedId -> sessions.remove(closedId) }
+                onClosed = { closedId -> sessions.remove(closedId, created) }
             )
+            created
         }
     }
 

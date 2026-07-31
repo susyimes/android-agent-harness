@@ -4,12 +4,122 @@ package dev.androidagent.harness.web.android
 internal object Web4AgentScripts {
     private const val ELEMENT_ATTRIBUTE = "data-android-agent-web-id"
 
+    private fun fingerprintFunctions(): String = """
+        function harnessClean(value) {
+          return String(value || "").replace(/\s+/g, " ").trim();
+        }
+        function harnessRollingHash(value) {
+          var first = 0x811c9dc5;
+          var second = 0x9e3779b9;
+          for (var index = 0; index < value.length; index++) {
+            var code = value.charCodeAt(index);
+            first = Math.imul(first ^ code, 0x01000193) >>> 0;
+            second = Math.imul(second ^ (code + index), 0x85ebca6b) >>> 0;
+          }
+          return ("00000000" + first.toString(16)).slice(-8) +
+            ("00000000" + second.toString(16)).slice(-8);
+        }
+        function harnessDocumentMaterial() {
+          var root = document.documentElement;
+          var html = String(root && root.outerHTML || "");
+          var controls = document.querySelectorAll("input,textarea,select");
+          var controlState = [];
+          for (var controlIndex = 0; controlIndex < controls.length; controlIndex++) {
+            var control = controls[controlIndex];
+            var controlValue = "";
+            try {
+              controlValue = String(control.value || "");
+            } catch (ignored) {}
+            controlState.push([
+              String(control.tagName || "").toLowerCase(),
+              harnessRollingHash(String(control.getAttribute("id") || "")),
+              harnessRollingHash(String(control.getAttribute("name") || "")),
+              harnessRollingHash(controlValue) + ":" + controlValue.length,
+              control.checked === true ? 1 : 0,
+              Number.isFinite(Number(control.selectedIndex)) ? Number(control.selectedIndex) : -1,
+              control.disabled === true ? 1 : 0,
+              control.readOnly === true ? 1 : 0
+            ].join(":"));
+          }
+          var timeOrigin = 0;
+          try {
+            timeOrigin = Number(window.performance && window.performance.timeOrigin || 0);
+          } catch (ignored) {}
+          return JSON.stringify({
+            href: harnessRollingHash(String(location.href || "")) + ":" +
+              String(location.href || "").length,
+            title: harnessRollingHash(String(document.title || "")) + ":" +
+              String(document.title || "").length,
+            readyState: String(document.readyState || "").slice(0, 32),
+            timeOrigin: timeOrigin,
+            htmlLength: html.length,
+            htmlHash: harnessRollingHash(html),
+            controlCount: controls.length,
+            controlStateHash: harnessRollingHash(controlState.join("\\u0000"))
+          });
+        }
+        function harnessTargetMaterial(element) {
+          if (!element || element.nodeType !== 1) return null;
+          var rect = element.getBoundingClientRect();
+          var inputType = String(element.getAttribute("type") || "").toLowerCase();
+          var criticalNames = [
+            "id", "name", "type", "role", "aria-label", "title", "href",
+            "src", "action", "formaction", "onclick", "value", "disabled",
+            "readonly", "checked", "selected", "multiple", "required",
+            "aria-disabled", "aria-checked", "aria-selected", "$ELEMENT_ATTRIBUTE"
+          ];
+          var critical = {};
+          criticalNames.forEach(function(name) {
+            var value = element.getAttribute(name);
+            if (value !== null) {
+              value = String(value);
+              critical[name] = harnessRollingHash(value) + ":" + value.length;
+            }
+          });
+          var path = [];
+          var current = element;
+          for (var depth = 0; current && current.nodeType === 1 && depth < 16; depth++) {
+            var tag = String(current.tagName || "").toLowerCase();
+            var sibling = current;
+            var position = 1;
+            while ((sibling = sibling.previousElementSibling)) {
+              if (String(sibling.tagName || "").toLowerCase() === tag) position++;
+            }
+            path.push(tag + ":nth-of-type(" + position + ")");
+            current = current.parentElement;
+          }
+          var targetText = inputType === "password" ? "[REDACTED]" :
+            harnessClean(element.innerText || element.textContent || "");
+          var targetPath = path.join(">");
+          return JSON.stringify({
+            tag: String(element.tagName || "").toLowerCase(),
+            critical: critical,
+            text: harnessRollingHash(targetText) + ":" + targetText.length,
+            path: harnessRollingHash(targetPath) + ":" + targetPath.length,
+            state: {
+              value: harnessRollingHash(String(element.value || "")) + ":" +
+                String(element.value || "").length,
+              checked: element.checked === true,
+              selectedIndex: Number.isFinite(Number(element.selectedIndex)) ?
+                Number(element.selectedIndex) : -1,
+              disabled: element.disabled === true,
+              readOnly: element.readOnly === true
+            },
+            bounds: [
+              Math.round(rect.left), Math.round(rect.top),
+              Math.round(rect.width), Math.round(rect.height)
+            ]
+          });
+        }
+    """.trimIndent()
+
     fun observe(
         request: Web4AgentObservationRequest,
         maxOutputChars: Int = 48 * 1024
     ): String = """
         (function() {
           try {
+            ${fingerprintFunctions()}
             var maxChars = ${request.maxChars};
             var maxElements = ${request.maxElements};
             var attr = "$ELEMENT_ATTRIBUTE";
@@ -59,7 +169,8 @@ internal object Web4AgentScripts {
                   y: Math.round(rect.top),
                   width: Math.round(rect.width),
                   height: Math.round(rect.height)
-                }
+                },
+                __androidAgentTargetMaterial: harnessTargetMaterial(element)
               };
             }
             var candidates = Array.prototype.slice.call(document.querySelectorAll(
@@ -79,7 +190,8 @@ internal object Web4AgentScripts {
               readyState: String(document.readyState || ""),
               text: bodyText,
               frameworkHints: hints,
-              elements: candidates.map(describe)
+              elements: candidates.map(describe),
+              __androidAgentDocumentMaterial: harnessDocumentMaterial()
             };
             var encoded = JSON.stringify(payload);
             if (encoded.length > $maxOutputChars) {
@@ -106,7 +218,8 @@ internal object Web4AgentScripts {
                 readyState: String(document.readyState || "").slice(0, 32),
                 text: bodyText.slice(0, Math.max(0, $maxOutputChars - 768)),
                 frameworkHints: hints.slice(0, 8),
-                elements: []
+                elements: [],
+                __androidAgentDocumentMaterial: harnessDocumentMaterial()
               };
               encoded = JSON.stringify(payload);
             }
@@ -275,6 +388,7 @@ internal object Web4AgentScripts {
         return """
             (function() {
               try {
+                ${fingerprintFunctions()}
                 var selector = $selector;
                 var xpath = $xpath;
                 var text = $text;
@@ -364,29 +478,22 @@ internal object Web4AgentScripts {
                       y: Math.round(rect.top),
                       width: Math.round(rect.width),
                       height: Math.round(rect.height)
-                    }
+                    },
+                    __androidAgentTargetMaterial: harnessTargetMaterial(node)
                   };
                 });
-                var encoded = JSON.stringify({ok:true,count:payload.length,elements:payload});
+                var resultPayload = {
+                  ok:true,
+                  count:payload.length,
+                  elements:payload,
+                  __androidAgentDocumentMaterial:harnessDocumentMaterial()
+                };
+                var encoded = JSON.stringify(resultPayload);
                 if (encoded.length > $outputLimit) {
-                  var serialized = encoded;
-                  var budget = Math.max(0, $outputLimit - 256);
-                  var bounded = serialized.slice(0, budget);
-                  encoded = JSON.stringify({
-                    ok:true,
-                    count:payload.length,
-                    truncated:true,
-                    text:bounded
-                  });
-                  if (encoded.length > $outputLimit) {
-                    var overflow = encoded.length - $outputLimit;
-                    bounded = bounded.slice(0, Math.max(0, bounded.length - overflow - 16));
-                    encoded = JSON.stringify({
-                      ok:true,
-                      count:payload.length,
-                      truncated:true,
-                      text:bounded
-                    });
+                  resultPayload.truncated = true;
+                  while (resultPayload.elements.length && encoded.length > $outputLimit) {
+                    resultPayload.elements.pop();
+                    encoded = JSON.stringify(resultPayload);
                   }
                 }
                 return encoded.length <= $outputLimit ? encoded :
@@ -401,10 +508,27 @@ internal object Web4AgentScripts {
         """.trimIndent()
     }
 
-    fun evaluate(request: Web4AgentEvalRequest, maxResultChars: Int): String = """
+    fun evaluate(
+        request: Web4AgentEvalRequest,
+        maxResultChars: Int,
+        expectedDocumentMaterial: String? = null
+    ): String {
+        val expectedDocument = expectedDocumentMaterial?.let(Web4AgentJson::quote) ?: "null"
+        return """
         (function() {
+          ${fingerprintFunctions()}
           var source = ${Web4AgentJson.quote(request.script)};
           try {
+            var expectedDocument = $expectedDocument;
+            if (expectedDocument !== null &&
+                harnessDocumentMaterial() !== expectedDocument) {
+              return JSON.stringify({
+                ok:false,
+                code:"STALE_TARGET",
+                occurred:false,
+                error:"page changed after exact approval"
+              });
+            }
             var value = (new Function('"use strict";\n' + source))();
             if (typeof value === "undefined") value = null;
             if (typeof value === "bigint") value = String(value);
@@ -440,18 +564,26 @@ internal object Web4AgentScripts {
             });
           }
         })()
-    """.trimIndent()
+        """.trimIndent()
+    }
 
-    fun action(action: Web4AgentAction): String {
+    fun action(
+        action: Web4AgentAction,
+        expectedDocumentMaterial: String? = null,
+        expectedTargetMaterial: String? = null
+    ): String {
         val elementId = action.elementId?.let(Web4AgentJson::quote) ?: "null"
         val selector = action.selector?.let(Web4AgentJson::quote) ?: "null"
         val xpath = action.xpath?.let(Web4AgentJson::quote) ?: "null"
         val text = action.text?.let(Web4AgentJson::quote) ?: "null"
         val value = action.value?.let(Web4AgentJson::quote) ?: "null"
         val direction = Web4AgentJson.quote(action.direction ?: "down")
+        val expectedDocument = expectedDocumentMaterial?.let(Web4AgentJson::quote) ?: "null"
+        val expectedTarget = expectedTargetMaterial?.let(Web4AgentJson::quote) ?: "null"
         return """
             (function() {
               try {
+                ${fingerprintFunctions()}
                 var attr = "$ELEMENT_ATTRIBUTE";
                 var elementId = $elementId;
                 var selector = $selector;
@@ -484,7 +616,27 @@ internal object Web4AgentScripts {
                   return null;
                 }
                 var type = ${Web4AgentJson.quote(action.type)};
+                var expectedDocument = $expectedDocument;
+                var expectedTarget = $expectedTarget;
+                if (expectedDocument !== null &&
+                    harnessDocumentMaterial() !== expectedDocument) {
+                  return JSON.stringify({
+                    ok:false,
+                    code:"STALE_TARGET",
+                    occurred:false,
+                    error:"page changed after exact approval"
+                  });
+                }
                 var element = find();
+                if (expectedTarget !== null &&
+                    harnessTargetMaterial(element) !== expectedTarget) {
+                  return JSON.stringify({
+                    ok:false,
+                    code:"STALE_TARGET",
+                    occurred:false,
+                    error:"target changed after exact approval"
+                  });
+                }
                 if (type === "scroll") {
                   if (element) {
                     element.scrollIntoView({behavior:"auto",block:"center",inline:"nearest"});
@@ -532,6 +684,64 @@ internal object Web4AgentScripts {
             })()
         """.trimIndent()
     }
+
+    fun guard(expectedDocumentMaterial: String): String = """
+        (function() {
+          try {
+            ${fingerprintFunctions()}
+            if (harnessDocumentMaterial() !==
+                ${Web4AgentJson.quote(expectedDocumentMaterial)}) {
+              return JSON.stringify({
+                ok:false,
+                code:"STALE_TARGET",
+                occurred:false,
+                error:"page changed after exact approval"
+              });
+            }
+            return JSON.stringify({ok:true,occurred:false});
+          } catch (error) {
+            return JSON.stringify({
+              ok:false,
+              code:"STALE_TARGET",
+              occurred:false,
+              error:"page fingerprint is unavailable"
+            });
+          }
+        })()
+    """.trimIndent()
+
+    fun installEpochObserver(documentToken: String, bridgeName: String): String = """
+        (function() {
+          try {
+            var HostMutationObserver = window.MutationObserver;
+            var bridge = window[${Web4AgentJson.quote(bridgeName)}];
+            if (!HostMutationObserver || !bridge || !bridge.changed) return "false";
+            var observer = new HostMutationObserver(function(records) {
+              var meaningful = records.some(function(record) {
+                return !(record.type === "attributes" &&
+                  record.attributeName === "$ELEMENT_ATTRIBUTE");
+              });
+              if (meaningful) {
+                bridge.changed(${Web4AgentJson.quote(documentToken)});
+              }
+            });
+            observer.observe(document, {
+              subtree:true,
+              childList:true,
+              characterData:true,
+              attributes:true
+            });
+            var notifyStateChange = function() {
+              bridge.changed(${Web4AgentJson.quote(documentToken)});
+            };
+            document.addEventListener("input", notifyStateChange, true);
+            document.addEventListener("change", notifyStateChange, true);
+            return "true";
+          } catch (ignored) {
+            return "false";
+          }
+        })()
+    """.trimIndent()
 
     fun waitPredicate(action: Web4AgentAction): String {
         return when (action.type) {

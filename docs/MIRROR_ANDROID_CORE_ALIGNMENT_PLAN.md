@@ -214,8 +214,28 @@ Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行
 | 网页动作与 JS | 完成 | click/type/scroll/back/forward/reload/wait；自由 JS function body；每次 act/eval 绑定通用 exact approval | Eval 不等于 Native/shell 任意代码执行 |
 | Console/Capture | 完成 | 有界 console/eval notes；PNG 进入 host raw-payload store，绑定 run/session/call 与 TTL | capture 不自动成为模型 vision 输入 |
 | Demo APK | 完成 | Chat 注册全部九个 `web4agent_*` 工具和 guidance；控制中心提供手动入口；首次工具调用进入 80 步、单工具/步扩展 | Offline scripted provider 不会自行发起真实网页工具调用 |
-| Android 设备验证 | 模拟器通过，物理真机待连接 | `checkConnectedSample` 在 `emulator-5554` / API 34 上 5/5 通过；Web4Agent 用例覆盖 inline HTML 的 observe/read/inspect/type/click/wait/eval/console/capture/finish；v0.5.0 Demo 已安装并冷启动到 `HomeActivity` | 本轮没有在线物理设备；外部站点兼容性受目标网页与 Android WebView 影响 |
+| Android 设备验证 | 模拟器通过，物理真机待连接 | v0.5.1 `checkConnectedSample` 在 API 29 与 API 34 上各 8/8 通过；Web4Agent 用例覆盖四类 JS dialog、exact-effect 页面漂移、session replacement，以及 inline HTML 的 observe/read/inspect/type/click/wait/eval/console/capture/finish；v0.5.0 Demo 已安装并冷启动到 `HomeActivity` | 本轮没有在线物理设备；外部站点兼容性受目标网页与 Android WebView 影响 |
 | MiniApp/Bridge | 未纳入 | 无占位入口、无空工具注册 | 后续独立范围与安全评审 |
+
+### 4.7 v0.5.1 Web4Agent 安全补丁
+
+2026-07-31 的产品接入验证发现并上游修复两项 Harness 边界缺口：默认
+`WebChromeClient` 生成的原生 JavaScript 对话框会覆盖产品全局 Stop，以及
+exact approval 与实际网页 effect 之间缺少同一页面/DOM epoch 的原子复核。
+
+v0.5.1 保持 `Web4AgentRuntime.install/getInstance` 和公开 session ABI，不复制
+第二套 WebView 循环。Harness 自己拒绝 alert/confirm/prompt/beforeunload，且
+observe/inspect 签发 host-owned `pageEpoch`、`observationId`、document/target
+fingerprint。act/eval 在审批前建立一次性 page lease，将 epoch/fingerprint
+绑定到 `AgentEffectIntent`；token consume 后在 WebView 主线程复核并执行。
+navigation、同 URL DOM replace、target recycle、Activity detach、Stop/close
+或 session replacement 都会使旧租约返回 `STALE_TARGET`/`SESSION_CLOSED`、
+`occurred=false`，只有重新观察和重新审批才能执行。
+
+设备回归在 API 29 与 API 34 上覆盖四类 JavaScript dialog、同 selector A→B
+审批竞态、session close/replacement 和完整九工具循环；两套
+`checkConnectedSample` 均为 8/8。`checkSdk` 与 `checkM0` 也已通过，包含公开
+ABI、JVM/Android 单测、lint、本地 Maven 发布和 JVM/Android consumer smoke。
 
 ## 5. 七层目标架构
 
