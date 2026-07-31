@@ -31,7 +31,7 @@ The repository also ships an installable sample app. It is a reference compositi
   <a href="docs/screenshots/android-automation.png"><img src="docs/screenshots/android-automation.png" alt="Agent Harness automation controls" width="23%"></a>
 </p>
 
-The v0.5.1 sample exposes:
+The v0.5.2 sample exposes:
 
 - Home Brief, provider state, active runs, recent sessions, and shortcuts to every product surface.
 - Chat with provider/model selection, streamed text, file/image attachment, speech input, TTS, Stop, and model-selected Phone Use.
@@ -106,7 +106,7 @@ Requirements:
 
 ## SDK artifacts
 
-The v0.5.1 coordinates use group `dev.androidagent.harness`.
+The v0.5.2 coordinates use group `dev.androidagent.harness`.
 
 | Artifact | Type | Responsibility |
 | --- | --- | --- |
@@ -128,31 +128,45 @@ The v0.5.1 coordinates use group `dev.androidagent.harness`.
 | `device-loop-android` | AAR | Accessibility, approval overlay, visual and experimental sensor adapters |
 | `web4agent-android` | AAR | Visible WebView sessions, DOM/JS tools, console, capture, and exact-approved web actions |
 
-Publish all artifacts to the repository-local Maven directory:
+Publish development artifacts to the disposable repository-local candidate
+Maven directory:
 
 ```sh
 ./gradlew publishSdk
 ```
 
+This writes to `build/sdk-candidate-repository`. It is not a release channel.
+A release publisher must start from a clean commit and an empty, explicitly
+named repository:
+
+```sh
+./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.2-commit/repository
+```
+
+The release root receives `publisher-sidecar.json`,
+`publisher-sidecar.sha256`, and `artifacts.sha256`, binding the clean commit,
+all coordinates, the manifest itself, and every published file hash.
+
 Consume only the modules your host needs:
 
 ```groovy
 repositories {
-    maven { url = uri("../android-agent-harness/build/sdk-repository") }
+    maven { url = uri("/absolute/verified/0.5.2-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.1"
-    implementation "dev.androidagent.harness:context-engine:0.5.1"
-    implementation "dev.androidagent.harness:agent-state:0.5.1"
-    implementation "dev.androidagent.harness:provider-openai:0.5.1"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.2"
+    implementation "dev.androidagent.harness:context-engine:0.5.2"
+    implementation "dev.androidagent.harness:agent-state:0.5.2"
+    implementation "dev.androidagent.harness:provider-openai:0.5.2"
 
     // Optional Android features:
-    implementation "dev.androidagent.harness:agent-sdk-android:0.5.1"
-    implementation "dev.androidagent.harness:agent-data-android:0.5.1"
-    implementation "dev.androidagent.harness:web4agent-android:0.5.1"
+    implementation "dev.androidagent.harness:agent-sdk-android:0.5.2"
+    implementation "dev.androidagent.harness:agent-data-android:0.5.2"
+    implementation "dev.androidagent.harness:web4agent-android:0.5.2"
 }
 ```
 
@@ -190,6 +204,11 @@ stopButton.setOnClickListener {
 
 Cancellation marks the run terminal, invokes the provider cancel hook, interrupts the worker, prevents another SDK-controlled effect, rejects late deltas/results, and discards the staged conversation turn. Effects already completed outside the session transaction cannot be rolled back automatically.
 
+That base handle is not by itself an Accessibility-effect quiescence proof. A
+host exposing Phone Use as a global Stop surface must first fence the scoped
+device surface and gate its visible `STOPPED` state on the quiescence handle,
+as described below.
+
 See [SDK Quickstart](docs/SDK_QUICKSTART.md) and [Architecture](docs/SDK_ARCHITECTURE.md) for integration details.
 
 ## Providers
@@ -224,6 +243,15 @@ Phone Use is not a fixed chat mode and is not activated by keywords. The selecte
 7. `device_finish` requires fresh, visible completion evidence.
 
 The run is also bounded by wall-clock time, tool count, repeated failures, approval expiry, and user Stop.
+
+For a global Stop that must not report `STOPPED` while an admitted Accessibility
+effect is still running, feature-detect `CancellableDeviceSurface` or call
+`AndroidPhoneAgent.requestWithStopQuiescence()`. `requestStop(reason)` closes
+admission without blocking the Android main thread and returns a handle whose
+`quiescence` completes only after queued main work is cancelled and every
+already-dispatched gesture or clipboard cleanup has finished. Legacy
+`DeviceSurface` implementations remain compatible; the strict helper fails
+closed for them.
 
 Approval is host-policy driven. In the sample, No approval is the default; Risk-based mode requires a human-backed surface for high-risk actions, and Strict mode requires it for every Phone Use action. Whenever policy requires approval, missing UI, denial, timeout, stale snapshot, changed target/arguments, or a mismatched token fails closed. Pressing Home is refused because it breaks the observed task chain.
 
@@ -265,6 +293,17 @@ to web effects.
 payload store. Provider-visible text receives metadata and an opaque reference,
 not image bytes.
 
+Visible presentation is a separate host-owned lifecycle. Strict hosts call
+`preparePresentation(sessionId, hostGeneration)`, retain the returned one-shot
+lease, and call `show(lease)`. `Web4AgentBrowserActivity` consumes that exact
+generation before it may create or attach a controller. Stop/replacement calls
+`closeAndAwaitQuiescence(lease, reason)`: pending launches are cancelled
+synchronously, a late Activity is rejected before controller creation, and the
+returned stage completes only after any already-attached Activity detaches.
+Closing an old same-session lease cannot close a newer generation. The original
+`show(sessionId)` and `close(sessionId)` remain compatibility APIs, but do not
+expose acknowledgement/quiescence to the host.
+
 ## State and background safety
 
 - Memory, skill, and persona output enters a pending candidate inbox first.
@@ -300,11 +339,14 @@ Run the sample instrumentation suite on a connected device:
 ./gradlew checkConnectedSample
 ```
 
-The sample instrumentation suite checks navigation to every documented product
+The connected suites check navigation to every documented product
 surface, guards the quick-entry buttons against clipped elevation shadows, and
 runs all nine registered Web4Agent tools through `AgentToolRegistry` over one
 inline visible-browser loop, including password-field redaction, page-lease
-revalidation, JavaScript-dialog suppression, and exact-scope capture retrieval.
+revalidation, JavaScript-dialog suppression, close-mid-guard effect fencing,
+presentation-generation/late-launch fencing, and exact-scope capture retrieval.
+They also exercise Accessibility gesture and
+clipboard-fallback Stop/quiescence on API 29 and API 34.
 
 ## Storage and privacy
 
@@ -339,7 +381,7 @@ The following security/approval items are intentionally not addressed by the cur
 - Schedule approval hashing does not yet include every behavior-affecting `ScheduleSpec` field.
 - `AndroidPhoneAgent.request()` callers must currently supply the generic `AgentApprovalCoordinator` on the returned request, as the sample does; the legacy configuration gate is not bridged automatically.
 
-The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.5.1.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
+The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.5.2.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
 
 ## License
 

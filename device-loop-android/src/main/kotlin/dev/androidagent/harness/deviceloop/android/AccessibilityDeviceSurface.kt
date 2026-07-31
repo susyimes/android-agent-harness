@@ -16,10 +16,14 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import dev.androidagent.harness.deviceloop.CancellableDeviceSurface
 import dev.androidagent.harness.deviceloop.DeviceActionException
 import dev.androidagent.harness.deviceloop.DeviceErrorType
 import dev.androidagent.harness.deviceloop.DeviceScreen
 import dev.androidagent.harness.deviceloop.DeviceSurface
+import dev.androidagent.harness.deviceloop.DeviceSurfaceEffectScope
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStopHandle
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStoppedException
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -65,13 +69,105 @@ class AccessibilityDeviceSurface(
         HarnessAccessibilityService.connectedInstance()
     },
     private val quietWindowMs: Long = DEFAULT_QUIET_WINDOW_MS
-) : DeviceSurface {
+) : DeviceSurface, CancellableDeviceSurface {
 
     private val mainHandler: Handler by lazy { Handler(Looper.getMainLooper()) }
+    private val effectScopeLock = Any()
+    private val currentEffectLease =
+        ThreadLocal<AccessibilityEffectScopeCoordinator.EffectLease?>()
+
+    private var activeEffectScope: AccessibilityEffectScopeCoordinator? = null
 
     private var lastScreen: DeviceScreen? = null
     private var nodeById: Map<String, AccessibilityNodeInfo> = emptyMap()
     private var retained: List<AccessibilityNodeInfo> = emptyList()
+
+    // -------------------------------------------------------- effect scopes
+
+    override fun openEffectScope(scopeId: String): DeviceSurfaceEffectScope {
+        lateinit var created: AccessibilityEffectScopeCoordinator
+        synchronized(effectScopeLock) {
+            val current = activeEffectScope
+            check(current == null || current.isQuiescent()) {
+                "The previous device-surface effect scope has not reached quiescence."
+            }
+            created = AccessibilityEffectScopeCoordinator(scopeId) { completed ->
+                synchronized(effectScopeLock) {
+                    if (activeEffectScope === completed) {
+                        activeEffectScope = null
+                    }
+                }
+            }
+            activeEffectScope = created
+        }
+        return ScopedDeviceSurface(created)
+    }
+
+    private inner class ScopedDeviceSurface(
+        private val coordinator: AccessibilityEffectScopeCoordinator
+    ) : DeviceSurfaceEffectScope {
+        override val scopeId: String = coordinator.scopeId
+
+        override fun snapshot(): DeviceScreen = observeScoped { this@AccessibilityDeviceSurface.snapshot() }
+
+        override fun tap(nodeId: String) = effectScoped {
+            this@AccessibilityDeviceSurface.tap(nodeId)
+        }
+
+        override fun setText(nodeId: String, text: String) = effectScoped {
+            this@AccessibilityDeviceSurface.setText(nodeId, text)
+        }
+
+        override fun back() = effectScoped { this@AccessibilityDeviceSurface.back() }
+
+        override fun home() = effectScoped { this@AccessibilityDeviceSurface.home() }
+
+        override fun swipe(direction: String, distancePx: Int, durationMs: Int) = effectScoped {
+            this@AccessibilityDeviceSurface.swipe(direction, distancePx, durationMs)
+        }
+
+        override fun scrollToText(
+            text: String,
+            direction: String,
+            maxScrolls: Int
+        ): Boolean = effectScoped {
+            this@AccessibilityDeviceSurface.scrollToText(text, direction, maxScrolls)
+        }
+
+        override fun launchApp(nameOrPackage: String): String = effectScoped {
+            this@AccessibilityDeviceSurface.launchApp(nameOrPackage)
+        }
+
+        override fun waitForStable(timeoutMs: Long): Boolean = effectScoped {
+            this@AccessibilityDeviceSurface.waitForStable(timeoutMs)
+        }
+
+        override fun foregroundPackage(): String? = observeScoped {
+            this@AccessibilityDeviceSurface.foregroundPackage()
+        }
+
+        override fun requestStop(reason: String): DeviceSurfaceStopHandle =
+            coordinator.requestStop(reason)
+
+        private fun <T> observeScoped(block: () -> T): T {
+            coordinator.ensureOpen()
+            return block()
+        }
+
+        private fun <T> effectScoped(block: () -> T): T {
+            return coordinator.runEffect { lease ->
+                check(currentEffectLease.get() == null) {
+                    "A scoped device effect cannot recursively enter another scope."
+                }
+                currentEffectLease.set(lease)
+                try {
+                    block()
+                } finally {
+                    currentEffectLease.remove()
+                }
+            }
+        }
+    }
 
     // ------------------------------------------------------------- observing
 
@@ -178,7 +274,10 @@ class AccessibilityDeviceSurface(
             text
         )
         val direct = try {
+            beginEffectStepIfScoped()
             node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+        } catch (stopped: DeviceSurfaceStoppedException) {
+            throw stopped
         } catch (_: RuntimeException) {
             false
         }
@@ -265,6 +364,7 @@ class AccessibilityDeviceSurface(
         }
         var previousSignature = signatureOf(screen)
         repeat(maxScrolls.coerceAtLeast(1)) {
+            beginEffectStepIfScoped()
             swipe(direction, SCROLL_DISTANCE_PX, SCROLL_DURATION_MILLIS)
             waitForStable(SCROLL_SETTLE_MILLIS)
             screen = snapshot()
@@ -298,6 +398,7 @@ class AccessibilityDeviceSurface(
         val startedAt = SystemClock.uptimeMillis()
         val deadline = startedAt + budget
         while (true) {
+            beginEffectStepIfScoped()
             val now = SystemClock.uptimeMillis()
             val lastEvent = service.lastRelevantEventUptimeMillis()
             val reference = if (lastEvent in 1..now) lastEvent else startedAt
@@ -367,6 +468,7 @@ class AccessibilityDeviceSurface(
                     "so it cannot be started."
             )
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        beginEffectStepIfScoped()
         try {
             service.startActivity(intent)
         } catch (failed: RuntimeException) {
@@ -378,6 +480,7 @@ class AccessibilityDeviceSurface(
 
         val deadline = SystemClock.uptimeMillis() + LAUNCH_TIMEOUT_MILLIS
         while (true) {
+            beginEffectStepIfScoped()
             val front = foregroundPackageQuietly()
             if (front == best.packageName) {
                 return best.packageName
@@ -451,6 +554,7 @@ class AccessibilityDeviceSurface(
     }
 
     private fun performClick(target: AccessibilityNodeInfo, nodeId: String) {
+        beginEffectStepIfScoped()
         if (!target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
             throw IllegalStateException(
                 "The system refused ACTION_CLICK for node '$nodeId'."
@@ -460,8 +564,12 @@ class AccessibilityDeviceSurface(
 
     private fun focusQuietly(node: AccessibilityNodeInfo) {
         try {
+            beginEffectStepIfScoped()
             node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
+            beginEffectStepIfScoped()
             node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        } catch (stopped: DeviceSurfaceStoppedException) {
+            throw stopped
         } catch (_: RuntimeException) {
             // Focus is an optimization; the write attempt below is the real test.
         }
@@ -478,7 +586,7 @@ class AccessibilityDeviceSurface(
                 "Node '$nodeId' refused ACTION_SET_TEXT and no clipboard is available to " +
                     "fall back to."
             )
-        val previous = onMainThread {
+        val previous = onMainEffectThread {
             try {
                 clipboard.primaryClip
             } catch (_: RuntimeException) {
@@ -487,9 +595,14 @@ class AccessibilityDeviceSurface(
             }
         }
         try {
-            onMainThread { clipboard.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text)) }
+            onMainEffectThread {
+                clipboard.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text))
+            }
             val pasted = try {
+                beginEffectStepIfScoped()
                 node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+            } catch (stopped: DeviceSurfaceStoppedException) {
+                throw stopped
             } catch (_: RuntimeException) {
                 false
             }
@@ -500,7 +613,7 @@ class AccessibilityDeviceSurface(
                 )
             }
         } finally {
-            onMainThread { restoreClipboard(clipboard, previous) }
+            onMainCleanupThread { restoreClipboard(clipboard, previous) }
         }
     }
 
@@ -590,14 +703,28 @@ class AccessibilityDeviceSurface(
                 latch.countDown()
             }
         }
+        beginEffectStepIfScoped()
         if (!service.dispatchGesture(gesture, callback, mainHandler)) {
             throw IllegalStateException("The system refused the $what gesture.")
         }
-        val reported = try {
-            latch.await(durationMs + GESTURE_GRACE_MILLIS, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
+        val deadline = SystemClock.elapsedRealtime() + durationMs + GESTURE_GRACE_MILLIS
+        var interrupted = false
+        var reported = false
+        while (!reported) {
+            val remaining = deadline - SystemClock.elapsedRealtime()
+            if (remaining <= 0L) break
+            try {
+                reported = latch.await(remaining, TimeUnit.MILLISECONDS)
+            } catch (_: InterruptedException) {
+                // AgentRunHandle.cancel interrupts the worker immediately after
+                // the scope fence. Once dispatch won, keep the admitted effect
+                // alive until Android reports its terminal callback (or the
+                // bounded gesture window expires), then restore interruption.
+                interrupted = true
+            }
+        }
+        if (interrupted) {
             Thread.currentThread().interrupt()
-            false
         }
         if (!reported) {
             throw IllegalStateException(
@@ -612,9 +739,78 @@ class AccessibilityDeviceSurface(
 
     private fun performGlobal(action: Int, name: String) {
         val service = requireService()
+        beginEffectStepIfScoped()
         if (!service.performGlobalAction(action)) {
             throw IllegalStateException("The system refused the global '$name' action.")
         }
+    }
+
+    /**
+     * Runs a cancellable, scope-owned task on main. Cleanup deliberately uses
+     * [onMainThread] instead: once the clipboard was borrowed its restoration
+     * must run even after Stop, and quiescence waits for the enclosing effect.
+     */
+    private fun <T> onMainEffectThread(block: () -> T): T {
+        val lease = currentEffectLease.get() ?: return onMainThread(block)
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            lease.beginEffectStep()
+            return block()
+        }
+
+        val call = ScopedMainThreadCall(lease, block)
+        val ticket = lease.scheduleMainTask(
+            post = { admitted ->
+                call.ticket = admitted
+                mainHandler.post(call)
+            },
+            cancel = { _, stopped ->
+                mainHandler.removeCallbacks(call)
+                call.cancel(stopped)
+            }
+        )
+        return call.await(mainHandler, ticket)
+    }
+
+    /**
+     * Completes an already-required cleanup on main without allowing worker
+     * interruption or the ordinary main-task timeout to publish quiescence
+     * ahead of the posted callback. Stop itself remains non-blocking because
+     * only the admitted effect worker waits here.
+     */
+    private fun <T> onMainCleanupThread(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return block()
+        }
+        val value = AtomicReference<Any?>(null)
+        val failure = AtomicReference<RuntimeException?>(null)
+        val latch = CountDownLatch(1)
+        check(
+            mainHandler.post {
+                try {
+                    value.set(block())
+                } catch (error: RuntimeException) {
+                    failure.set(error)
+                } finally {
+                    latch.countDown()
+                }
+            }
+        ) { "The Android main thread rejected a device-surface cleanup task." }
+
+        var interrupted = false
+        while (true) {
+            try {
+                latch.await()
+                break
+            } catch (_: InterruptedException) {
+                interrupted = true
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt()
+        }
+        failure.get()?.let { error -> throw error }
+        @Suppress("UNCHECKED_CAST")
+        return value.get() as T
     }
 
     /** Runs [block] on the main looper and blocks until it finished. */
@@ -649,6 +845,77 @@ class AccessibilityDeviceSurface(
         failure.get()?.let { error -> throw error }
         @Suppress("UNCHECKED_CAST")
         return value.get() as T
+    }
+
+    private class ScopedMainThreadCall<T>(
+        private val lease: AccessibilityEffectScopeCoordinator.EffectLease,
+        private val block: () -> T
+    ) : Runnable {
+        lateinit var ticket: AccessibilityEffectScopeCoordinator.MainTaskTicket
+
+        private val terminal = AtomicBoolean(false)
+        private val value = AtomicReference<Any?>(null)
+        private val failure = AtomicReference<RuntimeException?>(null)
+        private val latch = CountDownLatch(1)
+
+        override fun run() {
+            if (!lease.beginMainTask(ticket)) {
+                cancel(
+                    lease.stoppedException() ?: IllegalStateException(
+                        "A stale device-surface main task was discarded."
+                    )
+                )
+                return
+            }
+            try {
+                value.set(block())
+            } catch (error: RuntimeException) {
+                failure.set(error)
+            } finally {
+                lease.finishMainTask(ticket)
+                finish()
+            }
+        }
+
+        fun cancel(error: RuntimeException) {
+            failure.compareAndSet(null, error)
+            finish()
+        }
+
+        fun await(
+            handler: Handler,
+            admittedTicket: AccessibilityEffectScopeCoordinator.MainTaskTicket
+        ): T {
+            val finished = try {
+                latch.await(MAIN_THREAD_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
+            }
+            if (!finished) {
+                handler.removeCallbacks(this)
+                lease.abandonMainTask(admittedTicket)
+                cancel(
+                    IllegalStateException(
+                        "The main thread did not run a device-surface task within " +
+                            "${MAIN_THREAD_TIMEOUT_MILLIS}ms."
+                    )
+                )
+            }
+            failure.get()?.let { error -> throw error }
+            @Suppress("UNCHECKED_CAST")
+            return value.get() as T
+        }
+
+        private fun finish() {
+            if (terminal.compareAndSet(false, true)) {
+                latch.countDown()
+            }
+        }
+    }
+
+    private fun beginEffectStepIfScoped() {
+        currentEffectLease.get()?.beginEffectStep()
     }
 
     private fun requireBackgroundThread(what: String) {

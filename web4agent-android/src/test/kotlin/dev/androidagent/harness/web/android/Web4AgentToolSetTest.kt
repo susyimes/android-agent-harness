@@ -74,6 +74,55 @@ class Web4AgentToolSetTest {
     }
 
     @Test
+    fun openWaitsForAnAcknowledgedPresentationBeforeCreatingTheSession() {
+        val backend = FakeSession()
+        val order = mutableListOf<String>()
+        val presenter = object : Web4AgentAcknowledgedPresenter {
+            override fun show(sessionId: String) = error("Acknowledged path expected.")
+
+            override fun showAndAwait(
+                sessionId: String,
+                timeoutMillis: Long
+            ): Web4AgentPresentationAcknowledgement {
+                order += "attached:$sessionId:$timeoutMillis"
+                return Web4AgentPresentationAcknowledgement(
+                    presentationId = "presentation",
+                    sessionId = sessionId,
+                    generation = 1L,
+                    hostGeneration = "host",
+                    status = Web4AgentPresentationStatus.ATTACHED,
+                    reasonCode = null
+                )
+            }
+        }
+        val sessions = Web4AgentSessionProvider { sessionId ->
+            order += "session:$sessionId"
+            backend.sessionId = sessionId
+            backend
+        }
+        val registry = AgentToolRegistry(
+            Web4AgentToolSet(
+                sessions = sessions,
+                presenter = presenter,
+                approvals = allowAllCoordinator()
+            ).tools()
+        )
+
+        val opened = registry.execute(
+            AgentToolCall(
+                id = "open-ack",
+                toolName = "web4agent_open",
+                arguments = mapOf("html" to "<h1>attached</h1>", "timeout_ms" to "1234")
+            ),
+            sessionId = "chat-ack",
+            runId = "run-ack"
+        )
+
+        assertFalse(opened.isError)
+        assertEquals(listOf("attached:chat-ack:1234", "session:chat-ack"), order)
+    }
+
+    @Test
     fun evalFailsClosedBeforeCallingTheBackendWithoutHostApproval() {
         val backend = FakeSession()
         val registry = registry(backend)

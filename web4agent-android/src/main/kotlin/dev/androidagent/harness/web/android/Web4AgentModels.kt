@@ -263,6 +263,21 @@ fun interface Web4AgentPresenter {
     fun show(sessionId: String)
 }
 
+/**
+ * Optional visible-surface contract used by strict tool hosts.
+ *
+ * Implementations return only after the exact presentation generation is
+ * attached, cancelled, or rejected. Existing [Web4AgentPresenter]
+ * implementations remain compatible and keep their original fire-and-return
+ * behavior.
+ */
+interface Web4AgentAcknowledgedPresenter : Web4AgentPresenter {
+    fun showAndAwait(
+        sessionId: String,
+        timeoutMillis: Long
+    ): Web4AgentPresentationAcknowledgement
+}
+
 object Web4AgentGuidance {
     const val CONTEXT_ID = "web4agent-guidance"
 

@@ -35,9 +35,33 @@ subprojects {
             repositories {
                 maven {
                     name = 'sdkLocal'
-                    url = rootProject.layout.buildDirectory.dir('sdk-repository')
+                    url = uri(
+                        rootProject.providers.gradleProperty('SDK_REPOSITORY_DIR')
+                            .orElse(
+                                rootProject.layout.buildDirectory
+                                    .dir('sdk-candidate-repository')
+                                    .map { directory -> directory.asFile.absolutePath }
+                            )
+                            .get()
+                    )
                 }
             }
+        }
+        if (
+            rootProject.providers.gradleProperty('SDK_RELEASE_PUBLISH')
+                .map { value -> value.toBoolean() }
+                .getOrElse(false)
+        ) {
+            tasks.withType(
+                org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+            ).configureEach {
+                dependsOn rootProject.tasks.named('verifySdkReleaseSource')
+            }
+        }
+        tasks.withType(
+            org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+        ).configureEach {
+            mustRunAfter rootProject.tasks.named('verifySdkReleaseSource')
         }
     }
 }
@@ -137,6 +161,7 @@ tasks.register('checkM0') {
     dependsOn ':device-loop:test'
     dependsOn ':device-loop-android:testDebugUnitTest'
     dependsOn ':web4agent-android:testDebugUnitTest'
+    dependsOn ':web4agent-android:assembleDebugAndroidTest'
     dependsOn ':demo:test'
     dependsOn ':agent-sdk-android:testDebugUnitTest'
     dependsOn ':sdk-consumer-smoke:test'
@@ -148,7 +173,8 @@ tasks.register('checkM0') {
 
 tasks.register('checkConnectedSample') {
     group = 'verification'
-    description = 'Runs the sample instrumentation suite on a connected Android device.'
+    description = 'Runs Harness and sample instrumentation suites on a connected Android device.'
+    dependsOn ':web4agent-android:connectedDebugAndroidTest'
     dependsOn ':sample:connectedDebugAndroidTest'
 }
 
@@ -169,7 +195,7 @@ tasks.register('checkSdkAbi') {
 
 tasks.register('publishJvmSdk') {
     group = 'publishing'
-    description = 'Builds and publishes JVM SDK JAR artifacts to build/sdk-repository.'
+    description = 'Builds and publishes JVM SDK JAR artifacts to the configured candidate repository.'
     dependsOn ':harness-core:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-sdk:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-approval:publishSdkPublicationToSdkLocalRepository'
@@ -184,7 +210,7 @@ tasks.register('publishJvmSdk') {
 
 tasks.register('publishSdk') {
     group = 'publishing'
-    description = 'Builds and publishes all SDK JAR/AAR artifacts to build/sdk-repository.'
+    description = 'Builds and publishes all SDK JAR/AAR artifacts to the configured candidate repository.'
     dependsOn 'publishJvmSdk'
     dependsOn ':device-loop-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':web4agent-android:publishSdkPublicationToSdkLocalRepository'
@@ -193,6 +219,161 @@ tasks.register('publishSdk') {
     dependsOn ':agent-data-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-scheduling-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-voice-android:publishSdkPublicationToSdkLocalRepository'
+}
+
+tasks.register('verifySdkReleaseSource') {
+    group = 'publishing'
+    description = 'Rejects dirty-source or mutable-directory SDK release publication.'
+
+    doLast {
+        if (
+            !providers.gradleProperty('SDK_RELEASE_PUBLISH')
+                .map { value -> value.toBoolean() }
+                .getOrElse(false)
+        ) {
+            throw new GradleException(
+                'Release publication requires -PSDK_RELEASE_PUBLISH=true.'
+            )
+        }
+        def repositoryProperty = providers.gradleProperty('SDK_REPOSITORY_DIR').orNull
+        if (repositoryProperty == null || repositoryProperty.trim().isEmpty()) {
+            throw new GradleException(
+                'Release publication requires a new -PSDK_REPOSITORY_DIR path.'
+            )
+        }
+        def status = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'status', '--porcelain=v1', '--untracked-files=all'
+            standardOutput = status
+        }
+        if (!status.toString('UTF-8').trim().isEmpty()) {
+            throw new GradleException('SDK release source must be a clean Git worktree.')
+        }
+        def commitOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-parse', 'HEAD'
+            standardOutput = commitOutput
+        }
+        rootProject.ext.sdkReleaseVerifiedCommit = commitOutput.toString('UTF-8').trim()
+        def repository = file(repositoryProperty)
+        if (repository.exists() && !fileTree(repository).files.isEmpty()) {
+            throw new GradleException(
+                "SDK release repository must be a new empty directory: ${repository}"
+            )
+        }
+    }
+}
+
+tasks.register('writeSdkPublisherSidecar') {
+    group = 'publishing'
+    description = 'Writes commit-bound coordinates and SHA-256 for a clean SDK release.'
+    dependsOn 'publishSdk'
+    dependsOn 'verifySdkReleaseSource'
+
+    doLast {
+        def repositoryProperty = providers.gradleProperty('SDK_REPOSITORY_DIR').orNull
+        if (repositoryProperty == null || repositoryProperty.trim().isEmpty()) {
+            throw new GradleException('SDK_REPOSITORY_DIR is required for a release sidecar.')
+        }
+        def repository = file(repositoryProperty).canonicalFile
+        if (!repository.isDirectory()) {
+            throw new GradleException("Published SDK repository is missing: ${repository}")
+        }
+        def commitOutput = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-parse', 'HEAD'
+            standardOutput = commitOutput
+        }
+        def commit = commitOutput.toString('UTF-8').trim()
+        def status = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'status', '--porcelain=v1', '--untracked-files=all'
+            standardOutput = status
+        }
+        if (!status.toString('UTF-8').trim().isEmpty()) {
+            throw new GradleException(
+                'SDK release source changed while artifacts were being published.'
+            )
+        }
+        def verifiedCommit = rootProject.ext.has('sdkReleaseVerifiedCommit')
+            ? rootProject.ext.sdkReleaseVerifiedCommit
+            : null
+        if (verifiedCommit == null || verifiedCommit != commit) {
+            throw new GradleException(
+                'SDK release HEAD changed while artifacts were being published.'
+            )
+        }
+        def releaseRoot = repository.parentFile
+        def digest = { File artifact ->
+            def sha256 = java.security.MessageDigest.getInstance('SHA-256')
+            artifact.withInputStream { stream ->
+                byte[] buffer = new byte[64 * 1024]
+                int read
+                while ((read = stream.read(buffer)) != -1) {
+                    sha256.update(buffer, 0, read)
+                }
+            }
+            sha256.digest().encodeHex().toString()
+        }
+        def artifacts = fileTree(repository).files
+            .findAll { artifact -> artifact.isFile() }
+            .sort { left, right -> left.path <=> right.path }
+            .collect { artifact ->
+                [
+                    relativePath: repository.toPath().relativize(artifact.toPath())
+                        .toString().replace('\\', '/'),
+                    bytes: artifact.length(),
+                    sha256: digest(artifact)
+                ]
+            }
+        def groupPath = providers.gradleProperty('GROUP').get().replace('.', '/')
+        def version = providers.gradleProperty('VERSION_NAME').get()
+        def versionRoot = new File(repository, groupPath)
+        def coordinates = versionRoot.listFiles()
+            ?.findAll { artifactDirectory ->
+                new File(artifactDirectory, version).isDirectory()
+            }
+            ?.collect { artifactDirectory ->
+                "${providers.gradleProperty('GROUP').get()}:${artifactDirectory.name}:${version}"
+            }
+            ?.sort() ?: []
+        def sidecar = [
+            schemaVersion: 1,
+            group: providers.gradleProperty('GROUP').get(),
+            version: version,
+            commit: commit,
+            repository: repository.absolutePath,
+            coordinates: coordinates,
+            artifacts: artifacts
+        ]
+        releaseRoot.mkdirs()
+        def sidecarFile = new File(releaseRoot, 'publisher-sidecar.json')
+        sidecarFile.setText(
+            groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(sidecar)) +
+                System.lineSeparator(),
+            'UTF-8'
+        )
+        new File(releaseRoot, 'artifacts.sha256').setText(
+            artifacts.collect { artifact ->
+                "${artifact.sha256}  ${artifact.relativePath}"
+            }.join(System.lineSeparator()) + System.lineSeparator(),
+            'UTF-8'
+        )
+        new File(releaseRoot, 'publisher-sidecar.sha256').setText(
+            "${digest(sidecarFile)}  publisher-sidecar.json${System.lineSeparator()}",
+            'UTF-8'
+        )
+        logger.lifecycle(
+            "SDK publisher sidecar wrote ${coordinates.size()} coordinates and " +
+                "${artifacts.size()} files for ${commit}."
+        )
+    }
+}
+
+tasks.register('publishSdkRelease') {
+    group = 'publishing'
+    description = 'Publishes a clean SDK to a new repository and writes its hash sidecar.'
+    dependsOn 'writeSdkPublisherSidecar'
 }
 
 tasks.register('checkSdk') {

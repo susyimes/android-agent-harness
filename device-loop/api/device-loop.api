@@ -31,6 +31,20 @@ public final class dev/androidagent/harness/deviceloop/ArgumentApprovalGate : de
 	public fun pauseMessage (Ldev/androidagent/harness/deviceloop/DeviceNode;Ljava/lang/String;Ldev/androidagent/harness/deviceloop/ApprovalDecision;)Ljava/lang/String;
 }
 
+public abstract interface class dev/androidagent/harness/deviceloop/CancellableDeviceSurface : dev/androidagent/harness/deviceloop/DeviceSurface {
+	public abstract fun openEffectScope (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;
+}
+
+public final class dev/androidagent/harness/deviceloop/CancellableDeviceSurface$DefaultImpls {
+	public static fun back (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;)V
+	public static fun foregroundPackage (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;)Ljava/lang/String;
+	public static fun home (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;)V
+	public static fun launchApp (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;Ljava/lang/String;)Ljava/lang/String;
+	public static fun scrollToText (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;Ljava/lang/String;Ljava/lang/String;I)Z
+	public static fun swipe (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;Ljava/lang/String;II)V
+	public static fun waitForStable (Ldev/androidagent/harness/deviceloop/CancellableDeviceSurface;J)Z
+}
+
 public final class dev/androidagent/harness/deviceloop/DeviceActTool : dev/androidagent/harness/approval/AgentApprovalAwareTool {
 	public static final field ACTION_BACK Ljava/lang/String;
 	public static final field ACTION_HOME Ljava/lang/String;
@@ -225,6 +239,57 @@ public final class dev/androidagent/harness/deviceloop/DeviceSurface$DefaultImpl
 	public static fun scrollToText (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ljava/lang/String;Ljava/lang/String;I)Z
 	public static fun swipe (Ldev/androidagent/harness/deviceloop/DeviceSurface;Ljava/lang/String;II)V
 	public static fun waitForStable (Ldev/androidagent/harness/deviceloop/DeviceSurface;J)Z
+}
+
+public abstract interface class dev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope : dev/androidagent/harness/deviceloop/DeviceSurface, dev/androidagent/harness/deviceloop/DeviceSurfaceStopController, java/lang/AutoCloseable {
+	public fun close ()V
+	public abstract fun getScopeId ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope$DefaultImpls {
+	public static fun back (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;)V
+	public static fun close (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;)V
+	public static fun foregroundPackage (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;)Ljava/lang/String;
+	public static fun home (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;)V
+	public static fun launchApp (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;Ljava/lang/String;)Ljava/lang/String;
+	public static fun scrollToText (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;Ljava/lang/String;Ljava/lang/String;I)Z
+	public static fun swipe (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;Ljava/lang/String;II)V
+	public static fun waitForStable (Ldev/androidagent/harness/deviceloop/DeviceSurfaceEffectScope;J)Z
+}
+
+public abstract interface class dev/androidagent/harness/deviceloop/DeviceSurfaceStopController {
+	public abstract fun requestStop (Ljava/lang/String;)Ldev/androidagent/harness/deviceloop/DeviceSurfaceStopHandle;
+}
+
+public abstract interface class dev/androidagent/harness/deviceloop/DeviceSurfaceStopHandle {
+	public abstract fun getQuiescence ()Ljava/util/concurrent/CompletionStage;
+	public abstract fun getReason ()Ljava/lang/String;
+	public abstract fun getScopeId ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceSurfaceStopOutcome {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;JJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun component5 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;JJJ)Ldev/androidagent/harness/deviceloop/DeviceSurfaceStopOutcome;
+	public static synthetic fun copy$default (Ldev/androidagent/harness/deviceloop/DeviceSurfaceStopOutcome;Ljava/lang/String;Ljava/lang/String;JJJILjava/lang/Object;)Ldev/androidagent/harness/deviceloop/DeviceSurfaceStopOutcome;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdmittedEffects ()J
+	public final fun getCancelledQueuedTasks ()J
+	public final fun getCompletedEffects ()J
+	public final fun getReason ()Ljava/lang/String;
+	public final fun getScopeId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/androidagent/harness/deviceloop/DeviceSurfaceStoppedException : java/lang/IllegalStateException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getScopeId ()Ljava/lang/String;
+	public final fun getStopReason ()Ljava/lang/String;
 }
 
 public final class dev/androidagent/harness/deviceloop/FakeDevice : dev/androidagent/harness/deviceloop/DeviceSurface {

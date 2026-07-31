@@ -73,7 +73,7 @@ class Web4AgentInstrumentedTest {
                               </body>
                             </html>
                         """.trimIndent(),
-                        waitTimeoutMillis = 1_000L
+                        waitTimeoutMillis = 5_000L
                     )
                 )
                 assertTrue(opened.ok)
@@ -175,7 +175,7 @@ class Web4AgentInstrumentedTest {
                         """.trimIndent()
                     )
                 )
-                assertFalse(opened.isError)
+                assertFalse(opened.content, opened.isError)
 
                 val observed = call("observe", "web4agent_observe")
                 assertFalse(observed.isError)
@@ -360,7 +360,7 @@ class Web4AgentInstrumentedTest {
                               <script>window.effectLog='NONE';</script>
                             </body></html>
                         """.trimIndent(),
-                        waitTimeoutMillis = 1_000L
+                        waitTimeoutMillis = 5_000L
                     )
                 )
                 assertTrue(opened.ok)
@@ -539,7 +539,7 @@ class Web4AgentInstrumentedTest {
                                   <script>window.effectLog='NONE';</script>
                                 </body></html>
                             """.trimIndent(),
-                            waitTimeoutMillis = 1_000L
+                            waitTimeoutMillis = 5_000L
                         )
                     ).ok
                 )
@@ -580,7 +580,7 @@ class Web4AgentInstrumentedTest {
                                   <script>window.effectLog='NONE';</script>
                                 </body></html>
                             """.trimIndent(),
-                            waitTimeoutMillis = 1_000L
+                            waitTimeoutMillis = 5_000L
                         )
                     ).ok
                 )
@@ -596,7 +596,7 @@ class Web4AgentInstrumentedTest {
                         purpose = "verify replacement did not receive the old effect"
                     )
                 )
-                assertTrue(replacementState.dataJson.contains("NONE"))
+                assertTrue(replacementState.dataJson, replacementState.dataJson.contains("NONE"))
                 assertTrue(runtime.activeSessionIds().contains(sessionId))
             }
         } finally {

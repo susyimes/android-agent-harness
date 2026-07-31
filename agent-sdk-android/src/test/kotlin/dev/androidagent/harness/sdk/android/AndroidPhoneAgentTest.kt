@@ -12,10 +12,18 @@ import dev.androidagent.harness.AgentToolInvocation
 import dev.androidagent.harness.AgentToolResult
 import dev.androidagent.harness.AgentToolSpec
 import dev.androidagent.harness.deviceloop.ApprovalDecision
+import dev.androidagent.harness.deviceloop.CancellableDeviceSurface
 import dev.androidagent.harness.deviceloop.DeviceNode
 import dev.androidagent.harness.deviceloop.DeviceScreen
 import dev.androidagent.harness.deviceloop.DeviceSurface
+import dev.androidagent.harness.deviceloop.DeviceSurfaceEffectScope
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStopHandle
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStopOutcome
 import dev.androidagent.harness.deviceloop.RiskPolicy
+import dev.androidagent.harness.sdk.AgentRunEvent
+import dev.androidagent.harness.sdk.AgentRunListener
+import dev.androidagent.harness.sdk.AgentRunOutcome
+import java.util.concurrent.CompletableFuture
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -102,6 +110,78 @@ class AndroidPhoneAgentTest {
         }
     }
 
+    @Test
+    fun strictRequestFailsClosedForALegacySurface() {
+        val phone = AndroidPhoneAgent(
+            surface = StaticSurface(),
+            configuration = configuration()
+        )
+
+        assertFalse(phone.supportsStopQuiescence())
+        assertThrows(IllegalStateException::class.java) {
+            phone.requestWithStopQuiescence(
+                sessionId = "legacy-session",
+                userInput = "tap",
+                providerFactory = AgentProviderFactory.fixed(FinalProvider())
+            )
+        }
+    }
+
+    @Test
+    fun strictRequestOwnsAnIsolatedEffectScopeAndStopHandle() {
+        val surface = RecordingCancellableSurface()
+        val phone = AndroidPhoneAgent(surface, configuration())
+
+        val binding = phone.requestWithStopQuiescence(
+            sessionId = "phone-session",
+            userInput = "tap",
+            providerFactory = AgentProviderFactory.fixed(FinalProvider()),
+            effectScopeId = "run-42"
+        )
+
+        assertTrue(phone.supportsStopQuiescence())
+        assertEquals("run-42", surface.openedScopeId)
+        assertEquals("phone-session", binding.request.sessionId)
+        val first = binding.requestStop("user.stop")
+        val repeated = binding.requestStop("ignored.reason")
+        assertTrue(first === repeated)
+        assertEquals("user.stop", first.reason)
+        assertTrue(first.quiescence.toCompletableFuture().isDone)
+    }
+
+    @Test
+    fun terminalRunEventFencesTheScopeBeforeCallingTheHostListener() {
+        val surface = RecordingCancellableSurface()
+        val phone = AndroidPhoneAgent(surface, configuration())
+        var reasonObservedByHost: String? = null
+        val binding = phone.requestWithStopQuiescence(
+            sessionId = "phone-session",
+            userInput = "tap",
+            providerFactory = AgentProviderFactory.fixed(FinalProvider()),
+            listener = AgentRunListener {
+                reasonObservedByHost = surface.openedScope?.stoppedReason
+            },
+            effectScopeId = "run-finished"
+        )
+
+        binding.request.listener.onEvent(
+            AgentRunEvent.Finished(
+                runId = "run-1",
+                sessionId = "phone-session",
+                outcome = AgentRunOutcome.Cancelled()
+            )
+        )
+
+        assertEquals("agent.run.finished", reasonObservedByHost)
+        assertEquals("agent.run.finished", surface.openedScope?.stoppedReason)
+    }
+
+    private fun configuration(): AndroidPhoneAgentConfiguration =
+        AndroidPhoneAgentConfiguration(
+            riskPolicy = RiskPolicy(),
+            approvalGate = { _, _, _ -> ApprovalDecision.DENIED }
+        )
+
     private class StaticSurface : DeviceSurface {
         override fun snapshot(): DeviceScreen {
             return DeviceScreen(
@@ -110,6 +190,56 @@ class AndroidPhoneAgentTest {
                 nodes = listOf(DeviceNode("node", "button", "Open"))
             )
         }
+
+        override fun tap(nodeId: String) = Unit
+
+        override fun setText(nodeId: String, text: String) = Unit
+    }
+
+    private class RecordingCancellableSurface : CancellableDeviceSurface {
+        var openedScopeId: String? = null
+        var openedScope: RecordingScope? = null
+
+        override fun openEffectScope(scopeId: String): DeviceSurfaceEffectScope {
+            openedScopeId = scopeId
+            return RecordingScope(scopeId).also { scope -> openedScope = scope }
+        }
+
+        override fun snapshot(): DeviceScreen = StaticSurface().snapshot()
+
+        override fun tap(nodeId: String) = Unit
+
+        override fun setText(nodeId: String, text: String) = Unit
+    }
+
+    private class RecordingScope(
+        override val scopeId: String
+    ) : DeviceSurfaceEffectScope {
+        private var handle: DeviceSurfaceStopHandle? = null
+
+        val stoppedReason: String?
+            get() = handle?.reason
+
+        override fun requestStop(reason: String): DeviceSurfaceStopHandle {
+            handle?.let { existing -> return existing }
+            val created = object : DeviceSurfaceStopHandle {
+                override val scopeId: String = this@RecordingScope.scopeId
+                override val reason: String = reason
+                override val quiescence = CompletableFuture.completedFuture(
+                    DeviceSurfaceStopOutcome(
+                        scopeId = scopeId,
+                        reason = reason,
+                        admittedEffects = 0L,
+                        completedEffects = 0L,
+                        cancelledQueuedTasks = 0L
+                    )
+                )
+            }
+            handle = created
+            return created
+        }
+
+        override fun snapshot(): DeviceScreen = StaticSurface().snapshot()
 
         override fun tap(nodeId: String) = Unit
 

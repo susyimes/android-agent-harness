@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.5.1 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.5.2 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -213,16 +213,38 @@ provider calls device_observe
   → finish requires fresh visible evidence
 ```
 
+Strict global Stop uses an optional run-scoped surface rather than changing the
+legacy synchronous `DeviceSurface` ABI:
+
+```text
+UI Stop
+  → DeviceSurfaceEffectScope.requestStop closes Accessibility admission
+  → AgentRunHandle.cancel fences the provider/tool loop
+  → queued main work is cancelled
+  → dispatched gesture callbacks and clipboard cleanup drain
+  → quiescence completes
+  → host may publish STOPPED
+```
+
+`AccessibilityDeviceSurface` implements this scope. The request path never
+blocks Android main while waiting for quiescence; a strict host must feature-
+detect the capability and fail closed for a legacy surface.
+
 ### Web4Agent
 
 ```text
 provider calls web4agent_open
+  → host prepares a one-shot visible-presentation generation
+  → BrowserActivity consumes it before controller creation/attach
   → runtime binds a visible WebView to the Agent session id
   → observe/inspect issues a host page epoch, observation id, and fingerprints
   → act or eval binds that one-page lease into the exact host approval
-  → token consumption is followed by main-thread atomic lease revalidation
+  → token consumption is followed by a WebView guard
+  → a second main-thread atomic lease/close/epoch check owns effect dispatch
   → stale page/target returns occurred=false without the requested effect
   → provider observes the changed page
+  → Stop cancels pending presentation admission and closes the session
+  → presentation quiescence waits for an admitted Activity to detach
   → finish closes or explicitly leaves the session visible
 ```
 
@@ -236,6 +258,12 @@ live form input/change, Activity detach/attach, effect completion, close, and
 replacement; the document guard also hashes the complete serialized DOM and
 live form-control state. JavaScript dialogs are cancelled by the Harness
 WebChromeClient rather than delegated to Android's native modal-window default.
+Visible Activity launch has its own Harness-issued lease and optional
+host-generation binding. A queued Activity must consume that exact one-shot
+lease under the runtime lifecycle lock before controller creation. Stop closes
+admission synchronously; its completion stage does not report quiescence until
+an already-attached Activity has detached. A stale same-session generation
+cannot close or consume its replacement.
 
 ## Persistence domains
 

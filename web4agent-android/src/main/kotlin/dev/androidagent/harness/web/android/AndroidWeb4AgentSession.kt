@@ -44,12 +44,24 @@ internal data class Web4AgentPageState(
     val error: String?
 )
 
+/** Same-module deterministic latches for exact-effect connected tests. */
+internal interface Web4AgentExactEffectTestHooks {
+    fun afterGuardBeforeDispatch(sessionId: String, leaseId: String) = Unit
+    fun afterSessionFenced(sessionId: String) = Unit
+
+    companion object {
+        val NONE = object : Web4AgentExactEffectTestHooks {}
+    }
+}
+
 internal class AndroidWeb4AgentSession(
     private val applicationContext: Context,
     override val sessionId: String,
     private val configuration: Web4AgentConfiguration,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis,
-    private val onClosed: (String) -> Unit = {}
+    private val onClosed: (String) -> Unit = {},
+    private val exactEffectTestHooks: Web4AgentExactEffectTestHooks =
+        Web4AgentExactEffectTestHooks.NONE
 ) : Web4AgentExactEffectSession {
     private val main = Handler(Looper.getMainLooper())
     private val loadMonitor = Object()
@@ -306,8 +318,8 @@ internal class AndroidWeb4AgentSession(
             }
             throw error
         }
-        val stale = isStaleTarget(json)
-        if (!stale) {
+        val exactFailureCode = exactEffectFailureCode(json)
+        if (exactFailureCode == null) {
             appendConsole(
                 Web4AgentConsoleEntry(
                     level = "agent",
@@ -318,15 +330,19 @@ internal class AndroidWeb4AgentSession(
                 )
             )
         }
-        val backend = if (stale) {
+        val backend = if (exactFailureCode != null) {
             exactJsonFailure(
-                Web4AgentExactEffectErrors.STALE_TARGET,
-                "Web4Agent page changed after approval; JavaScript was not executed."
+                exactFailureCode,
+                if (exactFailureCode == Web4AgentExactEffectErrors.SESSION_CLOSED) {
+                    "Web4Agent session closed before JavaScript execution."
+                } else {
+                    "Web4Agent page changed after approval; JavaScript was not executed."
+                }
             )
         } else {
             jsonResult(json, "Executed Web4Agent JavaScript for ${request.purpose}.")
         }
-        return Web4AgentExactJsonExecution(backend, occurred = !stale)
+        return Web4AgentExactJsonExecution(backend, occurred = exactFailureCode == null)
     }
 
     override fun actPrepared(
@@ -359,12 +375,17 @@ internal class AndroidWeb4AgentSession(
                     ),
                     timeoutMillis = action.timeoutMillis
                 ).take(configuration.maxResultChars)
-                val stale = isStaleTarget(json)
-                if (stale) {
+                val exactFailureCode = exactEffectFailureCode(json)
+                if (exactFailureCode != null) {
                     Web4AgentExactActionExecution(
                         exactActionFailure(
-                            Web4AgentExactEffectErrors.STALE_TARGET,
-                            "Web4Agent page or target changed after approval; the action was not executed."
+                            exactFailureCode,
+                            if (exactFailureCode == Web4AgentExactEffectErrors.SESSION_CLOSED) {
+                                "Web4Agent session closed before the action executed."
+                            } else {
+                                "Web4Agent page or target changed after approval; " +
+                                    "the action was not executed."
+                            }
                         ),
                         occurred = false
                     )
@@ -478,6 +499,7 @@ internal class AndroidWeb4AgentSession(
                 dataJson = """{"ok":true,"closed":true}"""
             )
         }
+        exactEffectTestHooks.afterSessionFenced(sessionId)
         val activity = hostActivity.get()
         onMain {
             webView?.let { view ->
@@ -660,11 +682,11 @@ internal class AndroidWeb4AgentSession(
                 }
 
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
-                    if (newProgress >= 100 && loading) {
-                        markLoading(false, lastError)
-                    } else {
-                        notifyState()
-                    }
+                    // Progress 100 can arrive while document.readyState is still
+                    // "loading" (notably after replacing a just-closed session).
+                    // Only WebViewClient.onPageFinished or an error callback may
+                    // linearize load completion; progress is presentation-only.
+                    notifyState()
                 }
             }
         }
@@ -744,11 +766,43 @@ internal class AndroidWeb4AgentSession(
                 result.complete(Web4AgentExactEffectErrors.json(rejection.code, rejection.summary))
                 return@post
             }
-            view.evaluateJavascript(script) { encoded ->
-                val decoded = Web4AgentJson.decodeJavascriptString(encoded)
-                    .take(configuration.maxResultChars)
-                endExactExecution(lease)
-                result.complete(decoded)
+            view.evaluateJavascript(Web4AgentScripts.guard(lease.documentMaterial)) { guarded ->
+                val guard = Web4AgentJson.decodeJavascriptString(guarded)
+                if (!isSuccessful(guard)) {
+                    endExactExecution(lease)
+                    result.complete(
+                        Web4AgentExactEffectErrors.json(
+                            Web4AgentExactEffectErrors.STALE_TARGET,
+                            "Web4Agent page changed after approval; JavaScript was not executed."
+                        )
+                    )
+                    return@evaluateJavascript
+                }
+                try {
+                    exactEffectTestHooks.afterGuardBeforeDispatch(sessionId, lease.leaseId)
+                    val dispatchRejection = dispatchExactJavascriptOnMain(
+                        lease = lease,
+                        view = view,
+                        script = script
+                    ) { encoded ->
+                        val decoded = Web4AgentJson.decodeJavascriptString(encoded)
+                            .take(configuration.maxResultChars)
+                        endExactExecution(lease)
+                        result.complete(decoded)
+                    }
+                    if (dispatchRejection != null) {
+                        endExactExecution(lease)
+                        result.complete(
+                            Web4AgentExactEffectErrors.json(
+                                dispatchRejection.code,
+                                dispatchRejection.summary
+                            )
+                        )
+                    }
+                } catch (failure: RuntimeException) {
+                    endExactExecution(lease)
+                    result.completeExceptionally(failure)
+                }
             }
         }
         return try {
@@ -792,28 +846,13 @@ internal class AndroidWeb4AgentSession(
                     )
                     return@evaluateJavascript
                 }
-                val navigation = runCatching {
-                    operation(view)
-                    Web4AgentExactActionExecution(
-                        Web4AgentActionResult(
-                            ok = true,
-                            summary = "Web4Agent completed $action.",
-                            dataJson = """{"ok":true,"action":${Web4AgentJson.quote(action)}}"""
-                        ),
-                        occurred = true
-                    )
-                }.getOrElse { error ->
-                    Web4AgentExactActionExecution(
-                        Web4AgentActionResult(
-                            ok = false,
-                            summary = error.message ?: "Web4Agent $action failed.",
-                            dataJson = """{"ok":false,"action":${Web4AgentJson.quote(action)},"error":${
-                                Web4AgentJson.quote(error.message ?: "failed")
-                            }}"""
-                        ),
-                        occurred = false
-                    )
-                }
+                exactEffectTestHooks.afterGuardBeforeDispatch(sessionId, lease.leaseId)
+                val navigation = executeExactNavigationOnMain(
+                    lease = lease,
+                    view = view,
+                    action = action,
+                    operation = operation
+                )
                 endExactExecution(lease)
                 result.complete(navigation)
             }
@@ -836,10 +875,16 @@ internal class AndroidWeb4AgentSession(
             minOf(action.timeoutMillis, configuration.defaultTimeoutMillis)
         )
         if (!isSuccessful(guard)) {
+            val code = exactEffectFailureCode(guard)
+                ?: Web4AgentExactEffectErrors.STALE_TARGET
             return Web4AgentExactActionExecution(
                 exactActionFailure(
-                    Web4AgentExactEffectErrors.STALE_TARGET,
-                    "Web4Agent page changed after approval; ${action.type} was not started."
+                    code,
+                    if (code == Web4AgentExactEffectErrors.SESSION_CLOSED) {
+                        "Web4Agent session closed before ${action.type} started."
+                    } else {
+                        "Web4Agent page changed after approval; ${action.type} was not started."
+                    }
                 ),
                 occurred = false
             )
@@ -866,6 +911,81 @@ internal class AndroidWeb4AgentSession(
                 activeEffectLeaseId = lease.leaseId
                 null
             }
+        }
+    }
+
+    /**
+     * Second atomic fence after the asynchronous page guard and immediately
+     * before JavaScript is handed to WebView. If dispatch wins this lock, the
+     * effect is linearized and Stop must await its existing caller; if close,
+     * replacement, or epoch drift wins, no script is dispatched.
+     */
+    private fun dispatchExactJavascriptOnMain(
+        lease: Web4AgentPreparedEffect,
+        view: WebView,
+        script: String,
+        callback: (String?) -> Unit
+    ): Web4AgentEffectPreparation.Rejected? = synchronized(exactEffectLock) {
+        revalidateExactExecutionLocked(lease, view)?.let { rejected ->
+            return@synchronized rejected
+        }
+        view.evaluateJavascript(script, callback)
+        null
+    }
+
+    /** Check and native navigation dispatch share one monitor linearization point. */
+    private fun executeExactNavigationOnMain(
+        lease: Web4AgentPreparedEffect,
+        view: WebView,
+        action: String,
+        operation: (WebView) -> Unit
+    ): Web4AgentExactActionExecution = synchronized(exactEffectLock) {
+        revalidateExactExecutionLocked(lease, view)?.let { rejected ->
+            return@synchronized Web4AgentExactActionExecution(
+                exactActionFailure(rejected.code, rejected.summary),
+                occurred = false
+            )
+        }
+        runCatching {
+            operation(view)
+            Web4AgentExactActionExecution(
+                Web4AgentActionResult(
+                    ok = true,
+                    summary = "Web4Agent completed $action.",
+                    dataJson = """{"ok":true,"action":${Web4AgentJson.quote(action)}}"""
+                ),
+                occurred = true
+            )
+        }.getOrElse { error ->
+            Web4AgentExactActionExecution(
+                Web4AgentActionResult(
+                    ok = false,
+                    summary = error.message ?: "Web4Agent $action failed.",
+                    dataJson = """{"ok":false,"action":${Web4AgentJson.quote(action)},"error":${
+                        Web4AgentJson.quote(error.message ?: "failed")
+                    }}"""
+                ),
+                occurred = false
+            )
+        }
+    }
+
+    private fun revalidateExactExecutionLocked(
+        lease: Web4AgentPreparedEffect,
+        view: WebView
+    ): Web4AgentEffectPreparation.Rejected? {
+        return when {
+            closed || webView !== view -> Web4AgentEffectPreparation.Rejected(
+                Web4AgentExactEffectErrors.SESSION_CLOSED,
+                "Web4Agent session closed or was replaced before the approved effect dispatched."
+            )
+            activeEffectLeaseId != lease.leaseId -> stalePreparation(
+                "The approved Web4Agent effect no longer owns this session."
+            )
+            pageEpoch != lease.pageEpoch -> stalePreparation(
+                "Web4Agent page changed before the approved effect dispatched."
+            )
+            else -> null
         }
     }
 
@@ -987,10 +1107,13 @@ internal class AndroidWeb4AgentSession(
         )
     }
 
-    private fun isStaleTarget(json: String): Boolean {
+    private fun exactEffectFailureCode(json: String): String? {
         return runCatching {
-            JSONObject(json).optString("code") == Web4AgentExactEffectErrors.STALE_TARGET
-        }.getOrDefault(false)
+            JSONObject(json).optString("code").takeIf { code ->
+                code == Web4AgentExactEffectErrors.STALE_TARGET ||
+                    code == Web4AgentExactEffectErrors.SESSION_CLOSED
+            }
+        }.getOrNull()
     }
 
     private fun stalePreparation(summary: String): Web4AgentEffectPreparation.Rejected {

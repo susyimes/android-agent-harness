@@ -11,7 +11,11 @@ dependencyResolutionManagement {
     repositories {
         maven {
             name = 'sdkLocal'
-            url = uri("${rootDir}/build/sdk-repository")
+            url = uri(
+                providers.gradleProperty('SDK_REPOSITORY_DIR')
+                    .orElse("${rootDir}/build/sdk-candidate-repository")
+                    .get()
+            )
             content {
                 includeGroup 'dev.androidagent.harness'
             }

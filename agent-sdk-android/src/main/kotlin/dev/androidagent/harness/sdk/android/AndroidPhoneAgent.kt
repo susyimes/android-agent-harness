@@ -11,14 +11,18 @@ import dev.androidagent.harness.AgentTool
 import dev.androidagent.harness.AgentToolLoopActivation
 import dev.androidagent.harness.AgentToolProfile
 import dev.androidagent.harness.deviceloop.ApprovalGate
+import dev.androidagent.harness.deviceloop.CancellableDeviceSurface
 import dev.androidagent.harness.deviceloop.DeviceActTool
 import dev.androidagent.harness.deviceloop.DeviceFinishTool
 import dev.androidagent.harness.deviceloop.DeviceObserveTool
 import dev.androidagent.harness.deviceloop.DeviceSurface
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStopController
+import dev.androidagent.harness.deviceloop.DeviceSurfaceStopHandle
 import dev.androidagent.harness.deviceloop.RiskPolicy
 import dev.androidagent.harness.deviceloop.StrictDeviceProtocol
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
 import dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService
+import dev.androidagent.harness.sdk.AgentRunEvent
 import dev.androidagent.harness.sdk.AgentRunListener
 import dev.androidagent.harness.sdk.AgentRunRequest
 
@@ -84,19 +88,90 @@ class AndroidPhoneAgent(
         additionalContextProviders: List<AgentContextProvider> = emptyList(),
         additionalTools: List<AgentTool> = emptyList(),
         additionalActivationToolNames: Set<String> = emptySet()
+    ): AgentRunRequest = buildRequest(
+        requestSurface = surface,
+        sessionId = sessionId,
+        userInput = userInput,
+        providerFactory = providerFactory,
+        listener = listener,
+        additionalContextProviders = additionalContextProviders,
+        additionalTools = additionalTools,
+        additionalActivationToolNames = additionalActivationToolNames
+    )
+
+    /** True when this agent can build a run with a non-blocking Stop barrier. */
+    fun supportsStopQuiescence(): Boolean = surface is CancellableDeviceSurface
+
+    /**
+     * Builds a request over an isolated effect scope and returns its Stop
+     * controller alongside the ordinary [AgentRunRequest].
+     *
+     * This is the strict counterpart to [request]. It fails closed for legacy
+     * surfaces rather than claiming a Stop guarantee they cannot provide.
+     */
+    fun requestWithStopQuiescence(
+        sessionId: String,
+        userInput: String,
+        providerFactory: AgentProviderFactory,
+        listener: AgentRunListener = AgentRunListener.NONE,
+        additionalContextProviders: List<AgentContextProvider> = emptyList(),
+        additionalTools: List<AgentTool> = emptyList(),
+        additionalActivationToolNames: Set<String> = emptySet(),
+        effectScopeId: String = sessionId
+    ): AndroidPhoneAgentRequestBinding {
+        val cancellable = surface as? CancellableDeviceSurface
+            ?: throw IllegalStateException(
+                "This AndroidPhoneAgent surface does not support Stop quiescence."
+            )
+        val scope = cancellable.openEffectScope(effectScopeId)
+        return try {
+            val stoppingListener = AgentRunListener { event ->
+                if (event is AgentRunEvent.Finished) {
+                    scope.requestStop("agent.run.finished")
+                }
+                listener.onEvent(event)
+            }
+            AndroidPhoneAgentRequestBinding(
+                request = buildRequest(
+                    requestSurface = scope,
+                    sessionId = sessionId,
+                    userInput = userInput,
+                    providerFactory = providerFactory,
+                    listener = stoppingListener,
+                    additionalContextProviders = additionalContextProviders,
+                    additionalTools = additionalTools,
+                    additionalActivationToolNames = additionalActivationToolNames
+                ),
+                stopController = scope
+            )
+        } catch (failure: Throwable) {
+            scope.requestStop("request.failed")
+            throw failure
+        }
+    }
+
+    private fun buildRequest(
+        requestSurface: DeviceSurface,
+        sessionId: String,
+        userInput: String,
+        providerFactory: AgentProviderFactory,
+        listener: AgentRunListener,
+        additionalContextProviders: List<AgentContextProvider>,
+        additionalTools: List<AgentTool>,
+        additionalActivationToolNames: Set<String>
     ): AgentRunRequest {
         val protocol = StrictDeviceProtocol()
         val phoneTools = listOf(
-            DeviceObserveTool(surface, protocol),
+            DeviceObserveTool(requestSurface, protocol),
             DeviceActTool(
-                surface = surface,
+                surface = requestSurface,
                 riskPolicy = configuration.riskPolicy,
                 approvalGate = configuration.approvalGate,
                 allowHome = configuration.allowHome,
                 stableTimeoutMs = configuration.stableTimeoutMs,
                 protocol = protocol
             ),
-            DeviceFinishTool(surface, protocol)
+            DeviceFinishTool(requestSurface, protocol)
         )
         val tools = phoneTools + additionalTools
         val toolNames = tools.map { tool -> tool.spec.name }
@@ -185,5 +260,20 @@ class AndroidPhoneAgent(
                 "Finish with device_finish and evidence visible on screen. If a high-risk " +
                 "action is denied or times out, do not retry it."
         }
+    }
+}
+
+/**
+ * Strict Phone Use request plus the Stop controller for its exact effect scope.
+ */
+class AndroidPhoneAgentRequestBinding internal constructor(
+    val request: AgentRunRequest,
+    val stopController: DeviceSurfaceStopController
+) : DeviceSurfaceStopController, AutoCloseable {
+    override fun requestStop(reason: String): DeviceSurfaceStopHandle =
+        stopController.requestStop(reason)
+
+    override fun close() {
+        requestStop("binding.closed")
     }
 }

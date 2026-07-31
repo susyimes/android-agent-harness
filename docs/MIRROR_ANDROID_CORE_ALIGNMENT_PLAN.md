@@ -237,6 +237,63 @@ navigation、同 URL DOM replace、target recycle、Activity detach、Stop/close
 `checkConnectedSample` 均为 8/8。`checkSdk` 与 `checkM0` 也已通过，包含公开
 ABI、JVM/Android 单测、lint、本地 Maven 发布和 JVM/Android consumer smoke。
 
+### 4.8 v0.5.2 Phone Stop 静止屏障与 Web dispatch fence
+
+2026-08-01 的产品 Stop 状态机接入继续发现两项上游线性化缺口：进入
+`DeviceSurface` 的 Accessibility gesture/clipboard effect 没有可取消准入和
+可等待静止点；Web exact-effect 的第一道页面 guard 与真正 JavaScript/native
+navigation dispatch 之间，session close 仍可能抢入旧 callback。
+
+v0.5.2 保留原 `DeviceSurface` 与既有 Web4Agent 公开 ABI。`device-loop` 新增可选
+`CancellableDeviceSurface`、run-scoped `DeviceSurfaceEffectScope` 和非阻塞
+`requestStop()` handle；Android 实现同步关闭新 effect 准入、取消尚未开始的
+main task，并在已准入 gesture callback、clipboard 写入与恢复全部结束后完成
+`quiescence`。`AndroidPhoneAgent.requestWithStopQuiescence()` 负责 feature detect，
+严格模式对 legacy surface fail-closed，terminal event 在通知宿主前先 fence scope。
+
+Web exact act/eval 在 page guard 之后、effect dispatch 之前，于 WebView 主线程和
+同一 exact-effect lock 下再次原子复核 session closed、WebView identity、lease id
+与 page epoch。close/replacement 先胜出时返回 `SESSION_CLOSED`、
+`occurred=false`，旧 click/eval/back/forward/reload 均不执行；若 dispatch 已先
+线性化，宿主必须把该 tool invocation 保留在 run-level in-flight barrier 中，待其
+完成后才能发布 `STOPPED`。
+
+发布验收在 API 29 与 API 34 上各运行 Sample connected 9/9 和 Web
+connected 2/2。Phone 用例使用真实 Accessibility gesture 与强制 clipboard fallback；
+Web 用例用确定性 latch 覆盖 back、forward、reload、click、eval 以及 visible
+presentation admission。`checkSdk`/`checkM0` 继续覆盖公开 ABI、JVM/Android 单测、
+lint、本地 Maven 发布、provenance 与独立 consumer smoke。
+
+### 4.9 v0.5.2 Web visible-presentation lease
+
+同日产品的多项 connected 串行执行暴露第三个宿主无法下沉修复的竞态：旧
+`Web4AgentRuntime.show(sessionId)` 在 `startActivity()` 入队后立即返回，而
+`BrowserActivity.onCreate()` 稍后才创建 controller。Stop、session replacement
+或 host close 无法撤回已入队 launch，也无法在 controller 创建前验证产品 generation；
+`REORDER_TO_FRONT` 还可能把旧 Activity 调到前台并让新的 pending 状态悬挂；API 29
+不会可靠地向该旧实例交付新的 generation Intent。
+
+v0.5.2 因此新增向后兼容的 `Web4AgentPresentationLease`。宿主可把自己的 opaque
+generation 绑定到 Harness 的单调 generation/随机 lease id；Activity 在同一 runtime
+lock 下消费一次性 lease，校验先于 controller create/attach。`cancelPresentation()`
+同步关闭该 generation 的准入；`closeAndAwaitQuiescence()` 仅在 lease 仍是同 session
+最新 generation 时关闭 session，防止旧 ABA cleanup 误伤新 surface。未 attach 的
+late Activity 被拒绝且 controller create 为零；已 attach 的 surface 必须 detach 后
+quiescence 才完成。Harness launch Intent 同时移除 `REORDER_TO_FRONT`；严格 generation
+使用独立、非最近任务的 Activity，避免 API 29 将它合并进正在结束的旧 root；同 session
+新 Activity attach 时原子 detach/finish 旧 surface。旧 `show(sessionId)`、`close(sessionId)`
+与公开 session API 保留。
+
+确定性 connected fixture 在 controller admission 前卡 latch，覆盖 pending timeout/
+cancel、Stop 后迟到 Activity、same-session ABA、distinct-session
+replacement，并断言不再设置 `REORDER_TO_FRONT`；API 29/34 的 Web 聚合由 1/1
+增至 2/2。
+
+同轮还把日常 Maven 输出移到 disposable candidate repo。正式 `publishSdkRelease`
+要求 clean Git commit 与全新显式目录，并生成包含完整坐标、commit 与每个文件
+SHA-256 的 publisher sidecar 及其独立哈希；sidecar 写入前再次核验 clean status 与
+HEAD，避免 dirty 源码再次覆盖既有版本坐标。
+
 ## 5. 七层目标架构
 
 ```mermaid

@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.5.1 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
+Android Agent Harness v0.5.2 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,26 +9,36 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.5.1`.
+The repository uses group `dev.androidagent.harness` and version `0.5.2`.
 
 ```sh
 ./gradlew publishSdk
 ```
 
-This writes JARs, AARs, sources, Gradle metadata, and POM files under `build/sdk-repository`.
+This writes development JARs, AARs, sources, Gradle metadata, and POM files
+under `build/sdk-candidate-repository`. Do not treat that mutable directory as
+a release. From a clean commit, publish to a new explicit path with:
+
+```sh
+./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.2-commit/repository
+```
+
+Verify `publisher-sidecar.sha256`, `publisher-sidecar.json`, and
+`artifacts.sha256` in the release root before resolving the coordinates.
 
 ```groovy
 repositories {
-    maven { url = uri("../android-agent-harness/build/sdk-repository") }
+    maven { url = uri("/absolute/verified/0.5.2-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.1"
-    implementation "dev.androidagent.harness:context-engine:0.5.1"
-    implementation "dev.androidagent.harness:agent-state:0.5.1"
-    implementation "dev.androidagent.harness:provider-openai:0.5.1"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.2"
+    implementation "dev.androidagent.harness:context-engine:0.5.2"
+    implementation "dev.androidagent.harness:agent-state:0.5.2"
+    implementation "dev.androidagent.harness:provider-openai:0.5.2"
 }
 ```
 
@@ -129,6 +139,11 @@ The first accepted cancellation returns `true`; later calls return `false`. Canc
 4. checks the independent cancellation signal after provider I/O and before every SDK-controlled effect;
 5. rejects late streaming deltas and results;
 6. discards the staged conversation turn.
+
+These are the base run semantics. For a global Stop that also covers Android
+Phone Use, fence the scoped device surface before `handle.cancel()` and do not
+publish the visible `STOPPED` state until its quiescence stage completes; see
+section 11.
 
 An effect that already occurred outside the session transaction is recorded but cannot be magically rolled back.
 
@@ -304,12 +319,37 @@ An action invalidates the snapshot even when the platform reports failure. Stale
 
 `AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. Device effects use the same approval protocol. A host policy may allow them directly or require a human-backed Android surface; the sample's setting applies the selected policy to the generic coordinator bound to the returned request.
 
+For a truthful global Stop, build the run with the optional stoppable scope:
+
+```kotlin
+val binding = androidPhoneAgent.requestWithStopQuiescence(
+    sessionId = sessionId,
+    userInput = userInput,
+    providerFactory = providerFactory
+)
+val handle = agentSdk.run(binding.request)
+
+stopButton.setOnClickListener {
+    val stop = binding.requestStop("user.stop") // fence Phone first; never blocks main
+    handle.cancel("Stopped by user.")
+    stop.quiescence.thenAccept { publishStopped() }
+}
+```
+
+`requestStop` atomically rejects new scope effects and cancels admitted Android
+main tasks that have not started. Its quiescence stage waits for admitted
+workers, already-dispatched gesture callbacks, and required clipboard cleanup.
+Do not publish `STOPPED` before that stage completes. The ordinary `request()`
+API and `DeviceSurface` ABI are unchanged; `requestWithStopQuiescence()` fails
+closed when the configured surface does not implement
+`CancellableDeviceSurface`.
+
 ## 12. Add Web4Agent
 
 Add the optional AAR:
 
 ```groovy
-implementation "dev.androidagent.harness:web4agent-android:0.5.1"
+implementation "dev.androidagent.harness:web4agent-android:0.5.2"
 ```
 
 Build one process-local runtime and register its complete tool bundle:
@@ -373,6 +413,46 @@ signatures remain binary compatible. Governed act/eval intentionally fail with
 `EXACT_EFFECT_UNSUPPORTED` when a custom `Web4AgentSessionProvider` does not use
 the runtime's strict internal session implementation. Direct session act/eval
 methods are host APIs and do not add an approval boundary by themselves.
+
+### Visible presentation lease and Stop
+
+`show(sessionId)` remains compatible, but a strict host should retain an exact
+presentation generation:
+
+```kotlin
+val presentation = webRuntime.preparePresentation(
+    sessionId = sessionId,
+    hostGeneration = "$agentRunId:$presentationSequence"
+)
+webRuntime.show(presentation)
+
+presentation.acknowledgement.thenAccept { acknowledgement ->
+    // ATTACHED, CANCELLED, or REJECTED; never page/DOM text.
+}
+
+fun stopWeb() {
+    val stop = webRuntime.closeAndAwaitQuiescence(presentation, "user.stop")
+    cancelAgentRun()
+    cancelApprovals()
+    stop.quiescence.thenAccept {
+        // Also wait for the run's entered Web tool-invocation barrier.
+        publishStoppedWhenWebToolsAreIdle()
+    }
+}
+```
+
+The lease id and monotonic Harness generation are placed in the Activity
+Intent. `Web4AgentBrowserActivity` atomically verifies and consumes them before
+controller creation/attach. Cancellation therefore rejects a queued late
+Activity with zero old controller/session creation. Quiescence is immediate
+when attach never won; otherwise it waits for Activity detach. An old
+same-session lease is stale and cannot close a newer generation. A host that
+builds `Web4AgentToolSet` with separate session/presenter adapters should create
+and retain this lease in its presenter adapter rather than copying Harness
+Activity or controller internals. Implement
+`Web4AgentAcknowledgedPresenter.showAndAwait()` so `web4agent_open` does not
+create/open the session until the exact Activity generation returns
+`ATTACHED`; timeout/cancel must return or throw fail-closed.
 
 Untrusted `alert`, `confirm`, `prompt`, and `beforeunload` callbacks are
 cancelled by the Harness WebChromeClient without creating a native dialog

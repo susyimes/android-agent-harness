@@ -88,7 +88,17 @@ class Web4AgentToolSet(
                 )
             }.getOrElse { error -> return invalid(error.message ?: "Invalid open request.") }
             return runCatching {
-                presenter.show(invocation.sessionId)
+                if (presenter is Web4AgentAcknowledgedPresenter) {
+                    val acknowledgement = presenter.showAndAwait(
+                        invocation.sessionId,
+                        request.waitTimeoutMillis
+                    )
+                    check(acknowledgement.status == Web4AgentPresentationStatus.ATTACHED) {
+                        "Visible Web4Agent browser did not attach."
+                    }
+                } else {
+                    presenter.show(invocation.sessionId)
+                }
                 sessions.session(invocation.sessionId).open(request)
             }.fold(
                 onSuccess = { result ->
