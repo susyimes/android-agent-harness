@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="web4agent_browser_title">Web4Agent</string>
+    <string name="web4agent_back">Back</string>
+    <string name="web4agent_forward">Forward</string>
+    <string name="web4agent_reload">Reload</string>
+    <string name="web4agent_go">Go</string>
+    <string name="web4agent_close">Close</string>
+    <string name="web4agent_address_hint">https://example.com</string>
+    <string name="web4agent_blocked_navigation">Navigation blocked by Web4Agent policy.</string>
+</resources>

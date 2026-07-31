@@ -9,7 +9,7 @@ class PublishedAndroidSdkSurfaceTest {
     @Test
     fun allPublishedAndroidArtifactsAreVisibleToAnIndependentHost() {
         val names = PublishedAndroidSdkSurface.publicTypeNames()
-        assertEquals(6, names.size)
+        assertEquals(7, names.size)
         assertTrue(names.all(String::isNotBlank))
     }
 }

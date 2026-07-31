@@ -49,16 +49,25 @@
 - Home、Chat、House、Memory Inbox、自动化、权限、调试等 sample 页面。
 - 测试、回放、评估、隐私、迁移和发布门禁。
 
-### 2.2 本轮明确排除
+### 2.2 v0.4.0 原始对齐范围明确排除
 
 - GitHub 仓库发现、Issue/PR、分支、合并、CI 和远端仓库操作。
 - Source patch、仓库 worker、端上代码修改、编译、签名、安装、发布。
 - Termux/Codex coding runtime、代码窗口、ADB shell 或通用命令执行。
-- Web4Agent、网页浏览器、DOM/JavaScript 工具、MiniApp 和 WebView bridge。
+- Web4Agent、网页浏览器、DOM/JavaScript 工具、MiniApp 和 WebView bridge（v0.4.0 原始范围）。
 - 动态加载 Dex/JAR/so、Kotlin Script、Wasm 或通用插件运行时。
 - 参考产品的品牌、布局、图标、Prompt、默认人格文本、数据目录或序列化格式复制。
 
 排除项不会显示为“即将可用”的假入口，也不会把空实现注册成模型工具。只在稳定的 Provider、Tool、ContextSource 和 CapabilityModule 接口处保留未来扩展点。
+
+### 2.3 v0.5.0 用户授权的范围扩展
+
+2026-07-31，用户明确要求 Harness “真正获得 Web4Agent”，并补充要求
+Demo APK 必须向模型提供相关工具。因此 v0.5.0 将 P0 网页工作台纳入范围：
+独立 `web4agent-android` AAR、可见且按 Agent session 建立独立 controller/WebView 的页面、
+`open/observe/read/inspect/eval/act/console/capture/finish` 模型工具、精确审批、
+Sample 工具注册和真机内联网页闭环。MiniApp 仓库、Native Bridge、自迭代文件
+patch、首页 widget 和 Web IDE 仍不在本次范围内。
 
 ## 3. 对齐定义
 
@@ -74,7 +83,9 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 
 ## 4. 实施状态与差距
 
-本章前四节保留 v0.3.0 立项时的基线，便于审计“为什么要做 M9–M16”；4.5 是 v0.4.0 当前实现状态。后续阅读和验收应以 4.5 与第 20 节为准。
+本章前四节保留 v0.3.0 立项时的基线，便于审计“为什么要做 M9–M16”；4.5
+记录 v0.4.0 完成状态，4.6 记录 v0.5.0 Web4Agent 范围扩展。后续阅读和验收
+应以 4.6、第 20 节及仓库原生门禁为准。
 
 ### 4.1 立项时已可作为基础保留（v0.3.0）
 
@@ -186,9 +197,25 @@ SDK 不负责替宿主 App 做产品决定。最终权限声明、凭据、数�
 | Streaming/多模态/语音 | 完成 | compatible SSE、原子且串行化的 late-delta fence、AttachmentRef、临时 visual/raw payload、STT/录音/TTS | 无捆绑本地大模型或第三方流式 ASR |
 | sample 产品 | 完成 | Home、Chat、House、Stats、Todo、State、Automation、Permissions、Debug、Data & Retention、三档 approval、Stop | 默认无审批；可在设置切换风险审批或严格审批；GitHub、Web、任意代码执行按范围明确排除 |
 
-当前仍明确不做的交付包括：Maven Central、生产签名密钥、外部 Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行 adapter，以及替宿主决定生产数据库/加密/备份策略。
+以上 v0.4.0 基线仍明确不做的交付包括：Maven Central、生产签名密钥、外部
+Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行 adapter，
+以及替宿主决定生产数据库/加密/备份策略。Web adapter 的后续用户授权扩展
+以 4.6 的 v0.5.0 实现矩阵为准；GitHub 和 Native/shell 任意代码执行仍未纳入。
 
 本轮按产品优先级明确保留三项已知安全/审批缺口：Direct Provider 文本 policy marker、Schedule 全字段审批 hash、AndroidPhoneAgent legacy gate 与 generic coordinator 自动桥接。它们不计入本轮运行可靠性修复的完成项。
+
+### 4.6 v0.5.0 Web4Agent 当前实现
+
+| 能力 | 状态 | 实现与证据 | 明确保留边界 |
+| --- | --- | --- | --- |
+| 可发布模块 | 完成 | `web4agent-android` AAR、source JAR、Maven consumer smoke、lint/单测进入 `checkSdk` | 未发布到 Maven Central |
+| 可见浏览器 | 完成 | `Web4AgentBrowserActivity` 与 Agent session id 绑定；工具打开的页面和用户看到的是同一个 WebView | 不是后台隐藏浏览器 |
+| 网页观察 | 完成 | bounded text、交互元素 id、framework hints；read 支持 text/html/links/forms/tables/meta；inspect 支持 CSS/XPath/text | 页面内容属于不可信外部证据 |
+| 网页动作与 JS | 完成 | click/type/scroll/back/forward/reload/wait；自由 JS function body；每次 act/eval 绑定通用 exact approval | Eval 不等于 Native/shell 任意代码执行 |
+| Console/Capture | 完成 | 有界 console/eval notes；PNG 进入 host raw-payload store，绑定 run/session/call 与 TTL | capture 不自动成为模型 vision 输入 |
+| Demo APK | 完成 | Chat 注册全部九个 `web4agent_*` 工具和 guidance；控制中心提供手动入口；首次工具调用进入 80 步、单工具/步扩展 | Offline scripted provider 不会自行发起真实网页工具调用 |
+| Android 设备验证 | 模拟器通过，物理真机待连接 | `checkConnectedSample` 在 `emulator-5554` / API 34 上 5/5 通过；Web4Agent 用例覆盖 inline HTML 的 observe/read/inspect/type/click/wait/eval/console/capture/finish；v0.5.0 Demo 已安装并冷启动到 `HomeActivity` | 本轮没有在线物理设备；外部站点兼容性受目标网页与 Android WebView 影响 |
+| MiniApp/Bridge | 未纳入 | 无占位入口、无空工具注册 | 后续独立范围与安全评审 |
 
 ## 5. 七层目标架构
 

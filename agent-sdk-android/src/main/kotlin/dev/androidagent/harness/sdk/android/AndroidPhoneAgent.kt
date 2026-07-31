@@ -61,8 +61,10 @@ data class AndroidPhoneAgentConfiguration(
  *
  * Device tools are visible from the first provider step, but the short normal
  * budget stays active until the model actually requests one of them. That call
- * activates a sticky, one-tool-per-step Phone Use loop. No keyword classifier
- * or user-selected chat/phone mode sits in front of the model.
+ * activates a sticky, one-tool-per-step capability loop. A host may opt
+ * additional tools such as Web4Agent into the same activation boundary through
+ * `additionalActivationToolNames`. No keyword classifier or user-selected
+ * chat/phone mode sits in front of the model.
  *
  * The host must still supply a real human-backed [ApprovalGate] and its own
  * [RiskPolicy]; the SDK deliberately has no permissive production default.
@@ -80,7 +82,8 @@ class AndroidPhoneAgent(
         providerFactory: AgentProviderFactory,
         listener: AgentRunListener = AgentRunListener.NONE,
         additionalContextProviders: List<AgentContextProvider> = emptyList(),
-        additionalTools: List<AgentTool> = emptyList()
+        additionalTools: List<AgentTool> = emptyList(),
+        additionalActivationToolNames: Set<String> = emptySet()
     ): AgentRunRequest {
         val protocol = StrictDeviceProtocol()
         val phoneTools = listOf(
@@ -105,6 +108,14 @@ class AndroidPhoneAgent(
             "Duplicate Android Agent tool names: ${duplicateNames.sorted().joinToString()}."
         }
         val phoneToolNames = phoneTools.map { tool -> tool.spec.name }.toSet()
+        val additionalToolNames = additionalTools.map { tool -> tool.spec.name }.toSet()
+        require(additionalActivationToolNames.none(String::isBlank)) {
+            "Additional activation tool names must not be blank."
+        }
+        require(additionalActivationToolNames.all(additionalToolNames::contains)) {
+            "Additional activation tools must be present in additionalTools."
+        }
+        val activationToolNames = phoneToolNames + additionalActivationToolNames
         return AgentRunRequest(
             sessionId = sessionId,
             userInput = userInput,
@@ -127,7 +138,7 @@ class AndroidPhoneAgent(
                 maxProviderSteps = configuration.initialMaxProviderSteps,
                 maxToolCallsPerStep = configuration.initialMaxToolCallsPerStep,
                 toolLoopActivation = AgentToolLoopActivation(
-                    toolNames = phoneToolNames,
+                    toolNames = activationToolNames,
                     maxProviderSteps = configuration.maxProviderSteps,
                     maxToolCallsPerStep = 1
                 )

@@ -12,11 +12,20 @@ This repository is an independently authored extraction of architectural seams, 
 6. Tool results are appended to the session before the provider is invoked again.
 7. Final assistant text is saved, or a configured provider/tool-call limit ends the run.
 
-The core is Kotlin/JVM so every runtime boundary can be tested without Android state. The JVM demo is an executable proof. The Android sample is an installable consumer of the same core: it adds exactly the capabilities its features need — the `INTERNET` permission for the user-configured endpoint, app-private preferences for user-entered settings, and the opt-in accessibility service from `device-loop-android` for phone mode — while `harness-core` itself stays free of all of them.
+The core is Kotlin/JVM so every runtime boundary can be tested without Android
+state. The JVM demo is an executable proof. The Android sample is an
+installable consumer of the same core: it adds exactly the capabilities its
+features need — network access for user-selected provider/web endpoints,
+app-private preferences for user-entered settings, the opt-in accessibility
+service from `device-loop-android`, and the visible WebView surface from
+`web4agent-android` — while `harness-core` itself stays free of all of them.
 
 ## Current alignment map
 
-This map was refreshed on 2026-07-27 against the then-current private `mirror-android` revision (pinned in a private audit log). It describes independently authored responsibility and product-flow alignment, not package, API, source, binary, visual-asset, or serialized-data compatibility.
+This map was refreshed on 2026-07-31 against the then-current private reference
+revision (pinned in a private audit log). It describes independently authored
+responsibility and product-flow alignment, not package, API, source, binary,
+visual-asset, or serialized-data compatibility.
 
 | Extracted boundary | Current `mirror-android` seam | Minimum retained responsibility |
 | --- | --- | --- |
@@ -34,6 +43,7 @@ This map was refreshed on 2026-07-27 against the then-current private `mirror-an
 | `harness-eval` module | The house baseline/candidate evaluation responsibility | Evaluate candidate overlays of interpretable markdown assets against a baseline on fixed cases before promotion. The product workspace format, memory files, and promotion UI are not reproduced. |
 | `device-loop` module | The accessibility closed-loop responsibility (observe → act → finish with high-risk confirmation) | Keep observation semantic, actions single-step, and dangerous actions paused until explicit confirmation — over a fake device. The module itself contains no accessibility service, screen capture, or real device access. |
 | `device-loop-android` module | The accessibility closed-loop integration seam (service enablement, tree reading, action dispatch) | Bridge the `device-loop` contract onto a real accessibility tree: a pull-only service that does nothing on events, a deterministic mapper from the foreground window to bounded semantic nodes with synthetic ids, and tap/set-text execution against the last snapshot. No product node identity, event-driven automation, gesture vocabulary, or screen capture is reproduced. |
+| `web4agent-android` module | The visible WebView capability responsibility | Provide a new session-keyed browser Activity and public Android WebView implementation for open/observe/read/inspect/eval/act/console/capture/finish over the existing Harness tool and exact-approval contracts. No reference source, package, bridge, MiniApp file format, storage layout, prompt, UI resource, or product data is reproduced. |
 
 ## Why these four runtime layers are separate
 
@@ -56,16 +66,29 @@ Keeping these responsibilities separate allows an Android application to replace
 - Context is structured and passed separately from conversation messages.
 - The context coordinator performs deterministic policy selection, not the reference V2 NeedSpec/EvidencePack/reranking pipeline.
 - The bundled file session and Agent House formats are new and are not compatible with existing product databases or workspaces.
-- Tool results are text-only; images, opaque evidence refs, and large-result envelopes require an explicit extension.
+- Tool results use bounded text plus typed envelopes. Web captures are opaque,
+  exact-scope TTL payloads; this release does not silently convert a capture
+  into provider image input.
 - Tool profiles are caller-declared generic allowlists, not the product's CHAT/HARNESS/PROACTIVE policy table.
-- The sample keeps a process-local holder for its own app-private session and House adapters, but has no receiver, telemetry, copied product resource, or cross-application storage. Its external capabilities remain the `INTERNET` permission and the user-enabled accessibility service.
+- The sample keeps process-local holders for its app-private session/House
+  adapters and visible WebView sessions, but has no telemetry, copied product
+  resource, or cross-application storage. Network, scheduling, audio,
+  notifications, and Accessibility remain explicit documented Android
+  capabilities.
 - The target `AgentHarnessRunner` is the portable composition root; the baseline/candidate evaluation responsibility lives in the separate `harness-eval` module over a generic markdown workspace, not the product workspace format.
 - `device-loop` operates a deterministic fake device; the real accessibility-service integration is the separate `device-loop-android` module.
 - `provider-openai` speaks the public OpenAI-compatible protocol only; no product provider configuration is reproduced.
 - Device nodes carry synthetic per-snapshot ids (`n1`, `n2`, … in traversal order), not any product node-identity scheme; an id is only meaningful against the most recent snapshot and goes stale with it.
-- Observation is text-only: the accessibility node tree rendered as bounded semantic lines. There is no screen capture, screenshot, or vision input of any kind — pixels never reach a provider.
+- Phone Use observation remains a bounded text accessibility tree. Separately,
+  Web4Agent may create a temporary WebView PNG in a host raw-payload store; its
+  pixels do not enter provider-visible text or become model vision input
+  automatically.
 - There is no gesture recording or replay vocabulary; the only synthesized gesture is a single tap at a node's center, used as a fallback when nothing in the clickable chain accepts an accessibility click.
 - Device tools are provider-visible during normal planning; the first actual model device-tool call activates a sticky Phone Use budget. Activated turns are single-action steps only (`maxToolCallsPerStep = 1`), observing between actions, so every state change is attributable to one reviewed step.
+- Web4Agent tools are also provider-visible during normal planning. The first
+  actual Web4Agent call activates the same bounded one-tool-per-step expansion;
+  each page session is keyed by Agent session id and every action/eval remains
+  attributable to one tool call and exact approval intent.
 
 ## Safe adapter sequence
 

@@ -1,6 +1,6 @@
 # Provenance and privacy inventory
 
-Inventory refreshed: 2026-07-27 (Asia/Shanghai)
+Inventory refreshed: 2026-07-31 (Asia/Shanghai)
 
 ## Reference scope
 
@@ -12,6 +12,8 @@ The inspected material was limited to these declaration surfaces:
 - root build, settings, and Gradle wrapper configuration (build structure only; no properties values were opened)
 - the chat client, runtime context, chat model, and chat repository declaration surfaces (contracts and provider boundary)
 - the run orchestrator, context coordinator/model, tool registry/orchestrator/model, and house/harness-runner declaration surfaces
+- the WebView capability inventory, model-visible tool names, module boundary,
+  and application-integration declarations
 
 No top-level license covering the reference application code was found during the inventory. Accordingly, no implementation text, package name, resource, data layout, asset, UI asset, or product configuration was copied. The target contracts, coordinator/orchestrator implementations, demo, and thin sample UI were authored afresh from the required responsibilities and high-level boundary map.
 
@@ -35,8 +37,9 @@ The following were neither opened nor copied:
 | Evaluation harness | Generic markdown workspace, overlay semantics, case comparison, promotion verdict | Authored afresh; no product workspace format, file names, or persona/memory content |
 | Device loop | Fake device model, risk policy, observe/act/finish tools, pause protocol | Authored afresh; no accessibility service, screen data, or product action vocabulary |
 | Accessibility device surface (`device-loop-android`) | Pull-only accessibility service, JVM-testable screen mapper with synthetic per-snapshot node ids, tap/set-text device surface, XML service declaration | Authored afresh against public Android accessibility APIs; no product node identity, service configuration, recorded gestures, or screen captures. Text-only observation; no image ever reaches a provider |
+| Web capability (`web4agent-android`) | Session-keyed visible WebView, bounded DOM scripts, structured read/inspect/eval/action tools, console capture, exact-scoped PNG payloads, and a generic browser Activity | Authored afresh against public Android WebView/JavaScript APIs and this repository's public tool/approval contracts. No reference package, implementation text, bridge API, MiniApp format, resource, prompt, storage layout, or product UI is copied |
 | SDK local adapters | Hashed-name atomic session files; generic House core files, skills, daily memories, and bounded context conversion | Authored afresh with new formats and generic default text. No reference workspace, prompt, user data, or serialized format is included |
-| Android sample | Independently authored XML/programmatic home, chat, House/editor, and settings UI; run-time provider/model/credential settings; offline provider; dialog approval gate; app-declared risk-label patterns | No copied layout/resource, database, telemetry, branding, or binary asset. Ships no credential; see the run-time material section below. Its only manifest permission is `INTERNET`, used solely for the selected endpoint |
+| Android sample | Independently authored XML/programmatic home, chat, House/editor, settings, control center, and Web4Agent entry UI; run-time provider/model/credential settings; offline provider; dialog approval gate; app-declared risk-label patterns | No copied layout/resource, database, telemetry, branding, or binary asset. Ships no credential; declared Android permissions are tied to documented optional sample features and remain subject to platform/user grants |
 | Configuration | Public Gradle plugin/SDK versions and JVM settings | No endpoint, credential field, signing config, or local machine path |
 | Test data | Fixed ids, timestamps, and strings such as `android` | Synthetic only; no user or device data |
 | Documentation | Compatibility names and inventory refresh dates for auditability | Contains reference class names only as provenance facts — no private paths, revisions, or package names — never as runtime configuration |
@@ -45,12 +48,24 @@ The following were neither opened nor copied:
 
 ## Run-time user-supplied and user-granted material
 
-Four categories of material exist only at run time on the user's device and are never part of the repository, the APK, or any release artifact:
+Five categories of material exist only at run time on the user's device and are never part of the repository, the APK, or any release artifact:
 
 - **Provider credentials and Codex tokens are user-supplied data, never shipped.** The sample encrypts each value with a randomized AES-GCM payload whose key lives in Android Keystore, stores only the encrypted payload in app-private preferences, redacts profile rendering, and sends a credential only to the provider selected for that turn. The app migrates and removes the old plaintext custom-credential preference if present. The in-app clear/logout controls or uninstall remove the associated application data. This remains a debuggable sample rather than a production secret boundary; use revocable, low-limit credentials.
 - **Provider choice, model, endpoint, and last-session id are app-private settings.** They are not secrets, but a custom endpoint determines where the selected provider request is sent.
 - **Conversation and House content are local plaintext application data.** Complete committed sessions are stored under the app-private files directory; the House stores user-edited generic core Markdown plus Agent-written skill drafts and daily memories there as well. Agent memory keeps Agent provenance, and a generated skill remains disabled until the user enables it. The sample disables Android cloud backup and device transfer. These files are deleted by the relevant UI controls or uninstall, are not encrypted by the bundled file adapters, and may contain sensitive user text. Enabled House content and recent daily memories are sent as bounded context to the provider selected for a turn.
 - **The accessibility permission is a user-granted capability, not bundled data.** The APK declares the service, but declaring it grants nothing: the service is inert until the user manually enables it in the system accessibility settings, and the user can revoke it there at any time. While enabled, it reads the foreground window's node tree only after a turn the user started activates Phone Use and requests a snapshot; the snapshot is text-only, size-bounded, held in memory for the turn, and never persisted by the harness. No screen content is captured as pixels, stored on disk, or included in any artifact this repository produces.
+- **Web content is remote, untrusted run-time material.** Web4Agent loads only a
+  user/model-selected URL, query, or inline document in a visible,
+  session-keyed WebView. Bounded text, DOM, metadata, and console/eval
+  results enter provider-visible tool results only after the selected model
+  calls the matching tool. The secure default blocks cleartext HTTP, mixed
+  content, local file/content access, third-party cookies, popups, and autoplay.
+  Structured readers redact password and common secret-like form fields and
+  attributes on a best-effort basis; this is not a general DLP boundary.
+  Android WebView owns any platform cookie/DOM-storage persistence permitted by
+  host configuration. A capture is held only in the host-provided raw-payload
+  store under exact run/session/tool-call scope and TTL; image bytes are not
+  inserted into provider-visible text.
 
 The `auditProvenance` guard enforces the repository side of this boundary: any credential-shaped identifier assigned a quoted string literal fails the build, so a credential literal cannot enter the tree even disguised as a constant or test fixture.
 

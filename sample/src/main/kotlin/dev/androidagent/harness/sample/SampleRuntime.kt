@@ -39,6 +39,9 @@ import dev.androidagent.harness.scheduling.android.AndroidRunCheckpointStore
 import dev.androidagent.harness.scheduling.android.AndroidScheduleRepository
 import dev.androidagent.harness.voice.android.InMemoryVoiceSessionRepository
 import dev.androidagent.harness.voice.android.VoiceSessionRepository
+import dev.androidagent.harness.web.android.EphemeralWebPayloadStore
+import dev.androidagent.harness.web.android.Web4AgentRuntime
+import dev.androidagent.harness.web.android.Web4AgentToolSet
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -86,7 +89,11 @@ object SampleRuntime {
     @Volatile
     private var outcomeJournal: FileOutcomeJournal? = null
 
+    @Volatile
+    private var webRuntime: Web4AgentRuntime? = null
+
     private val voiceSessions = InMemoryVoiceSessionRepository(persistenceEnabled = false)
+    private val webPayloads = EphemeralWebPayloadStore()
     private val activeRuns = ConcurrentHashMap<String, AgentRunHandle>()
     private val traces = CopyOnWriteArrayList<AgentEvent>()
     private val occurrenceReceipts = CopyOnWriteArrayList<DispatchReceipt>()
@@ -200,6 +207,23 @@ object SampleRuntime {
             ).also { created -> usageStats = created }
         }
     }
+
+    fun webRuntime(context: Context): Web4AgentRuntime {
+        return webRuntime ?: synchronized(this) {
+            webRuntime ?: Web4AgentRuntime.getInstance(context.applicationContext)
+                .also { created -> webRuntime = created }
+        }
+    }
+
+    fun webTools(context: Context): Web4AgentToolSet {
+        return Web4AgentToolSet(
+            runtime = webRuntime(context.applicationContext),
+            approvals = approvals,
+            rawPayloadStore = webPayloads
+        )
+    }
+
+    fun webPayloads(): EphemeralWebPayloadStore = webPayloads
 
     fun schedules(context: Context): ScheduleRepository {
         return schedules ?: synchronized(this) {

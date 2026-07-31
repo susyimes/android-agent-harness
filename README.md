@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/susyimes/android-agent-harness)](https://github.com/susyimes/android-agent-harness/releases)
 
-Android Agent Harness is a provider-neutral Kotlin SDK for building bounded agents on the JVM and Android. It provides one governed run kernel plus optional context, state, scheduling, feedback, approval, product-data, Phone Use, multimodal, and voice components.
+Android Agent Harness is a provider-neutral Kotlin SDK for building bounded agents on the JVM and Android. It provides one governed run kernel plus optional context, state, scheduling, feedback, approval, product-data, Phone Use, Web4Agent, multimodal, and voice components.
 
 The repository also ships an installable sample app. It is a reference composition, not a second runtime: Chat, Heartbeat, Dream, Proactive, Cron, and LongTask all enter the same `AgentSdk` lifecycle.
 
@@ -19,6 +19,7 @@ The repository also ships an installable sample app. It is a reference compositi
 - Reliable schedules, occurrences, leases, checkpoints, explicit `SKIP`/`RUN_ONCE`/`NEXT_WINDOW` missed-run behavior, Cron, and LongTask semantics.
 - Heartbeat, Dream, Proactive, Home Brief, and Self Check with conservative local fallbacks and user-controlled initiative.
 - Android adapters for permissions, Stats, Todo, local documents, State/House, location, calendar, notifications, scheduling, accessibility Phone Use, visual observation, sensors, STT, and TTS.
+- A visible, session-keyed Web4Agent workbench with bounded DOM observation, structured reads, CSS/XPath inspection, exact-approved JavaScript/actions, console capture, and short-lived screenshots.
 - True streaming for the OpenAI-compatible transport, serialized late-event fencing, file/image attachments, a global Stop control, and a strict Phone Use state machine.
 
 ## Sample app
@@ -30,10 +31,11 @@ The repository also ships an installable sample app. It is a reference compositi
   <a href="docs/screenshots/android-automation.png"><img src="docs/screenshots/android-automation.png" alt="Agent Harness automation controls" width="23%"></a>
 </p>
 
-The v0.4.0 sample exposes:
+The v0.5.0 sample exposes:
 
 - Home Brief, provider state, active runs, recent sessions, and shortcuts to every product surface.
 - Chat with provider/model selection, streamed text, file/image attachment, speech input, TTS, Stop, and model-selected Phone Use.
+- Model-selected Web4Agent tools plus a visible browser workbench shared with the user.
 - Agent House editing plus skills and memory review.
 - Stats and Todo with typed unavailable states and governed durable changes.
 - State / Obsidian view for memory, skill, and persona candidates, evidence, effects, evaluations, promotion, rollback, and remote AgentBrief provenance.
@@ -104,7 +106,7 @@ Requirements:
 
 ## SDK artifacts
 
-The v0.4.0 coordinates use group `dev.androidagent.harness`.
+The v0.5.0 coordinates use group `dev.androidagent.harness`.
 
 | Artifact | Type | Responsibility |
 | --- | --- | --- |
@@ -124,6 +126,7 @@ The v0.4.0 coordinates use group `dev.androidagent.harness`.
 | `agent-scheduling-android` | AAR | WorkManager worker/backend, boot receiver, durable stores, visible LongTask carrier |
 | `agent-voice-android` | AAR | STT, ephemeral recording, TTS, and transcript contracts |
 | `device-loop-android` | AAR | Accessibility, approval overlay, visual and experimental sensor adapters |
+| `web4agent-android` | AAR | Visible WebView sessions, DOM/JS tools, console, capture, and exact-approved web actions |
 
 Publish all artifacts to the repository-local Maven directory:
 
@@ -141,14 +144,15 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.4.0"
-    implementation "dev.androidagent.harness:context-engine:0.4.0"
-    implementation "dev.androidagent.harness:agent-state:0.4.0"
-    implementation "dev.androidagent.harness:provider-openai:0.4.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.0"
+    implementation "dev.androidagent.harness:context-engine:0.5.0"
+    implementation "dev.androidagent.harness:agent-state:0.5.0"
+    implementation "dev.androidagent.harness:provider-openai:0.5.0"
 
     // Optional Android features:
-    implementation "dev.androidagent.harness:agent-sdk-android:0.4.0"
-    implementation "dev.androidagent.harness:agent-data-android:0.4.0"
+    implementation "dev.androidagent.harness:agent-sdk-android:0.5.0"
+    implementation "dev.androidagent.harness:agent-data-android:0.5.0"
+    implementation "dev.androidagent.harness:web4agent-android:0.5.0"
 }
 ```
 
@@ -225,6 +229,36 @@ Approval is host-policy driven. In the sample, No approval is the default; Risk-
 
 Visual observation is optional, host-enabled, redacted, and represented by an expiring raw-payload reference. It is not a silent screenshot fallback.
 
+## Web4Agent protocol
+
+Web4Agent is a real WebView capability, not Accessibility automation over an
+external browser. The sample registers these model-visible tools:
+
+```text
+web4agent_open / observe / read / inspect / eval
+web4agent_act / console / capture / finish
+```
+
+Each chat receives a controller and visible WebView keyed by its Agent session
+id. Standard Android WebView cookies and site storage still use the host app's
+WebView profile and can persist across those controllers. `observe` assigns
+reusable DOM element ids; `read` supports text/HTML/links/forms/tables/meta;
+`inspect` supports CSS selectors, XPath, and text queries; `eval` runs a
+JavaScript function body; and `act` supports click, type, scroll, browser
+navigation, reload, and bounded waits. Calling a Web4Agent tool activates the
+same bounded one-tool-per-step expansion used for a long Phone Use turn.
+
+The secure default enables JavaScript and DOM storage but permits only HTTPS
+navigation and inline HTML. It disables cleartext HTTP, mixed content, local
+file/content access, third-party cookies, popups, and autoplay. Page content is
+untrusted external evidence. Web actions and free-form JavaScript bind to the
+host's exact approval coordinator; the sample's persisted approval mode applies
+to them.
+
+`web4agent_capture` writes PNG bytes only to a host-provided, TTL-scoped raw
+payload store. Provider-visible text receives metadata and an opaque reference,
+not image bytes.
+
 ## State and background safety
 
 - Memory, skill, and persona output enters a pending candidate inbox first.
@@ -260,13 +294,20 @@ Run the sample instrumentation suite on a connected device:
 ./gradlew checkConnectedSample
 ```
 
-The sample instrumentation suite checks navigation to every documented product surface and guards the quick-entry buttons against clipped elevation shadows.
+The sample instrumentation suite checks navigation to every documented product
+surface, guards the quick-entry buttons against clipped elevation shadows, and
+runs all nine registered Web4Agent tools through `AgentToolRegistry` over one
+inline visible-browser loop, including password-field redaction and exact-scope
+capture retrieval.
 
 ## Storage and privacy
 
 - Provider secrets use Android Keystore-backed encryption in the sample.
 - Sessions, House, State, Todo, schedules, leases, checkpoints, and feedback journals use app-private file adapters; these adapters are not encrypted databases.
 - Raw image/audio payloads are optional, bounded, and temporary.
+- Web page text and DOM results are provider-visible tool evidence only when the
+  selected model calls a Web4Agent read tool. Web captures remain host-scoped
+  TTL payloads.
 - Android backup is disabled for the sample.
 - Data & Retention exposes per-domain export, bounded retention, and explicit deletion.
 - The SDK AARs do not force unrelated sensitive permissions into a host manifest.
@@ -275,7 +316,9 @@ A production host should replace file adapters when it needs database encryption
 
 ## Deliberate limits
 
-- No GitHub, web-browsing, or arbitrary code-execution tools are registered.
+- No GitHub, shell, repository mutation, or native arbitrary-code execution
+  tools are registered. Web4Agent JavaScript is confined to its current
+  WebView page and remains approval-gated.
 - “Obsidian” means the local logical State/House view; this release does not read or write an external Obsidian vault format.
 - Visual capture and local-understanding engines remain host-supplied and opt-in.
 - There is no bundled offline foundation model.
@@ -290,7 +333,7 @@ The following security/approval items are intentionally not addressed by the cur
 - Schedule approval hashing does not yet include every behavior-affecting `ScheduleSpec` field.
 - `AndroidPhoneAgent.request()` callers must currently supply the generic `AgentApprovalCoordinator` on the returned request, as the sample does; the legacy configuration gate is not bridged automatically.
 
-The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.4.0.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
+The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.5.0.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
 
 ## License
 

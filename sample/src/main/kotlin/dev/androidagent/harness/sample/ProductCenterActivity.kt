@@ -58,6 +58,7 @@ import dev.androidagent.harness.state.AgentStateRetentionPolicy
 import dev.androidagent.harness.state.AgentStateSnapshot
 import dev.androidagent.harness.state.GovernedAgentStateMaintenance
 import dev.androidagent.harness.state.recordCount
+import dev.androidagent.harness.web.android.Web4AgentBrowserActivity
 import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
@@ -225,6 +226,18 @@ class ProductCenterActivity : Activity() {
             "Phone Use、使用情况、通知和语音权限",
             "查看"
         ) { openSection(Section.PERMISSIONS) }
+        addWorkbenchRow(
+            "Web4Agent",
+            "可见 WebView · DOM/JavaScript · 网页观察与动作闭环",
+            "打开"
+        ) {
+            startActivity(
+                Web4AgentBrowserActivity.intent(
+                    this,
+                    Web4AgentBrowserActivity.DEFAULT_MANUAL_SESSION
+                )
+            )
+        }
 
         addSectionLabel("周期任务")
         val activeLongTasks = checkpoints.count { checkpoint ->

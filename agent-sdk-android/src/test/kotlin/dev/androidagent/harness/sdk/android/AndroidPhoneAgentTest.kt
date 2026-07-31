@@ -18,6 +18,7 @@ import dev.androidagent.harness.deviceloop.DeviceSurface
 import dev.androidagent.harness.deviceloop.RiskPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,7 +38,8 @@ class AndroidPhoneAgentTest {
             sessionId = "phone-session",
             userInput = "open maps",
             providerFactory = AgentProviderFactory.fixed(FinalProvider()),
-            additionalTools = listOf(WeatherTool())
+            additionalTools = listOf(WeatherTool()),
+            additionalActivationToolNames = setOf("weather")
         )
 
         assertEquals(8, request.harnessConfig.maxProviderSteps)
@@ -45,7 +47,7 @@ class AndroidPhoneAgentTest {
         assertEquals(80, request.harnessConfig.toolLoopActivation?.maxProviderSteps)
         assertEquals(1, request.harnessConfig.toolLoopActivation?.maxToolCallsPerStep)
         assertEquals(
-            setOf("device_observe", "device_act", "device_finish"),
+            setOf("device_observe", "device_act", "device_finish", "weather"),
             request.harnessConfig.toolLoopActivation?.toolNames
         )
         assertEquals(
@@ -77,6 +79,27 @@ class AndroidPhoneAgentTest {
         )
 
         assertFalse(phone.isAvailable())
+    }
+
+    @Test
+    fun additionalActivationNamesMustBelongToRegisteredAdditionalTools() {
+        val phone = AndroidPhoneAgent(
+            surface = StaticSurface(),
+            configuration = AndroidPhoneAgentConfiguration(
+                riskPolicy = RiskPolicy(),
+                approvalGate = { _, _, _ -> ApprovalDecision.DENIED }
+            )
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            phone.request(
+                sessionId = "phone-session",
+                userInput = "browse",
+                providerFactory = AgentProviderFactory.fixed(FinalProvider()),
+                additionalTools = listOf(WeatherTool()),
+                additionalActivationToolNames = setOf("missing")
+            )
+        }
     }
 
     private class StaticSurface : DeviceSurface {

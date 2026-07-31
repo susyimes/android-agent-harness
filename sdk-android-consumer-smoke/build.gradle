@@ -28,12 +28,14 @@ dependencies {
     implementation "dev.androidagent.harness:agent-scheduling-android:${rootProject.version}"
     implementation "dev.androidagent.harness:agent-voice-android:${rootProject.version}"
     implementation "dev.androidagent.harness:device-loop-android:${rootProject.version}"
+    implementation "dev.androidagent.harness:web4agent-android:${rootProject.version}"
     testImplementation 'junit:junit:4.13.2'
 }
 
 tasks.named('preBuild') {
     dependsOn rootProject.tasks.named('publishJvmSdk')
     dependsOn ':device-loop-android:publishSdkPublicationToSdkLocalRepository'
+    dependsOn ':web4agent-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-sdk-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-permission-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-data-android:publishSdkPublicationToSdkLocalRepository'

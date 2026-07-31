@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.4.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.5.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -146,7 +146,9 @@ The SDK supplies a conservative default but treats the policy as host-owned. The
 
 ### 7. Android adapters
 
-Modules: `agent-permission-android`, `agent-data-android`, `agent-scheduling-android`, `agent-sdk-android`, `device-loop-android`, `agent-voice-android`.
+Modules: `agent-permission-android`, `agent-data-android`,
+`agent-scheduling-android`, `agent-sdk-android`, `device-loop-android`,
+`web4agent-android`, `agent-voice-android`.
 
 Responsibilities:
 
@@ -154,6 +156,9 @@ Responsibilities:
 - Stats, Todo, local document, State/House, coarse location, calendar, and host-fed notification data;
 - durable Android schedule/checkpoint/lease adapters;
 - Accessibility observation/action and approval UI bridge;
+- visible session-keyed WebView hosting, bounded DOM reads/inspection,
+  exact-approved JavaScript and page actions, console collection, and
+  host-scoped capture;
 - optional visual observation, sensor, STT, recording, and TTS surfaces.
 
 Adapters expose availability instead of pretending missing permission is empty data.
@@ -208,6 +213,24 @@ provider calls device_observe
   → finish requires fresh visible evidence
 ```
 
+### Web4Agent
+
+```text
+provider calls web4agent_open
+  → runtime binds a visible WebView to the Agent session id
+  → observe/read/inspect returns bounded untrusted page evidence
+  → act or eval consumes an exact host approval when policy requires it
+  → provider observes the changed page
+  → finish closes or explicitly leaves the session visible
+```
+
+Web4Agent is an Android adapter inside the same `AgentSdk` tool loop. It is not
+a second Agent, an Accessibility wrapper around Chrome, or a background hidden
+browser. The default configuration keeps JavaScript and DOM storage while
+blocking cleartext/mixed/local-file boundaries. Page text and JavaScript results
+are marked sensitive; captures remain behind exact-scope TTL raw-payload
+references.
+
 ## Persistence domains
 
 | Domain | Default sample adapter | Automatic retention |
@@ -222,6 +245,8 @@ provider calls device_observe
 | Trace journal | bounded process journal in sample | bounded by count; user can clear/export |
 | Signal/outcome journals | app-private atomic files | signals: 30 days/2,000; outcomes: 90 days/1,000; user can clear |
 | Image/audio raw data | ephemeral host-owned storage | TTL / immediate cleanup |
+| WebView sessions | process-local runtime plus platform cookie/DOM storage policy | explicit finish/process lifecycle |
+| Web captures | exact-scope host raw-payload store | five-minute TTL by default |
 
 Production hosts can replace stores without changing the orchestration contracts.
 

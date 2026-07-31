@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.4.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, or voice capabilities it needs.
+Android Agent Harness v0.5.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,7 +9,7 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.4.0`.
+The repository uses group `dev.androidagent.harness` and version `0.5.0`.
 
 ```sh
 ./gradlew publishSdk
@@ -25,10 +25,10 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.4.0"
-    implementation "dev.androidagent.harness:context-engine:0.4.0"
-    implementation "dev.androidagent.harness:agent-state:0.4.0"
-    implementation "dev.androidagent.harness:provider-openai:0.4.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.0"
+    implementation "dev.androidagent.harness:context-engine:0.5.0"
+    implementation "dev.androidagent.harness:agent-state:0.5.0"
+    implementation "dev.androidagent.harness:provider-openai:0.5.0"
 }
 ```
 
@@ -47,6 +47,7 @@ Optional artifacts:
 | `agent-scheduling-android` | WorkManager, Receiver, foreground carrier, and Android stores |
 | `agent-voice-android` | STT, ephemeral audio, TTS, and transcript contracts |
 | `device-loop-android` | Accessibility, visual observation, sensors, and overlay approval |
+| `web4agent-android` | Visible WebView sessions, DOM reads/inspection, JavaScript, actions, console, and capture |
 
 The Android AAR manifests stay minimal. The host declares only the services and permissions it actually enables.
 
@@ -303,7 +304,59 @@ An action invalidates the snapshot even when the platform reports failure. Stale
 
 `AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. Device effects use the same approval protocol. A host policy may allow them directly or require a human-backed Android surface; the sample's setting applies the selected policy to the generic coordinator bound to the returned request.
 
-## 12. Streaming, attachments, and voice
+## 12. Add Web4Agent
+
+Add the optional AAR:
+
+```groovy
+implementation "dev.androidagent.harness:web4agent-android:0.5.0"
+```
+
+Build one process-local runtime and register its complete tool bundle:
+
+```kotlin
+val webRuntime = Web4AgentRuntime.getInstance(applicationContext)
+val webPayloads = EphemeralWebPayloadStore()
+val webTools = Web4AgentToolSet(
+    runtime = webRuntime,
+    approvals = approvalCoordinator,
+    rawPayloadStore = webPayloads
+)
+
+val request = androidPhoneAgent.request(
+    sessionId = sessionId,
+    userInput = userInput,
+    providerFactory = providerFactory,
+    additionalContextProviders = listOf(Web4AgentGuidance.contextProvider()),
+    additionalTools = webTools.tools(),
+    additionalActivationToolNames = webTools.toolNames
+)
+```
+
+The nine registered tools are `web4agent_open`, `observe`, `read`, `inspect`,
+`eval`, `act`, `console`, `capture`, and `finish` (all names retain the
+`web4agent_` prefix). They bind to `AgentToolInvocation.sessionId`; opening a
+page launches a visible `Web4AgentBrowserActivity` for that same session.
+
+The default runtime allows HTTPS and inline HTML, JavaScript, and DOM storage.
+It blocks cleartext HTTP, mixed content, local file/content access, third-party
+cookies, popups, and autoplay. Install a different
+`Web4AgentConfiguration` before the first session only when the host explicitly
+accepts the wider boundary.
+
+`web4agent_act` and `web4agent_eval` authorize and consume an exact approval
+token before execution. Page content is untrusted external evidence; include
+`Web4AgentGuidance.contextProvider()` or equivalent host policy so DOM text and
+console messages cannot override user/host instructions. Structured readers
+apply best-effort password/common-secret field redaction, but hosts should not
+treat that as general DLP. Session ids isolate controllers and WebViews, not
+the host app's standard Android WebView cookie/site-storage profile.
+
+Capture bytes are written to the supplied `AgentRawPayloadStore` with exact
+run/session/tool-call scope and TTL. They are not inserted into provider-visible
+text.
+
+## 13. Streaming, attachments, and voice
 
 The OpenAI-compatible transport supports true SSE deltas. The SDK emits bounded `ProviderDelta` events and accepts only one terminal response.
 
@@ -319,7 +372,7 @@ The OpenAI-compatible transport supports true SSE deltas. The SDK emits bounded 
 
 Raw audio is not persisted by default.
 
-## 13. Data and deletion
+## 14. Data and deletion
 
 Use separate storage domains for sessions, House, State, Todo, schedules/checkpoints, credentials, and operational journals. Deleting one domain must not silently delete another.
 
@@ -331,7 +384,7 @@ The sample demonstrates:
 - cancellation of future WorkManager work;
 - separate credential deletion in provider settings.
 
-## 14. Verification
+## 15. Verification
 
 ```sh
 # Unit, ABI, independent Maven consumer, AAR lint/publication, and audit gate

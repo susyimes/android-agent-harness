@@ -6,3 +6,6 @@ The repository includes standard Gradle Wrapper bootstrap files generated with G
 
 No runtime third-party library is declared by `harness-core`. The Android Gradle Plugin, Kotlin Gradle plugin, Kotlin standard library, Android SDK stubs, and JUnit are resolved as build/test dependencies under their respective licenses.
 
+`web4agent-android` uses the Android platform `WebView` APIs and the device's
+installed Android System WebView implementation. It introduces no bundled
+browser engine or additional runtime library.

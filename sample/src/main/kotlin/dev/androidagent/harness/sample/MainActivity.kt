@@ -88,6 +88,7 @@ import dev.androidagent.harness.voice.android.SpeechToTextListener
 import dev.androidagent.harness.voice.android.VoiceOperation
 import dev.androidagent.harness.voice.android.VoiceOperationState
 import dev.androidagent.harness.voice.android.VoiceUnavailableException
+import dev.androidagent.harness.web.android.Web4AgentGuidance
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1599,13 +1600,15 @@ class MainActivity : Activity() {
     ): AgentRunRequest {
         val houseContext = AgentHouseContextProvider(SampleRuntime.house(this))
         val governance = SampleRuntime.governance(this)
+        val webToolSet = SampleRuntime.webTools(this)
         val chatTools = listOf(UppercaseTool(), CurrentTimeTool(), WordCountTool()) +
             AgentHouseWriteTools(
                 repository = SampleRuntime.house(this),
                 memoryCandidateSink = governance.memorySink,
                 skillDraftSink = governance.skillSink,
                 personaProposalSink = governance.personaSink
-            ).tools()
+            ).tools() +
+            webToolSet.tools()
         val contextSources = listOf(
             NamedContextSource(
                 "approved-agent-state",
@@ -1669,8 +1672,13 @@ class MainActivity : Activity() {
                 userInput = userText,
                 providerFactory = providerFactory,
                 listener = listener,
-                additionalContextProviders = listOf(sampleGuidance, houseContext),
-                additionalTools = chatTools
+                additionalContextProviders = listOf(
+                    sampleGuidance,
+                    houseContext,
+                    Web4AgentGuidance.contextProvider()
+                ),
+                additionalTools = chatTools,
+                additionalActivationToolNames = webToolSet.toolNames
             ).copy(
                 errorMapper = sampleErrorMapper(),
                 approvalCoordinator = SampleRuntime.approvalCoordinator(),
@@ -1683,7 +1691,11 @@ class MainActivity : Activity() {
             sessionId = currentSessionId,
             userInput = userText,
             providerFactory = providerFactory,
-            contextProviders = listOf(sampleGuidance, houseContext),
+            contextProviders = listOf(
+                sampleGuidance,
+                houseContext,
+                Web4AgentGuidance.contextProvider()
+            ),
             tools = chatTools,
             harnessConfig = AgentHarnessConfig(
                 maxProviderSteps = CHAT_MAX_PROVIDER_STEPS,

@@ -7,6 +7,7 @@ import dev.androidagent.harness.permission.android.AndroidCapabilityStatus
 import dev.androidagent.harness.scheduling.android.AndroidOccurrenceHost
 import dev.androidagent.harness.sdk.android.AndroidPhoneAgent
 import dev.androidagent.harness.voice.android.VoiceOperationState
+import dev.androidagent.harness.web.android.Web4AgentRuntime
 
 /**
  * Compile-time consumer proof for every published Android AAR.
@@ -21,6 +22,7 @@ object PublishedAndroidSdkSurface {
         TodoState::class.java.name,
         AndroidOccurrenceHost::class.java.name,
         VoiceOperationState::class.java.name,
-        EphemeralVisualObservation::class.java.name
+        EphemeralVisualObservation::class.java.name,
+        Web4AgentRuntime::class.java.name
     )
 }

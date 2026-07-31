@@ -34,7 +34,7 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 - Typed `AgentToolArgumentSchema` metadata is rendered by both OpenAI-compatible and experimental Codex transports while the core retains its dependency-free normalized-string execution ABI.
 - `OpenAiProviderFactories` creates an isolated cancellable transport per run; Kimi Plan and all Ark Plan model presets are reusable defaults, not hard allow-lists.
 - `agent-sdk-android`: model-routed Phone Use composition requiring a host-supplied risk policy and human approval gate. The SDK has no permissive production default.
-- Six Maven-style JAR/AAR publications, source artifacts, an independent consumer smoke module, `checkSdk`, and a complete host integration guide.
+- Maven-style JAR/AAR publications, source artifacts, an independent consumer smoke module, `checkSdk`, and a complete host integration guide.
 
 ### M8 — product shell and durable local context
 - `FileAgentSessionStore`: an app-private, dependency-free session catalog with hashed file names, bounded decoding, atomic replace, and list/delete/clear management APIs.
@@ -42,11 +42,28 @@ The `scenarios` subcommand: five deterministic scenarios proving that what a pro
 - Model-driven Phone Use: device tools are visible during ordinary planning, but only an actual model device-tool call activates the sticky one-action-per-step loop and expands its ceiling from 8 to 80 steps.
 - The sample now has home, chat, session, Agent House/editor, and settings surfaces, plus persistent recent conversations and provider/accessibility status.
 
-## Beyond M8
+### M9 — visible Web4Agent capability
+
+- `web4agent-android`: an independently authored optional AAR with
+  session-isolated visible WebViews and model-visible
+  open/observe/read/inspect/eval/act/console/capture/finish tools.
+- Structured DOM observation assigns stable element ids; broad reads cover
+  text, HTML, links, forms, tables, and metadata; precise inspection supports
+  CSS selectors, XPath, and text queries.
+- JavaScript and page actions bind to the exact Harness approval protocol.
+  Secure defaults keep HTTPS/inline HTML and disable cleartext, mixed content,
+  local file/content access, third-party cookies, popups, and autoplay.
+- The sample APK registers the complete tool bundle, launches the browser
+  surface for the same chat session, exposes a manual workbench entry, and runs
+  an inline DOM/JavaScript/action/capture loop in connected-device tests.
+- Web captures use short-lived host raw-payload storage and never enter
+  provider-visible text as image bytes.
+
+## Beyond M9
 
 - Streaming provider responses behind the same bounded-step contract.
 - Optional encrypted/database session and House adapters with application-defined migration and retention.
 - Binary API compatibility validation and a release pipeline to a remote Maven repository.
-- A web-devtools capability component.
-
-Policy for production subsystems such as the web-devtools component: they are extracted into their own separately reviewed components or repositories — authored afresh against public contracts, never copied into this repository.
+Policy for additional production subsystems: extract them into their own
+separately reviewed modules or repositories, authored afresh against public
+contracts and never copied into this repository.
