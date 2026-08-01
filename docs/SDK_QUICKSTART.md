@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.5.2 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
+Android Agent Harness v0.5.3 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,7 +9,7 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.5.2`.
+The repository uses group `dev.androidagent.harness` and version `0.5.3`.
 
 ```sh
 ./gradlew publishSdk
@@ -21,24 +21,27 @@ a release. From a clean commit, publish to a new explicit path with:
 
 ```sh
 ./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
-  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.2-commit/repository
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.3-commit/repository
 ```
 
 Verify `publisher-sidecar.sha256`, `publisher-sidecar.json`, and
 `artifacts.sha256` in the release root before resolving the coordinates.
+Sidecar schema 2 lists both ordinary Maven module coordinates and Gradle
+variant capabilities such as `web4agent-android-test-fixtures`; every classifier
+and metadata file remains independently SHA-256-bound.
 
 ```groovy
 repositories {
-    maven { url = uri("/absolute/verified/0.5.2-commit/repository") }
+    maven { url = uri("/absolute/verified/0.5.3-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.2"
-    implementation "dev.androidagent.harness:context-engine:0.5.2"
-    implementation "dev.androidagent.harness:agent-state:0.5.2"
-    implementation "dev.androidagent.harness:provider-openai:0.5.2"
+    implementation "dev.androidagent.harness:agent-sdk:0.5.3"
+    implementation "dev.androidagent.harness:context-engine:0.5.3"
+    implementation "dev.androidagent.harness:agent-state:0.5.3"
+    implementation "dev.androidagent.harness:provider-openai:0.5.3"
 }
 ```
 
@@ -58,6 +61,7 @@ Optional artifacts:
 | `agent-voice-android` | STT, ephemeral audio, TTS, and transcript contracts |
 | `device-loop-android` | Accessibility, visual observation, sensors, and overlay approval |
 | `web4agent-android` | Visible WebView sessions, DOM reads/inspection, JavaScript, actions, console, and capture |
+| `web4agent-android-test-fixtures` | Android-test-only deterministic guard-to-dispatch race verification |
 
 The Android AAR manifests stay minimal. The host declares only the services and permissions it actually enables.
 
@@ -349,7 +353,7 @@ closed when the configured surface does not implement
 Add the optional AAR:
 
 ```groovy
-implementation "dev.androidagent.harness:web4agent-android:0.5.2"
+implementation "dev.androidagent.harness:web4agent-android:0.5.3"
 ```
 
 Build one process-local runtime and register its complete tool bundle:
@@ -453,6 +457,36 @@ Activity or controller internals. Implement
 `Web4AgentAcknowledgedPresenter.showAndAwait()` so `web4agent_open` does not
 create/open the session until the exact Activity generation returns
 `ATTACHED`; timeout/cancel must return or throw fail-closed.
+
+### Deterministic exact-effect consumer test fixture
+
+Strict Android hosts can verify the exact guard-to-dispatch Stop/replacement
+window without reflection or a copied WebView implementation. Resolve the
+fixture only on a test configuration; Gradle module metadata selects the
+`web4agent-android-test-fixtures` capability and its separate AAR:
+
+```groovy
+dependencies {
+    implementation "dev.androidagent.harness:web4agent-android:0.5.3"
+    androidTestImplementation testFixtures(
+        "dev.androidagent.harness:web4agent-android:0.5.3"
+    )
+}
+```
+
+Create `Web4AgentExactEffectTestHost` in a debuggable instrumentation process,
+arm `raceController.armNextEffect()`, start the governed act/eval call on a
+worker, then wait for `awaitAfterGuardBeforeDispatch()`. Call
+`closeSessionAsync()` or `replaceSessionAsync()`, wait for
+`awaitSessionFenced()`, and finally `release()` the gate. Assert the old tool
+returns `SESSION_CLOSED`, `occurred=false`, and leaves the native/DOM marker
+unchanged; a replacement must require a fresh observation and approval.
+
+The facade exposes an opaque salted effect token and fixture generation, never
+the internal session/hook/lease. It is headless and does not test visible
+BrowserActivity presentation (use the presentation lease APIs and dedicated
+HG-005 tests for that). The fixture capability is absent from production AAR
+bytes and release runtime classpaths; do not resolve it with `implementation`.
 
 Untrusted `alert`, `confirm`, `prompt`, and `beforeunload` callbacks are
 cancelled by the Harness WebChromeClient without creating a native dialog

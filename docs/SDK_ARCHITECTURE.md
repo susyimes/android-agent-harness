@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.5.2 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.5.3 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -265,6 +265,15 @@ admission synchronously; its completion stage does not report quiescence until
 an already-attached Activity has detached. A stale same-session generation
 cannot close or consume its replacement.
 
+The published Gradle test-fixtures variant provides a debuggable-only opaque
+host for independent consumer verification of the guard-to-dispatch race. It
+constructs the real version-matched strict session inside the owning module,
+but exposes neither that internal type nor its raw effect lease. A consumer can
+arm one exact window, wait for `AFTER_GUARD_BEFORE_DISPATCH`, close or replace
+the session, await its fence, and release the call. This test capability is not
+part of the production AAR or release runtime classpath and does not represent
+the separate visible-presentation lifecycle.
+
 ## Persistence domains
 
 | Domain | Default sample adapter | Automatic retention |
@@ -298,6 +307,9 @@ This revision deliberately leaves three approval/security composition items open
 - `checkSdkAbi` compares current bytecode with those snapshots.
 - `sdk-consumer-smoke` consumes all published JVM coordinates.
 - `sdk-android-consumer-smoke` consumes all published AAR coordinates and their POM graph.
+- its Android-test source consumes the published Web4Agent test-fixtures
+  variant through Gradle module metadata, while an isolation gate inspects both
+  dependency capabilities and AAR bytes to prove zero production leakage.
 - unit and Android library tests cover state machines and stores.
 - lint covers released AARs and the sample.
 - instrumentation covers documented sample navigation and the quick-entry shadow regression.

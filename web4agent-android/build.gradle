@@ -28,6 +28,10 @@ android {
             withSourcesJar()
         }
     }
+
+    testFixtures {
+        enable true
+    }
 }
 
 dependencies {
@@ -39,12 +43,18 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit-ktx:1.3.0'
 }
 
+def testFixturesSourcesJar = tasks.register('testFixturesSourcesJar', Jar) {
+    archiveClassifier = 'test-fixtures-sources'
+    from android.sourceSets.testFixtures.java.srcDirs
+}
+
 afterEvaluate {
     publishing {
         publications {
             sdk(MavenPublication) {
                 from components.release
                 artifactId = 'web4agent-android'
+                artifact testFixturesSourcesJar
             }
         }
     }

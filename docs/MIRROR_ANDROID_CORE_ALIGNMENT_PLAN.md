@@ -294,6 +294,23 @@ replacement，并断言不再设置 `REORDER_TO_FRONT`；API 29/34 的 Web 聚�
 SHA-256 的 publisher sidecar 及其独立哈希；sidecar 写入前再次核验 clean status 与
 HEAD，避免 dirty 源码再次覆盖既有版本坐标。
 
+### 4.10 v0.5.3 Web exact-effect consumer verification seam
+
+v0.5.2 的 guard 后二次原子复核已有 Harness 同模块 connected 证据，但下游产品无法
+合法注入 internal test hook，也不能用 approval 前阻塞来冒充 guard→dispatch 窗口。
+v0.5.3 因此发布 `web4agent-android` 的官方 Gradle test-fixtures variant：独立 Maven
+consumer 只在 `androidTestImplementation testFixtures(...)` 中获得 opaque
+`Web4AgentExactEffectTestHost`。fixture 在所属模块内部创建真实 strict session，允许
+等待一次 `AFTER_GUARD_BEFORE_DISPATCH`、异步 close/replacement、等待 session fence
+并释放；不公开 internal 类型、raw effect lease、WebView 或生产 bypass。
+
+发布隔离门禁同时检查 dependency capability 与实际 AAR/JAR 字节：fixture capability
+只进入 AndroidTest runtime，production AAR 不含 fixture class，fixture AAR 不复制
+production session；publisher sidecar schema 2 另列 `variantCapabilities`。独立
+consumer 在 API 29/34 上均为 2/2，分别覆盖 close/replacement × back/forward/
+reload/click/eval 共 10 个精确窗口。该 headless seam 只证明 HG-004，不替代 visible
+presentation 的 HG-005 lease/ack/quiescence 验证。
+
 ## 5. 七层目标架构
 
 ```mermaid

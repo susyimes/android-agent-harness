@@ -9,6 +9,7 @@ android {
 
     defaultConfig {
         minSdk 29
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     compileOptions {
@@ -29,6 +30,12 @@ dependencies {
     implementation "dev.androidagent.harness:agent-voice-android:${rootProject.version}"
     implementation "dev.androidagent.harness:device-loop-android:${rootProject.version}"
     implementation "dev.androidagent.harness:web4agent-android:${rootProject.version}"
+    androidTestImplementation testFixtures(
+        "dev.androidagent.harness:web4agent-android:${rootProject.version}"
+    )
+    androidTestImplementation 'androidx.test:core-ktx:1.7.0'
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test.ext:junit-ktx:1.3.0'
     testImplementation 'junit:junit:4.13.2'
 }
 
@@ -41,4 +48,136 @@ tasks.named('preBuild') {
     dependsOn ':agent-data-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-scheduling-android:publishSdkPublicationToSdkLocalRepository'
     dependsOn ':agent-voice-android:publishSdkPublicationToSdkLocalRepository'
+}
+
+tasks.register('verifyWeb4AgentTestFixtureIsolation') {
+    group = 'verification'
+    description = 'Proves the exact-effect fixture is Android-test-only and absent from production bytes/runtime.'
+    dependsOn ':web4agent-android:publishSdkPublicationToSdkLocalRepository'
+
+    doLast {
+        def selectedCapabilities = { configuration ->
+            configuration.incoming.resolutionResult.allDependencies
+                .findAll { dependency ->
+                    dependency instanceof org.gradle.api.artifacts.result.ResolvedDependencyResult
+                }
+                .collectMany { dependency ->
+                    dependency.resolvedVariant.capabilities.collect { capability ->
+                        "${capability.group}:${capability.name}:${capability.version}".toString()
+                    }
+                }
+                .toSet()
+        }
+        def fixtureCapability =
+            "dev.androidagent.harness:web4agent-android-test-fixtures:${rootProject.version}"
+                .toString()
+        def releaseCapabilities = selectedCapabilities(configurations.releaseRuntimeClasspath)
+        if (fixtureCapability in releaseCapabilities) {
+            throw new GradleException(
+                "Web4Agent test fixture leaked into releaseRuntimeClasspath."
+            )
+        }
+        def testCapabilities = selectedCapabilities(
+            configurations.debugAndroidTestRuntimeClasspath
+        )
+        if (!(fixtureCapability in testCapabilities)) {
+            throw new GradleException(
+                "Published Web4Agent test fixture is missing from androidTestRuntimeClasspath."
+            )
+        }
+
+        def repositoryProperty = rootProject.providers.gradleProperty('SDK_REPOSITORY_DIR').orNull
+        def repository = repositoryProperty == null
+            ? rootProject.layout.buildDirectory.dir('sdk-candidate-repository').get().asFile
+            : rootProject.file(repositoryProperty)
+        def version = rootProject.version.toString()
+        def artifactDirectory = new File(
+            repository,
+            "dev/androidagent/harness/web4agent-android/${version}"
+        )
+        def mainAar = new File(
+            artifactDirectory,
+            "web4agent-android-${version}.aar"
+        )
+        def fixtureAar = new File(
+            artifactDirectory,
+            "web4agent-android-${version}-test-fixtures.aar"
+        )
+        def fixtureSources = new File(
+            artifactDirectory,
+            "web4agent-android-${version}-test-fixtures-sources.jar"
+        )
+        [mainAar, fixtureAar, fixtureSources].each { artifact ->
+            if (!artifact.isFile()) {
+                throw new GradleException(
+                    "Published Web4Agent fixture artifact is missing: ${artifact}"
+                )
+            }
+        }
+
+        def aarContainsClass = { File aar, String classPath ->
+            def archive = new java.util.zip.ZipFile(aar)
+            try {
+                def classesEntry = archive.getEntry('classes.jar')
+                if (classesEntry == null) return false
+                def classes = new java.util.jar.JarInputStream(
+                    archive.getInputStream(classesEntry)
+                )
+                try {
+                    def found = false
+                    while (!found) {
+                        def entry = classes.nextJarEntry
+                        if (entry == null) break
+                        found = entry.name == classPath
+                    }
+                    return found
+                } finally {
+                    classes.close()
+                }
+            } finally {
+                archive.close()
+            }
+        }
+        def fixtureClass =
+            'dev/androidagent/harness/web/android/testfixtures/' +
+                'Web4AgentExactEffectTestHost.class'
+        if (aarContainsClass(mainAar, fixtureClass)) {
+            throw new GradleException(
+                'Web4Agent exact-effect fixture class leaked into the production AAR.'
+            )
+        }
+        if (!aarContainsClass(fixtureAar, fixtureClass)) {
+            throw new GradleException(
+                'Published Web4Agent test-fixtures AAR does not contain its public host.'
+            )
+        }
+        if (
+            aarContainsClass(
+                fixtureAar,
+                'dev/androidagent/harness/web/android/AndroidWeb4AgentSession.class'
+            )
+        ) {
+            throw new GradleException(
+                'Web4Agent test-fixtures AAR duplicated the production session implementation.'
+            )
+        }
+        def sourcesArchive = new java.util.zip.ZipFile(fixtureSources)
+        try {
+            if (
+                sourcesArchive.getEntry(
+                    'dev/androidagent/harness/web/android/testfixtures/' +
+                        'Web4AgentExactEffectTestHost.java'
+                ) == null
+            ) {
+                throw new GradleException(
+                    'Published Web4Agent test-fixtures sources are incomplete.'
+                )
+            }
+        } finally {
+            sourcesArchive.close()
+        }
+        logger.lifecycle(
+            'Web4Agent exact-effect fixture is isolated to its Android-test variant and bytes.'
+        )
+    }
 }

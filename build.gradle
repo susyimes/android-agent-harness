@@ -162,6 +162,7 @@ tasks.register('checkM0') {
     dependsOn ':device-loop-android:testDebugUnitTest'
     dependsOn ':web4agent-android:testDebugUnitTest'
     dependsOn ':web4agent-android:assembleDebugAndroidTest'
+    dependsOn ':sdk-android-consumer-smoke:assembleDebugAndroidTest'
     dependsOn ':demo:test'
     dependsOn ':agent-sdk-android:testDebugUnitTest'
     dependsOn ':sdk-consumer-smoke:test'
@@ -175,6 +176,7 @@ tasks.register('checkConnectedSample') {
     group = 'verification'
     description = 'Runs Harness and sample instrumentation suites on a connected Android device.'
     dependsOn ':web4agent-android:connectedDebugAndroidTest'
+    dependsOn ':sdk-android-consumer-smoke:connectedDebugAndroidTest'
     dependsOn ':sample:connectedDebugAndroidTest'
 }
 
@@ -337,13 +339,26 @@ tasks.register('writeSdkPublisherSidecar') {
                 "${providers.gradleProperty('GROUP').get()}:${artifactDirectory.name}:${version}"
             }
             ?.sort() ?: []
+        def variantCapabilities = fileTree(repository) {
+            include "${groupPath}/**/${version}/*.module"
+        }.files.collectMany { moduleFile ->
+            def moduleMetadata = new groovy.json.JsonSlurper().parse(moduleFile)
+            (moduleMetadata.variants ?: []).collectMany { variant ->
+                (variant.capabilities ?: []).collect { capability ->
+                    "${capability.group}:${capability.name}:${capability.version}".toString()
+                }
+            }
+        }.findAll { capability -> capability != null }
+            .toSet()
+            .sort()
         def sidecar = [
-            schemaVersion: 1,
+            schemaVersion: 2,
             group: providers.gradleProperty('GROUP').get(),
             version: version,
             commit: commit,
             repository: repository.absolutePath,
             coordinates: coordinates,
+            variantCapabilities: variantCapabilities,
             artifacts: artifacts
         ]
         releaseRoot.mkdirs()
@@ -365,6 +380,7 @@ tasks.register('writeSdkPublisherSidecar') {
         )
         logger.lifecycle(
             "SDK publisher sidecar wrote ${coordinates.size()} coordinates and " +
+                "${variantCapabilities.size()} variant capabilities across " +
                 "${artifacts.size()} files for ${commit}."
         )
     }
@@ -407,6 +423,7 @@ tasks.register('checkSdk') {
     dependsOn ':agent-voice-android:lintRelease'
     dependsOn ':sdk-consumer-smoke:test'
     dependsOn ':sdk-android-consumer-smoke:testDebugUnitTest'
+    dependsOn ':sdk-android-consumer-smoke:verifyWeb4AgentTestFixtureIsolation'
     dependsOn 'publishSdk'
 }
 
