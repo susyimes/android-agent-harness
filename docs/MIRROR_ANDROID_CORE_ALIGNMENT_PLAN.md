@@ -214,8 +214,102 @@ Obsidian 格式兼容、内置离线基础模型、GitHub/Web/任意代码执行
 | 网页动作与 JS | 完成 | click/type/scroll/back/forward/reload/wait；自由 JS function body；每次 act/eval 绑定通用 exact approval | Eval 不等于 Native/shell 任意代码执行 |
 | Console/Capture | 完成 | 有界 console/eval notes；PNG 进入 host raw-payload store，绑定 run/session/call 与 TTL | capture 不自动成为模型 vision 输入 |
 | Demo APK | 完成 | Chat 注册全部九个 `web4agent_*` 工具和 guidance；控制中心提供手动入口；首次工具调用进入 80 步、单工具/步扩展 | Offline scripted provider 不会自行发起真实网页工具调用 |
-| Android 设备验证 | 模拟器通过，物理真机待连接 | `checkConnectedSample` 在 `emulator-5554` / API 34 上 5/5 通过；Web4Agent 用例覆盖 inline HTML 的 observe/read/inspect/type/click/wait/eval/console/capture/finish；v0.5.0 Demo 已安装并冷启动到 `HomeActivity` | 本轮没有在线物理设备；外部站点兼容性受目标网页与 Android WebView 影响 |
+| Android 设备验证 | 模拟器通过，物理真机待连接 | v0.5.1 `checkConnectedSample` 在 API 29 与 API 34 上各 8/8 通过；Web4Agent 用例覆盖四类 JS dialog、exact-effect 页面漂移、session replacement，以及 inline HTML 的 observe/read/inspect/type/click/wait/eval/console/capture/finish；v0.5.0 Demo 已安装并冷启动到 `HomeActivity` | 本轮没有在线物理设备；外部站点兼容性受目标网页与 Android WebView 影响 |
 | MiniApp/Bridge | 未纳入 | 无占位入口、无空工具注册 | 后续独立范围与安全评审 |
+
+### 4.7 v0.5.1 Web4Agent 安全补丁
+
+2026-07-31 的产品接入验证发现并上游修复两项 Harness 边界缺口：默认
+`WebChromeClient` 生成的原生 JavaScript 对话框会覆盖产品全局 Stop，以及
+exact approval 与实际网页 effect 之间缺少同一页面/DOM epoch 的原子复核。
+
+v0.5.1 保持 `Web4AgentRuntime.install/getInstance` 和公开 session ABI，不复制
+第二套 WebView 循环。Harness 自己拒绝 alert/confirm/prompt/beforeunload，且
+observe/inspect 签发 host-owned `pageEpoch`、`observationId`、document/target
+fingerprint。act/eval 在审批前建立一次性 page lease，将 epoch/fingerprint
+绑定到 `AgentEffectIntent`；token consume 后在 WebView 主线程复核并执行。
+navigation、同 URL DOM replace、target recycle、Activity detach、Stop/close
+或 session replacement 都会使旧租约返回 `STALE_TARGET`/`SESSION_CLOSED`、
+`occurred=false`，只有重新观察和重新审批才能执行。
+
+设备回归在 API 29 与 API 34 上覆盖四类 JavaScript dialog、同 selector A→B
+审批竞态、session close/replacement 和完整九工具循环；两套
+`checkConnectedSample` 均为 8/8。`checkSdk` 与 `checkM0` 也已通过，包含公开
+ABI、JVM/Android 单测、lint、本地 Maven 发布和 JVM/Android consumer smoke。
+
+### 4.8 v0.5.2 Phone Stop 静止屏障与 Web dispatch fence
+
+2026-08-01 的产品 Stop 状态机接入继续发现两项上游线性化缺口：进入
+`DeviceSurface` 的 Accessibility gesture/clipboard effect 没有可取消准入和
+可等待静止点；Web exact-effect 的第一道页面 guard 与真正 JavaScript/native
+navigation dispatch 之间，session close 仍可能抢入旧 callback。
+
+v0.5.2 保留原 `DeviceSurface` 与既有 Web4Agent 公开 ABI。`device-loop` 新增可选
+`CancellableDeviceSurface`、run-scoped `DeviceSurfaceEffectScope` 和非阻塞
+`requestStop()` handle；Android 实现同步关闭新 effect 准入、取消尚未开始的
+main task，并在已准入 gesture callback、clipboard 写入与恢复全部结束后完成
+`quiescence`。`AndroidPhoneAgent.requestWithStopQuiescence()` 负责 feature detect，
+严格模式对 legacy surface fail-closed，terminal event 在通知宿主前先 fence scope。
+
+Web exact act/eval 在 page guard 之后、effect dispatch 之前，于 WebView 主线程和
+同一 exact-effect lock 下再次原子复核 session closed、WebView identity、lease id
+与 page epoch。close/replacement 先胜出时返回 `SESSION_CLOSED`、
+`occurred=false`，旧 click/eval/back/forward/reload 均不执行；若 dispatch 已先
+线性化，宿主必须把该 tool invocation 保留在 run-level in-flight barrier 中，待其
+完成后才能发布 `STOPPED`。
+
+发布验收在 API 29 与 API 34 上各运行 Sample connected 9/9 和 Web
+connected 2/2。Phone 用例使用真实 Accessibility gesture 与强制 clipboard fallback；
+Web 用例用确定性 latch 覆盖 back、forward、reload、click、eval 以及 visible
+presentation admission。`checkSdk`/`checkM0` 继续覆盖公开 ABI、JVM/Android 单测、
+lint、本地 Maven 发布、provenance 与独立 consumer smoke。
+
+### 4.9 v0.5.2 Web visible-presentation lease
+
+同日产品的多项 connected 串行执行暴露第三个宿主无法下沉修复的竞态：旧
+`Web4AgentRuntime.show(sessionId)` 在 `startActivity()` 入队后立即返回，而
+`BrowserActivity.onCreate()` 稍后才创建 controller。Stop、session replacement
+或 host close 无法撤回已入队 launch，也无法在 controller 创建前验证产品 generation；
+`REORDER_TO_FRONT` 还可能把旧 Activity 调到前台并让新的 pending 状态悬挂；API 29
+不会可靠地向该旧实例交付新的 generation Intent。
+
+v0.5.2 因此新增向后兼容的 `Web4AgentPresentationLease`。宿主可把自己的 opaque
+generation 绑定到 Harness 的单调 generation/随机 lease id；Activity 在同一 runtime
+lock 下消费一次性 lease，校验先于 controller create/attach。`cancelPresentation()`
+同步关闭该 generation 的准入；`closeAndAwaitQuiescence()` 仅在 lease 仍是同 session
+最新 generation 时关闭 session，防止旧 ABA cleanup 误伤新 surface。未 attach 的
+late Activity 被拒绝且 controller create 为零；已 attach 的 surface 必须 detach 后
+quiescence 才完成。Harness launch Intent 同时移除 `REORDER_TO_FRONT`；严格 generation
+使用独立、非最近任务的 Activity，避免 API 29 将它合并进正在结束的旧 root；同 session
+新 Activity attach 时原子 detach/finish 旧 surface。旧 `show(sessionId)`、`close(sessionId)`
+与公开 session API 保留。
+
+确定性 connected fixture 在 controller admission 前卡 latch，覆盖 pending timeout/
+cancel、Stop 后迟到 Activity、same-session ABA、distinct-session
+replacement，并断言不再设置 `REORDER_TO_FRONT`；API 29/34 的 Web 聚合由 1/1
+增至 2/2。
+
+同轮还把日常 Maven 输出移到 disposable candidate repo。正式 `publishSdkRelease`
+要求 clean Git commit 与全新显式目录，并生成包含完整坐标、commit 与每个文件
+SHA-256 的 publisher sidecar 及其独立哈希；sidecar 写入前再次核验 clean status 与
+HEAD，避免 dirty 源码再次覆盖既有版本坐标。
+
+### 4.10 v0.5.3 Web exact-effect consumer verification seam
+
+v0.5.2 的 guard 后二次原子复核已有 Harness 同模块 connected 证据，但下游产品无法
+合法注入 internal test hook，也不能用 approval 前阻塞来冒充 guard→dispatch 窗口。
+v0.5.3 因此发布 `web4agent-android` 的官方 Gradle test-fixtures variant：独立 Maven
+consumer 只在 `androidTestImplementation testFixtures(...)` 中获得 opaque
+`Web4AgentExactEffectTestHost`。fixture 在所属模块内部创建真实 strict session，允许
+等待一次 `AFTER_GUARD_BEFORE_DISPATCH`、异步 close/replacement、等待 session fence
+并释放；不公开 internal 类型、raw effect lease、WebView 或生产 bypass。
+
+发布隔离门禁同时检查 dependency capability 与实际 AAR/JAR 字节：fixture capability
+只进入 AndroidTest runtime，production AAR 不含 fixture class，fixture AAR 不复制
+production session；publisher sidecar schema 2 另列 `variantCapabilities`。独立
+consumer 在 API 29/34 上均为 2/2，分别覆盖 close/replacement × back/forward/
+reload/click/eval 共 10 个精确窗口。该 headless seam 只证明 HG-004，不替代 visible
+presentation 的 HG-005 lease/ack/quiescence 验证。
 
 ## 5. 七层目标架构
 

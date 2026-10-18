@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.5.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.6.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -163,6 +163,16 @@ Responsibilities:
 
 Adapters expose availability instead of pretending missing permission is empty data.
 
+## Capability composition
+
+`AgentCapability` packages tools, context providers, named context sources and
+optional activation metadata. `withCapabilities` combines these into the same
+request, validates collisions and keeps host policy intact. It contains no
+intent classifier, task recipe or second execution loop. The Phone adapter and
+independent Maven consumer use this path. Provider wire-history selection is
+shared and pins the current turn; stable event mapping is separate from SDK
+lifecycle management.
+
 ## Primary flows
 
 ### User run
@@ -213,14 +223,38 @@ provider calls device_observe
   → finish requires fresh visible evidence
 ```
 
+Strict global Stop uses an optional run-scoped surface rather than changing the
+legacy synchronous `DeviceSurface` ABI:
+
+```text
+UI Stop
+  → DeviceSurfaceEffectScope.requestStop closes Accessibility admission
+  → AgentRunHandle.cancel fences the provider/tool loop
+  → queued main work is cancelled
+  → dispatched gesture callbacks and clipboard cleanup drain
+  → quiescence completes
+  → host may publish STOPPED
+```
+
+`AccessibilityDeviceSurface` implements this scope. The request path never
+blocks Android main while waiting for quiescence; a strict host must feature-
+detect the capability and fail closed for a legacy surface.
+
 ### Web4Agent
 
 ```text
 provider calls web4agent_open
+  → host prepares a one-shot visible-presentation generation
+  → BrowserActivity consumes it before controller creation/attach
   → runtime binds a visible WebView to the Agent session id
-  → observe/read/inspect returns bounded untrusted page evidence
-  → act or eval consumes an exact host approval when policy requires it
+  → observe/inspect issues a host page epoch, observation id, and fingerprints
+  → act or eval binds that one-page lease into the exact host approval
+  → token consumption is followed by a WebView guard
+  → a second main-thread atomic lease/close/epoch check owns effect dispatch
+  → stale page/target returns occurred=false without the requested effect
   → provider observes the changed page
+  → Stop cancels pending presentation admission and closes the session
+  → presentation quiescence waits for an admitted Activity to detach
   → finish closes or explicitly leaves the session visible
 ```
 
@@ -229,7 +263,26 @@ a second Agent, an Accessibility wrapper around Chrome, or a background hidden
 browser. The default configuration keeps JavaScript and DOM storage while
 blocking cleartext/mixed/local-file boundaries. Page text and JavaScript results
 are marked sensitive; captures remain behind exact-scope TTL raw-payload
-references.
+references. The host epoch advances on main-frame/history changes, DOM mutation,
+live form input/change, Activity detach/attach, effect completion, close, and
+replacement; the document guard also hashes the complete serialized DOM and
+live form-control state. JavaScript dialogs are cancelled by the Harness
+WebChromeClient rather than delegated to Android's native modal-window default.
+Visible Activity launch has its own Harness-issued lease and optional
+host-generation binding. A queued Activity must consume that exact one-shot
+lease under the runtime lifecycle lock before controller creation. Stop closes
+admission synchronously; its completion stage does not report quiescence until
+an already-attached Activity has detached. A stale same-session generation
+cannot close or consume its replacement.
+
+The published Gradle test-fixtures variant provides a debuggable-only opaque
+host for independent consumer verification of the guard-to-dispatch race. It
+constructs the real version-matched strict session inside the owning module,
+but exposes neither that internal type nor its raw effect lease. A consumer can
+arm one exact window, wait for `AFTER_GUARD_BEFORE_DISPATCH`, close or replace
+the session, await its fence, and release the call. This test capability is not
+part of the production AAR or release runtime classpath and does not represent
+the separate visible-presentation lifecycle.
 
 ## Persistence domains
 
@@ -264,6 +317,9 @@ This revision deliberately leaves three approval/security composition items open
 - `checkSdkAbi` compares current bytecode with those snapshots.
 - `sdk-consumer-smoke` consumes all published JVM coordinates.
 - `sdk-android-consumer-smoke` consumes all published AAR coordinates and their POM graph.
+- its Android-test source consumes the published Web4Agent test-fixtures
+  variant through Gradle module metadata, while an isolation gate inspects both
+  dependency capabilities and AAR bytes to prove zero production leakage.
 - unit and Android library tests cover state machines and stores.
 - lint covers released AARs and the sample.
 - instrumentation covers documented sample navigation and the quick-entry shadow regression.

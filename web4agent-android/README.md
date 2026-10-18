@@ -51,6 +51,37 @@ session controller and WebView. Android WebView cookies and site storage remain
 part of the host app's standard WebView profile; controller isolation does not
 create a separate browser profile.
 
+Strict hosts should not treat `startActivity()` returning as proof that the
+visible surface attached. Prepare and retain a one-shot generation instead:
+
+```kotlin
+val lease = runtime.preparePresentation(sessionId, hostGeneration)
+runtime.show(lease)
+
+lease.acknowledgement.thenAccept { acknowledgement ->
+    // ATTACHED, CANCELLED, or REJECTED
+}
+```
+
+The Activity verifies the Harness lease id and generation under the runtime
+lifecycle lock before it may create or attach a controller. The original
+`show(sessionId)` remains source/binary compatible and internally uses a lease,
+but it cannot expose acknowledgement to its caller.
+
+Harness launch Intents use `NEW_TASK` without `REORDER_TO_FRONT`; Android API
+levels do not consistently deliver a replacement generation to a reordered
+Activity. Exact-generation leases add a short-lived `MULTIPLE_TASK`,
+`EXCLUDE_FROM_RECENTS` surface so an older finishing root Activity cannot absorb
+the new admission. When a new same-session Activity wins admission, the runtime
+atomically detaches and finishes the previous surface before attaching the
+shared controller to the new one.
+
+`Web4AgentToolSet` feature-detects `Web4AgentAcknowledgedPresenter`. The runtime
+implements it and waits off Android main for `ATTACHED` before `web4agent_open`
+creates/opens the session. A product presenter adapter can implement the same
+optional interface while retaining its exact lease for Stop. Legacy presenter
+implementations keep fire-and-return behavior.
+
 ## Default policy
 
 The default configuration enables JavaScript and DOM storage but allows only
@@ -70,3 +101,24 @@ basis; this is not a general data-loss-prevention system.
 Captures are stored only through the host-provided `AgentRawPayloadStore`. The
 tool result exposes an opaque TTL reference and metadata; it does not put image
 bytes into provider-visible text.
+
+## Stop and close semantics
+
+Call `Web4AgentRuntime.closeAndAwaitQuiescence(lease, reason)` before publishing
+a stopped run. It synchronously cancels pending Activity/controller admission
+and closes the session only if the supplied lease is still the latest
+same-session generation. Its stage completes immediately for a never-attached
+launch, or after an admitted Activity detaches. A queued late Activity is
+rejected before controller creation. `close(sessionId)` remains a compatible
+non-awaiting convenience that cancels every generation for that session. Exact
+act/eval executes a page guard and then rechecks session closure, WebView
+identity, lease ownership, and page epoch atomically immediately before effect
+dispatch. If close or session replacement wins, the call returns
+`SESSION_CLOSED`, `occurred=false`, and performs no JavaScript, click, or native
+navigation.
+
+Close does not pretend to undo an effect whose dispatch already won that
+linearization point. Keep every entered Web tool invocation in the host's
+run-level in-flight-effect barrier, and publish `STOPPED` only after those
+invocations complete. Reusing the same session id never transfers an old
+session's lease to its replacement.

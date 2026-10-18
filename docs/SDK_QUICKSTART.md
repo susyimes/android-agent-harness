@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.5.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
+Android Agent Harness v0.6.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,26 +9,39 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.5.0`.
+The repository uses group `dev.androidagent.harness` and version `0.6.0`.
 
 ```sh
 ./gradlew publishSdk
 ```
 
-This writes JARs, AARs, sources, Gradle metadata, and POM files under `build/sdk-repository`.
+This writes development JARs, AARs, sources, Gradle metadata, and POM files
+under `build/sdk-candidate-repository`. Do not treat that mutable directory as
+a release. From a clean commit, publish to a new explicit path with:
+
+```sh
+./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.6.0-commit/repository
+```
+
+Verify `publisher-sidecar.sha256`, `publisher-sidecar.json`, and
+`artifacts.sha256` in the release root before resolving the coordinates.
+Sidecar schema 2 lists both ordinary Maven module coordinates and Gradle
+variant capabilities such as `web4agent-android-test-fixtures`; every classifier
+and metadata file remains independently SHA-256-bound.
 
 ```groovy
 repositories {
-    maven { url = uri("../android-agent-harness/build/sdk-repository") }
+    maven { url = uri("/absolute/verified/0.6.0-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.0"
-    implementation "dev.androidagent.harness:context-engine:0.5.0"
-    implementation "dev.androidagent.harness:agent-state:0.5.0"
-    implementation "dev.androidagent.harness:provider-openai:0.5.0"
+    implementation "dev.androidagent.harness:agent-sdk:0.6.0"
+    implementation "dev.androidagent.harness:context-engine:0.6.0"
+    implementation "dev.androidagent.harness:agent-state:0.6.0"
+    implementation "dev.androidagent.harness:provider-openai:0.6.0"
 }
 ```
 
@@ -48,8 +61,34 @@ Optional artifacts:
 | `agent-voice-android` | STT, ephemeral audio, TTS, and transcript contracts |
 | `device-loop-android` | Accessibility, visual observation, sensors, and overlay approval |
 | `web4agent-android` | Visible WebView sessions, DOM reads/inspection, JavaScript, actions, console, and capture |
+| `web4agent-android-test-fixtures` | Android-test-only deterministic guard-to-dispatch race verification |
 
 The Android AAR manifests stay minimal. The host declares only the services and permissions it actually enables.
+
+## Compose capabilities without another runtime
+
+Group a host's tools and context once, then add them to an ordinary request:
+
+```kotlin
+val notes = AgentCapability(
+    id = "notes",
+    tools = noteTools,
+    contextSources = noteContextSources
+)
+val request = AgentRunRequest(
+    sessionId = "conversation",
+    userInput = userInput,
+    providerFactory = providerFactory
+).withCapabilities(listOf(notes))
+val handle = sdk.run(request)
+```
+
+Composition performs no inference or side effects. The model sees the admitted
+catalog on its first step and chooses how to use it. Optional `loopActivation`
+extends the short loop only after an actual model tool call, within the existing
+run budget. The host must configure a larger budget explicitly when needed.
+Composition never expands a restricted `toolProfile` or replaces approvals.
+Duplicate names fail during composition rather than halfway through inference.
 
 ## 2. Run one bounded turn
 
@@ -129,6 +168,11 @@ The first accepted cancellation returns `true`; later calls return `false`. Canc
 4. checks the independent cancellation signal after provider I/O and before every SDK-controlled effect;
 5. rejects late streaming deltas and results;
 6. discards the staged conversation turn.
+
+These are the base run semantics. For a global Stop that also covers Android
+Phone Use, fence the scoped device surface before `handle.cancel()` and do not
+publish the visible `STOPPED` state until its quiescence stage completes; see
+section 11.
 
 An effect that already occurred outside the session transaction is recorded but cannot be magically rolled back.
 
@@ -304,12 +348,37 @@ An action invalidates the snapshot even when the platform reports failure. Stale
 
 `AndroidPhoneAgent` exposes accessibility tools only when the host enables the service and registers them in the selected profile. Device effects use the same approval protocol. A host policy may allow them directly or require a human-backed Android surface; the sample's setting applies the selected policy to the generic coordinator bound to the returned request.
 
+For a truthful global Stop, build the run with the optional stoppable scope:
+
+```kotlin
+val binding = androidPhoneAgent.requestWithStopQuiescence(
+    sessionId = sessionId,
+    userInput = userInput,
+    providerFactory = providerFactory
+)
+val handle = agentSdk.run(binding.request)
+
+stopButton.setOnClickListener {
+    val stop = binding.requestStop("user.stop") // fence Phone first; never blocks main
+    handle.cancel("Stopped by user.")
+    stop.quiescence.thenAccept { publishStopped() }
+}
+```
+
+`requestStop` atomically rejects new scope effects and cancels admitted Android
+main tasks that have not started. Its quiescence stage waits for admitted
+workers, already-dispatched gesture callbacks, and required clipboard cleanup.
+Do not publish `STOPPED` before that stage completes. The ordinary `request()`
+API and `DeviceSurface` ABI are unchanged; `requestWithStopQuiescence()` fails
+closed when the configured surface does not implement
+`CancellableDeviceSurface`.
+
 ## 12. Add Web4Agent
 
 Add the optional AAR:
 
 ```groovy
-implementation "dev.androidagent.harness:web4agent-android:0.5.0"
+implementation "dev.androidagent.harness:web4agent-android:0.6.0"
 ```
 
 Build one process-local runtime and register its complete tool bundle:
@@ -344,8 +413,112 @@ cookies, popups, and autoplay. Install a different
 `Web4AgentConfiguration` before the first session only when the host explicitly
 accepts the wider boundary.
 
-`web4agent_act` and `web4agent_eval` authorize and consume an exact approval
-token before execution. Page content is untrusted external evidence; include
+`web4agent_observe` and `web4agent_inspect` return a host-owned `pageEpoch`,
+`observationId`, and `documentFingerprint`; matching DOM entries also return a
+`targetFingerprint`. Copy those exact values into the next governed call:
+
+```json
+{
+  "action": "click",
+  "selector": "#confirm",
+  "observation_id": "web-observation-...",
+  "expected_page_epoch": "17",
+  "target_fingerprint": "64 lowercase hex characters"
+}
+```
+
+Every `web4agent_act` and `web4agent_eval` requires `observation_id` and
+`expected_page_epoch`; click and type additionally require
+`target_fingerprint`. The runtime binds the page lease and fingerprints into
+the exact approval intent. After consuming the one-use approval token, it
+revalidates the host epoch plus the document/target fingerprint in the WebView
+main-thread task that performs the effect. Navigation, reload, DOM replacement,
+target recycling, Activity detach, Stop/session close, or session replacement
+therefore returns `STALE_TARGET` or `SESSION_CLOSED` with `occurred=false` and
+requires a new observe/inspect plus a new approval.
+
+The old public `Web4AgentRuntime.install/getInstance` and `Web4AgentSession`
+signatures remain binary compatible. Governed act/eval intentionally fail with
+`EXACT_EFFECT_UNSUPPORTED` when a custom `Web4AgentSessionProvider` does not use
+the runtime's strict internal session implementation. Direct session act/eval
+methods are host APIs and do not add an approval boundary by themselves.
+
+### Visible presentation lease and Stop
+
+`show(sessionId)` remains compatible, but a strict host should retain an exact
+presentation generation:
+
+```kotlin
+val presentation = webRuntime.preparePresentation(
+    sessionId = sessionId,
+    hostGeneration = "$agentRunId:$presentationSequence"
+)
+webRuntime.show(presentation)
+
+presentation.acknowledgement.thenAccept { acknowledgement ->
+    // ATTACHED, CANCELLED, or REJECTED; never page/DOM text.
+}
+
+fun stopWeb() {
+    val stop = webRuntime.closeAndAwaitQuiescence(presentation, "user.stop")
+    cancelAgentRun()
+    cancelApprovals()
+    stop.quiescence.thenAccept {
+        // Also wait for the run's entered Web tool-invocation barrier.
+        publishStoppedWhenWebToolsAreIdle()
+    }
+}
+```
+
+The lease id and monotonic Harness generation are placed in the Activity
+Intent. `Web4AgentBrowserActivity` atomically verifies and consumes them before
+controller creation/attach. Cancellation therefore rejects a queued late
+Activity with zero old controller/session creation. Quiescence is immediate
+when attach never won; otherwise it waits for Activity detach. An old
+same-session lease is stale and cannot close a newer generation. A host that
+builds `Web4AgentToolSet` with separate session/presenter adapters should create
+and retain this lease in its presenter adapter rather than copying Harness
+Activity or controller internals. Implement
+`Web4AgentAcknowledgedPresenter.showAndAwait()` so `web4agent_open` does not
+create/open the session until the exact Activity generation returns
+`ATTACHED`; timeout/cancel must return or throw fail-closed.
+
+### Deterministic exact-effect consumer test fixture
+
+Strict Android hosts can verify the exact guard-to-dispatch Stop/replacement
+window without reflection or a copied WebView implementation. Resolve the
+fixture only on a test configuration; Gradle module metadata selects the
+`web4agent-android-test-fixtures` capability and its separate AAR:
+
+```groovy
+dependencies {
+    implementation "dev.androidagent.harness:web4agent-android:0.6.0"
+    androidTestImplementation testFixtures(
+        "dev.androidagent.harness:web4agent-android:0.6.0"
+    )
+}
+```
+
+Create `Web4AgentExactEffectTestHost` in a debuggable instrumentation process,
+arm `raceController.armNextEffect()`, start the governed act/eval call on a
+worker, then wait for `awaitAfterGuardBeforeDispatch()`. Call
+`closeSessionAsync()` or `replaceSessionAsync()`, wait for
+`awaitSessionFenced()`, and finally `release()` the gate. Assert the old tool
+returns `SESSION_CLOSED`, `occurred=false`, and leaves the native/DOM marker
+unchanged; a replacement must require a fresh observation and approval.
+
+The facade exposes an opaque salted effect token and fixture generation, never
+the internal session/hook/lease. It is headless and does not test visible
+BrowserActivity presentation (use the presentation lease APIs and dedicated
+HG-005 tests for that). The fixture capability is absent from production AAR
+bytes and release runtime classpaths; do not resolve it with `implementation`.
+
+Untrusted `alert`, `confirm`, `prompt`, and `beforeunload` callbacks are
+cancelled by the Harness WebChromeClient without creating a native dialog
+window. The bounded console policy event includes only dialog type and origin,
+not the untrusted message or prompt default.
+
+Page content is untrusted external evidence; include
 `Web4AgentGuidance.contextProvider()` or equivalent host policy so DOM text and
 console messages cannot override user/host instructions. Structured readers
 apply best-effort password/common-secret field redaction, but hosts should not

@@ -21,7 +21,8 @@ import java.util.concurrent.Executors
 /** Visible browser surface shared by the Agent and the user. */
 class Web4AgentBrowserActivity : Activity() {
     private lateinit var sessionId: String
-    private lateinit var controller: AndroidWeb4AgentSession
+    private var controller: AndroidWeb4AgentSession? = null
+    private var presentationLease: Web4AgentPresentationLease? = null
     private lateinit var address: EditText
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
@@ -30,18 +31,65 @@ class Web4AgentBrowserActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sessionId = intent.getStringExtra(EXTRA_SESSION_ID)
-            ?.takeIf(String::isNotBlank)
-            ?: DEFAULT_MANUAL_SESSION
-        controller = Web4AgentRuntime.getInstance(this).controller(sessionId)
-        setContentView(buildContent())
-        controller.attach(this, container, ::renderState)
+        if (!attachIntent(intent)) finish()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (!attachIntent(intent)) finish()
     }
 
     override fun onDestroy() {
-        controller.detach(this)
+        controller?.detach(this)
+        presentationLease?.let { lease ->
+            Web4AgentRuntime.getInstance(this).detachBrowserActivity(this, lease)
+        }
+        controller = null
+        presentationLease = null
         worker.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun attachIntent(candidate: Intent): Boolean {
+        val requestedSessionId = candidate.getStringExtra(EXTRA_SESSION_ID)
+            ?.takeIf(String::isNotBlank)
+            ?: DEFAULT_MANUAL_SESSION
+        val requestedPresentationId = candidate.getStringExtra(EXTRA_PRESENTATION_ID)
+        val requestedGeneration = if (candidate.hasExtra(EXTRA_PRESENTATION_GENERATION)) {
+            candidate.getLongExtra(EXTRA_PRESENTATION_GENERATION, -1L)
+                .takeIf { generation -> generation > 0L }
+        } else {
+            null
+        }
+        if (
+            requestedPresentationId == null &&
+            presentationLease?.sessionId == requestedSessionId &&
+            controller != null
+        ) {
+            // Compatibility show(sessionId) brings an already-attached surface
+            // forward without manufacturing a second presentation generation.
+            setIntent(candidate)
+            return true
+        }
+        val runtime = Web4AgentRuntime.getInstance(this)
+        val admitted = runtime.attachBrowserActivity(
+            activity = this,
+            sessionId = requestedSessionId,
+            presentationId = requestedPresentationId,
+            presentationGeneration = requestedGeneration
+        ) { nextController, nextLease ->
+            controller?.detach(this)
+            presentationLease?.let { previous ->
+                runtime.detachBrowserActivity(this, previous, "activity.replaced")
+            }
+            sessionId = requestedSessionId
+            controller = nextController
+            presentationLease = nextLease
+            setIntent(candidate)
+            setContentView(buildContent())
+            nextController.attach(this, container, ::renderState)
+        }
+        return admitted != null
     }
 
     private fun buildContent(): LinearLayout {
@@ -68,7 +116,8 @@ class Web4AgentBrowserActivity : Activity() {
             LinearLayout.LayoutParams(0, 0, 1f)
         )
         navigation.addView(button(getString(R.string.web4agent_close)) {
-            worker.execute { controller.finish(keepSession = false) }
+            val activeController = controller ?: return@button
+            worker.execute { activeController.finish(keepSession = false) }
         })
         root.addView(
             navigation,
@@ -168,7 +217,8 @@ class Web4AgentBrowserActivity : Activity() {
         status.text = "Opening…"
         worker.execute {
             runCatching {
-                controller.open(Web4AgentOpenRequest(url = value))
+                checkNotNull(controller) { "Web4Agent presentation is detached." }
+                    .open(Web4AgentOpenRequest(url = value))
             }.onFailure { error ->
                 runOnUiThread {
                     status.text = error.message ?: "Web4Agent open failed."
@@ -179,7 +229,9 @@ class Web4AgentBrowserActivity : Activity() {
 
     private fun runAction(action: Web4AgentAction) {
         worker.execute {
-            runCatching { controller.act(action) }
+            runCatching {
+                checkNotNull(controller) { "Web4Agent presentation is detached." }.act(action)
+            }
                 .onFailure { error ->
                     runOnUiThread {
                         status.text = error.message ?: "Web4Agent action failed."
@@ -207,13 +259,31 @@ class Web4AgentBrowserActivity : Activity() {
     companion object {
         private const val EXTRA_SESSION_ID =
             "dev.androidagent.harness.web.android.extra.SESSION_ID"
+        private const val EXTRA_PRESENTATION_ID =
+            "dev.androidagent.harness.web.android.extra.PRESENTATION_ID"
+        private const val EXTRA_PRESENTATION_GENERATION =
+            "dev.androidagent.harness.web.android.extra.PRESENTATION_GENERATION"
         const val DEFAULT_MANUAL_SESSION = "web4agent-workbench"
 
         fun intent(context: Context, sessionId: String = DEFAULT_MANUAL_SESSION): Intent {
             require(sessionId.isNotBlank())
             return Intent(context, Web4AgentBrowserActivity::class.java)
                 .putExtra(EXTRA_SESSION_ID, sessionId)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+
+        internal fun presentationIntent(
+            context: Context,
+            lease: Web4AgentPresentationLease
+        ): Intent = intent(context, lease.sessionId)
+            .putExtra(EXTRA_PRESENTATION_ID, lease.presentationId)
+            .putExtra(EXTRA_PRESENTATION_GENERATION, lease.generation)
+            // An exact presentation generation must not be coalesced into a
+            // finishing root Activity on older Android releases. A short-lived,
+            // non-recents task gives every lease its own admission callback;
+            // the runtime closes any displaced same-session Activity after the
+            // new generation has attached.
+            .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            .addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
     }
 }

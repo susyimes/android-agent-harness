@@ -1,3 +1,21 @@
+public final class dev/androidagent/harness/sdk/AgentCapability {
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ldev/androidagent/harness/AgentToolLoopActivation;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ldev/androidagent/harness/AgentToolLoopActivation;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getContextProviders ()Ljava/util/List;
+	public final fun getContextSources ()Ljava/util/List;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getLoopActivation ()Ldev/androidagent/harness/AgentToolLoopActivation;
+	public final fun getTools ()Ljava/util/List;
+}
+
+public final class dev/androidagent/harness/sdk/AgentCapabilityKt {
+	public static final fun withCapabilities (Ldev/androidagent/harness/sdk/AgentRunRequest;Ljava/util/List;)Ldev/androidagent/harness/sdk/AgentRunRequest;
+}
+
 public final class dev/androidagent/harness/sdk/AgentContextEngineOptions {
 	public fun <init> ()V
 	public fun <init> (Ldev/androidagent/harness/context/ContextTaskType;Ljava/util/Set;Ljava/util/Set;Ljava/util/List;Ldev/androidagent/harness/context/ContextTimeRange;Ldev/androidagent/harness/context/ContextRiskLevel;Ldev/androidagent/harness/context/ContextPrivacy;Ljava/lang/Integer;I)V

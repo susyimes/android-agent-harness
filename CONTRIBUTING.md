@@ -16,7 +16,7 @@ JVM-only (no Android SDK):
 Full validation (what CI runs, requires the Android SDK):
 
 ```sh
-./gradlew checkM0 :device-loop-android:testDebugUnitTest
+./gradlew checkM0 checkSdk
 ```
 
 `checkM0` includes `:sample:assembleDebug`, so this also proves the APK still builds. Please make sure both are green before opening a pull request.
@@ -36,6 +36,11 @@ The `auditProvenance` task fails the build when it finds any of the following â€
 This repository is an independently authored extraction of architectural seams. Contributions must be authored fresh: do not copy implementation text, package names, resources, or configuration from any private reference project. Documentation may name reference class responsibilities as provenance facts, but never private paths, revisions, or package names.
 
 ## Style
+
+- Give the model tools and evidence, and let it decide what to do. Do not add keyword routers or scripted task plans to the shared run path.
+- Compose optional capabilities into one `AgentRunRequest` with `AgentCapability` and `withCapabilities`; keep one `AgentSdk` per host runtime.
+- Keep extension points small and driven by an actual consumer. Host permissions, budgets, and approval policy remain explicit at effect boundaries.
+- Refactor shared mechanics without copying private product implementation or adding runtime dependencies.
 
 - Kotlin, synchronous contracts, no coroutines, no third-party runtime dependencies (JUnit 4 for tests).
 - First line of every Kotlin file: `// SPDX-License-Identifier: Apache-2.0`

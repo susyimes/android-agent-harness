@@ -45,8 +45,8 @@ class OpenAiProtocolException(message: String) : IllegalStateException(message)
  * and eventually exceeds the context window. Trimming rules:
  *
  * - The system message is always sent in full and is not charged to the budget.
- * - The FIRST user message (the task statement) and the MOST RECENT tool result
- *   (the current screen) are always sent in full; their characters are charged
+ * - The LATEST user message (the current task) and its MOST RECENT tool result
+ *   (when the current turn has one) are always sent in full; their characters are charged
  *   first, so a budget smaller than those two is simply exceeded rather than
  *   dropping them.
  * - Remaining messages are walked newest to oldest and kept in full while they
@@ -358,38 +358,8 @@ class OpenAiCompatibleProvider(
      * Applies [OpenAiCompatibleConfig.historyCharBudget] to the stored session
      * messages. Returns [messages] unchanged when no budget is configured.
      */
-    private fun applyHistoryPolicy(messages: List<AgentMessage>): List<AgentMessage> {
-        val budget = config.historyCharBudget ?: return messages
-        val firstUserIndex = messages.indexOfFirst { message -> message.role == AgentRole.USER }
-        val lastToolIndex = messages.indexOfLast { message -> message.role == AgentRole.TOOL }
-        val pinned = setOf(firstUserIndex, lastToolIndex).filter { index -> index >= 0 }.toSet()
-
-        val kept = arrayOfNulls<AgentMessage>(messages.size)
-        var used = 0
-        pinned.forEach { index ->
-            kept[index] = messages[index]
-            used += messages[index].content.length
-        }
-
-        var exhausted = false
-        for (index in messages.indices.reversed()) {
-            if (index in pinned) {
-                continue
-            }
-            val message = messages[index]
-            if (!exhausted && used + message.content.length <= budget) {
-                used += message.content.length
-                kept[index] = message
-                continue
-            }
-            exhausted = true
-            if (message.role == AgentRole.TOOL) {
-                used += OMITTED_TOOL_RESULT.length
-                kept[index] = message.copy(content = OMITTED_TOOL_RESULT)
-            }
-        }
-        return kept.filterNotNull()
-    }
+    private fun applyHistoryPolicy(messages: List<AgentMessage>): List<AgentMessage> =
+        sessionHistoryWindow(messages, config.historyCharBudget)
 
     private fun renderSystemContent(context: List<AgentContextItem>): String {
         val builder = StringBuilder(
