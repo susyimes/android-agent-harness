@@ -31,7 +31,7 @@ The repository also ships an installable sample app. It is a reference compositi
   <a href="docs/screenshots/android-automation.png"><img src="docs/screenshots/android-automation.png" alt="Agent Harness automation controls" width="23%"></a>
 </p>
 
-The v0.5.3 sample exposes:
+The v0.6.0 sample exposes:
 
 - Home Brief, provider state, active runs, recent sessions, and shortcuts to every product surface.
 - Chat with provider/model selection, streamed text, file/image attachment, speech input, TTS, Stop, and model-selected Phone Use.
@@ -106,7 +106,7 @@ Requirements:
 
 ## SDK artifacts
 
-The v0.5.3 coordinates use group `dev.androidagent.harness`.
+The v0.6.0 coordinates use group `dev.androidagent.harness`.
 
 | Artifact | Type | Responsibility |
 | --- | --- | --- |
@@ -142,7 +142,7 @@ named repository:
 
 ```sh
 ./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
-  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.3-commit/repository
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.6.0-commit/repository
 ```
 
 The release root receives `publisher-sidecar.json`,
@@ -154,25 +154,25 @@ Consume only the modules your host needs:
 
 ```groovy
 repositories {
-    maven { url = uri("/absolute/verified/0.5.3-commit/repository") }
+    maven { url = uri("/absolute/verified/0.6.0-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.3"
-    implementation "dev.androidagent.harness:context-engine:0.5.3"
-    implementation "dev.androidagent.harness:agent-state:0.5.3"
-    implementation "dev.androidagent.harness:provider-openai:0.5.3"
+    implementation "dev.androidagent.harness:agent-sdk:0.6.0"
+    implementation "dev.androidagent.harness:context-engine:0.6.0"
+    implementation "dev.androidagent.harness:agent-state:0.6.0"
+    implementation "dev.androidagent.harness:provider-openai:0.6.0"
 
     // Optional Android features:
-    implementation "dev.androidagent.harness:agent-sdk-android:0.5.3"
-    implementation "dev.androidagent.harness:agent-data-android:0.5.3"
-    implementation "dev.androidagent.harness:web4agent-android:0.5.3"
+    implementation "dev.androidagent.harness:agent-sdk-android:0.6.0"
+    implementation "dev.androidagent.harness:agent-data-android:0.6.0"
+    implementation "dev.androidagent.harness:web4agent-android:0.6.0"
 
     // Optional deterministic consumer verification; never use implementation.
     androidTestImplementation testFixtures(
-        "dev.androidagent.harness:web4agent-android:0.5.3"
+        "dev.androidagent.harness:web4agent-android:0.6.0"
     )
 }
 ```
@@ -388,7 +388,7 @@ The following security/approval items are intentionally not addressed by the cur
 - Schedule approval hashing does not yet include every behavior-affecting `ScheduleSpec` field.
 - `AndroidPhoneAgent.request()` callers must currently supply the generic `AgentApprovalCoordinator` on the returned request, as the sample does; the legacy configuration gate is not bridged automatically.
 
-The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.5.3.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
+The detailed target, responsibility boundaries, and acceptance evidence are in [Mirror Android Core Alignment Plan](docs/MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md). See [Release notes](docs/releases/v0.6.0.md), [Extraction and Compatibility](docs/EXTRACTION_AND_COMPATIBILITY.md), and [Provenance and Privacy](docs/PROVENANCE_PRIVACY.md) for additional boundaries.
 
 ## License
 

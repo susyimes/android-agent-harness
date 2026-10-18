@@ -18,9 +18,7 @@ import dev.androidagent.harness.AgentProviderFactory
 import dev.androidagent.harness.AgentSessionStore
 import dev.androidagent.harness.AgentTool
 import dev.androidagent.harness.AgentToolProfile
-import dev.androidagent.harness.AgentToolResultEnvelope
 import dev.androidagent.harness.AttachmentRef
-import dev.androidagent.harness.AgentProviderDisplayEvent
 import dev.androidagent.harness.AgentMessage
 import dev.androidagent.harness.AgentRole
 import dev.androidagent.harness.EmptyAgentContextProvider
@@ -229,6 +227,8 @@ class AgentSdk(
         val connection = request.providerFactory.connect()
         val (running, existing) = try {
             synchronized(sessionLifecycleLock) {
+                check(!closed.get()) { "AgentSdk is closed." }
+                require(connection.provider.id.isNotBlank()) { "Provider id must not be blank." }
                 val candidate = RunningAgentRun(
                     owner = this,
                     runId = UUID.randomUUID().toString(),
@@ -258,6 +258,7 @@ class AgentSdk(
                 providerId = connection.provider.id
             )
         )
+        if (running.terminal.get()) return running
         try {
             running.deadlineTask.set(
                 deadlineExecutor.schedule(
@@ -268,6 +269,7 @@ class AgentSdk(
             )
             executor.execute { execute(running) }
         } catch (error: RuntimeException) {
+            runCatching(connection.cancel)
             finish(
                 running,
                 AgentRunOutcome.Failure(
@@ -690,10 +692,11 @@ class AgentSdk(
     }
 
     override fun close() {
-        if (!closed.compareAndSet(false, true)) {
-            return
+        val admitted = synchronized(sessionLifecycleLock) {
+            if (!closed.compareAndSet(false, true)) return
+            activeBySession.values.toList()
         }
-        activeBySession.values.toList().forEach { running ->
+        admitted.forEach { running ->
             requestCancellation(running, "AgentSdk was closed.")
         }
         deadlineExecutor.shutdownNow()
@@ -738,15 +741,14 @@ class AgentSdk(
         }
 
         fun emit(event: AgentRunEvent) {
-            try {
-                request.listener.onEvent(event)
-            } catch (_: RuntimeException) {
-                // Host observability is never allowed to break the run.
-            }
-            stableEvent(event)?.let(::emitStableEvent)
+            if (terminal.get()) return
+            // Stable telemetry precedes UI callbacks, which may cancel the run.
+            event.toStableEvent(request.runPolicy, state)?.let(::emitStableEvent)
+            if (terminal.get()) return
             if (event is AgentRunEvent.Trace) {
                 val trace = event.event as? AgentHarnessTraceEvent.ToolExecuted
                 trace?.envelope?.candidates.orEmpty().forEach { candidate ->
+                    if (terminal.get()) return@forEach
                     emitStableEvent(
                         AgentEvent.CandidateProduced(
                             runId = runId,
@@ -757,6 +759,12 @@ class AgentSdk(
                         )
                     )
                 }
+            }
+            if (terminal.get()) return
+            try {
+                request.listener.onEvent(event)
+            } catch (_: RuntimeException) {
+                // Host observability is never allowed to break the run.
             }
         }
 
@@ -771,7 +779,7 @@ class AgentSdk(
                 sessionId = sessionId,
                 outcome = outcome
             )
-            stableEvent(event)?.let(::emitStableEvent)
+            event.toStableEvent(request.runPolicy, state)?.let(::emitStableEvent)
             completion.complete(outcome)
             try {
                 request.listener.onEvent(event)
@@ -801,135 +809,6 @@ class AgentSdk(
                     )
                     return
                 }
-            }
-        }
-
-        private fun stableEvent(event: AgentRunEvent): AgentEvent? {
-            val now = System.currentTimeMillis()
-            return when (event) {
-                is AgentRunEvent.Started -> AgentEvent.RunStarted(
-                    runId = event.runId,
-                    sessionId = event.sessionId,
-                    occurredAtEpochMillis = now,
-                    trigger = request.runPolicy.trigger,
-                    providerId = event.providerId,
-                    budget = request.runPolicy.budget
-                )
-
-                is AgentRunEvent.Trace -> when (val trace = event.event) {
-                    is AgentHarnessTraceEvent.ContextLoaded -> null
-
-                    is AgentHarnessTraceEvent.ProviderInvoked -> AgentEvent.ProviderStarted(
-                        runId = event.runId,
-                        sessionId = event.sessionId,
-                        occurredAtEpochMillis = now,
-                        step = trace.step,
-                        providerId = trace.providerId,
-                        toolNames = trace.toolNames
-                    )
-
-                    is AgentHarnessTraceEvent.ProviderCompleted -> AgentEvent.ProviderCompleted(
-                        runId = event.runId,
-                        sessionId = event.sessionId,
-                        occurredAtEpochMillis = now,
-                        step = trace.step,
-                        responseKind = trace.responseKind
-                    )
-
-                    is AgentHarnessTraceEvent.ProviderDisplay -> when (val display = trace.event) {
-                        is AgentProviderDisplayEvent.TextDelta -> AgentEvent.ProviderDelta(
-                            runId = event.runId,
-                            sessionId = event.sessionId,
-                            occurredAtEpochMillis = now,
-                            step = trace.step,
-                            text = display.text
-                        )
-
-                        is AgentProviderDisplayEvent.ActionNarration ->
-                            AgentEvent.ProviderDisplay(
-                                runId = event.runId,
-                                sessionId = event.sessionId,
-                                occurredAtEpochMillis = now,
-                                step = trace.step,
-                                kind = "action_narration",
-                                text = display.text
-                            )
-
-                        is AgentProviderDisplayEvent.ToolStatus ->
-                            AgentEvent.ProviderDisplay(
-                                runId = event.runId,
-                                sessionId = event.sessionId,
-                                occurredAtEpochMillis = now,
-                                step = trace.step,
-                                kind = "tool_status",
-                                text = display.status,
-                                toolName = display.toolName
-                            )
-
-                        is AgentProviderDisplayEvent.Usage ->
-                            AgentEvent.ProviderDisplay(
-                                runId = event.runId,
-                                sessionId = event.sessionId,
-                                occurredAtEpochMillis = now,
-                                step = trace.step,
-                                kind = "usage",
-                                inputTokens = display.inputTokens,
-                                outputTokens = display.outputTokens
-                            )
-                    }
-
-                    is AgentHarnessTraceEvent.ToolRequested -> AgentEvent.ToolRequested(
-                        runId = event.runId,
-                        sessionId = event.sessionId,
-                        occurredAtEpochMillis = now,
-                        step = trace.step,
-                        callId = trace.callId,
-                        toolName = trace.toolName,
-                        argumentNames = trace.arguments.keys
-                    )
-
-                    is AgentHarnessTraceEvent.ToolExecuted -> AgentEvent.ToolCompleted(
-                        runId = event.runId,
-                        sessionId = event.sessionId,
-                        occurredAtEpochMillis = now,
-                        step = trace.step,
-                        callId = trace.callId,
-                        toolName = trace.toolName,
-                        envelope = trace.envelope ?: AgentToolResultEnvelope(
-                            status = if (trace.succeeded) {
-                                dev.androidagent.harness.AgentToolResultStatus.SUCCESS
-                            } else {
-                                dev.androidagent.harness.AgentToolResultStatus.FAILURE
-                            },
-                            summary = trace.content.ifBlank { "Tool returned no summary." },
-                            createdAtEpochMillis = now
-                        )
-                    )
-
-                    is AgentHarnessTraceEvent.ToolLoopActivated -> AgentEvent.DeviceLoopActivated(
-                        runId = event.runId,
-                        sessionId = event.sessionId,
-                        occurredAtEpochMillis = now,
-                        step = trace.step,
-                        toolName = trace.toolName,
-                        maxProviderSteps = trace.maxProviderSteps
-                    )
-
-                    is AgentHarnessTraceEvent.Completed -> null
-                }
-
-                is AgentRunEvent.Finished -> AgentEvent.RunFinished(
-                    runId = event.runId,
-                    sessionId = event.sessionId,
-                    occurredAtEpochMillis = now,
-                    state = state,
-                    summary = when (val outcome = event.outcome) {
-                        is AgentRunOutcome.Success -> outcome.result.output
-                        is AgentRunOutcome.Failure -> outcome.error.message
-                        is AgentRunOutcome.Cancelled -> outcome.reason
-                        is AgentRunOutcome.Expired -> outcome.reason
-                    }
-                )
             }
         }
 

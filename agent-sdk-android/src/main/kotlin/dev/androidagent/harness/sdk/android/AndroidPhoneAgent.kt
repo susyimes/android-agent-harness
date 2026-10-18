@@ -22,6 +22,8 @@ import dev.androidagent.harness.deviceloop.RiskPolicy
 import dev.androidagent.harness.deviceloop.StrictDeviceProtocol
 import dev.androidagent.harness.deviceloop.android.AccessibilityDeviceSurface
 import dev.androidagent.harness.deviceloop.android.HarnessAccessibilityService
+import dev.androidagent.harness.sdk.AgentCapability
+import dev.androidagent.harness.sdk.withCapabilities
 import dev.androidagent.harness.sdk.AgentRunEvent
 import dev.androidagent.harness.sdk.AgentRunListener
 import dev.androidagent.harness.sdk.AgentRunRequest
@@ -173,24 +175,16 @@ class AndroidPhoneAgent(
             ),
             DeviceFinishTool(requestSurface, protocol)
         )
-        val tools = phoneTools + additionalTools
-        val toolNames = tools.map { tool -> tool.spec.name }
-        val duplicateNames = toolNames.groupingBy { name -> name }
-            .eachCount()
-            .filterValues { count -> count > 1 }
-            .keys
-        require(duplicateNames.isEmpty()) {
-            "Duplicate Android Agent tool names: ${duplicateNames.sorted().joinToString()}."
-        }
-        val phoneToolNames = phoneTools.map { tool -> tool.spec.name }.toSet()
-        val additionalToolNames = additionalTools.map { tool -> tool.spec.name }.toSet()
-        require(additionalActivationToolNames.none(String::isBlank)) {
-            "Additional activation tool names must not be blank."
-        }
-        require(additionalActivationToolNames.all(additionalToolNames::contains)) {
-            "Additional activation tools must be present in additionalTools."
-        }
-        val activationToolNames = phoneToolNames + additionalActivationToolNames
+        val toolNames = (phoneTools + additionalTools).map { it.spec.name }.toSet()
+        val phoneToolNames = phoneTools.map { it.spec.name }.toSet()
+        val extension = AgentCapability(
+            id = "host-extensions",
+            tools = additionalTools,
+            contextProviders = additionalContextProviders,
+            loopActivation = additionalActivationToolNames.takeIf { it.isNotEmpty() }?.let {
+                AgentToolLoopActivation(it, configuration.maxProviderSteps, 1)
+            }
+        )
         return AgentRunRequest(
             sessionId = sessionId,
             userInput = userInput,
@@ -207,23 +201,23 @@ class AndroidPhoneAgent(
                         )
                     )
                 )
-            ) + additionalContextProviders,
-            tools = tools,
+            ),
+            tools = phoneTools,
             harnessConfig = AgentHarnessConfig(
                 maxProviderSteps = configuration.initialMaxProviderSteps,
                 maxToolCallsPerStep = configuration.initialMaxToolCallsPerStep,
                 toolLoopActivation = AgentToolLoopActivation(
-                    toolNames = activationToolNames,
+                    toolNames = phoneToolNames,
                     maxProviderSteps = configuration.maxProviderSteps,
                     maxToolCallsPerStep = 1
                 )
             ),
             toolProfile = AgentToolProfile.only(
                 id = "android-model-routed",
-                toolNames = toolNames.toSet()
+                toolNames = toolNames
             ),
             listener = listener
-        )
+        ).withCapabilities(listOf(extension))
     }
 
     companion object {

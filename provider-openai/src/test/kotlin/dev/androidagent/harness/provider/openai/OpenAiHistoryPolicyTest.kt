@@ -58,23 +58,16 @@ class OpenAiHistoryPolicyTest {
     }
 
     @Test
-    fun preservesFirstUserAndNewestToolResultAndOmitsOlderToolResults() {
-        val budget = FIRST_USER.length + SCREEN_C.length + 30
-
-        val messages = renderedMessages(mixedSession(), budget = budget)
-
-        // The two dropped conversational messages merged the two tool groups
-        // into one, so a single synthetic assistant now covers all four ids.
-        assertEquals(
-            listOf("system", "user", "assistant", "tool", "tool", "tool", "tool"),
-            messages.map { message -> message["role"] }
-        )
-        assertEquals(FIRST_USER, messages[1]["content"])
-        assertEquals(OpenAiCompatibleProvider.OMITTED_TOOL_RESULT, messages[3]["content"])
-        assertEquals(OpenAiCompatibleProvider.OMITTED_TOOL_RESULT, messages[4]["content"])
-        assertEquals(OpenAiCompatibleProvider.OMITTED_TOOL_RESULT, messages[5]["content"])
-        assertEquals(SCREEN_C, messages[6]["content"])
-        assertEquals(listOf("call-1", "call-2", "call-3", "call-4"), toolCallIds(messages[2]))
+    fun preservesCurrentUserAndNewestToolResultAndOmitsOlderToolResults() {
+        val messages = renderedMessages(mixedSession(), budget = 1)
+        assertEquals(SECOND_USER, messages.single { it["role"] == "user" }["content"])
+        val results = messages.filter { it["role"] == "tool" }
+        assertEquals(listOf("call-1", "call-2", "call-3", "call-4"),
+            results.map { it["tool_call_id"] })
+        assertTrue(results.dropLast(1).all {
+            it["content"] == OpenAiCompatibleProvider.OMITTED_TOOL_RESULT
+        })
+        assertEquals(SCREEN_C, results.last()["content"])
         assertValidToolProtocol(messages)
     }
 
@@ -84,10 +77,10 @@ class OpenAiHistoryPolicyTest {
 
         assertFalse("Older screens must be gone: $body", body.contains(SCREEN_A))
         assertFalse("Older screens must be gone: $body", body.contains(SCREEN_B))
-        assertFalse(body.contains(SECOND_USER))
+        assertFalse(body.contains(FIRST_USER))
         assertFalse(body.contains(INTERIM_ASSISTANT))
         assertTrue(body.contains(SCREEN_C))
-        assertTrue(body.contains(FIRST_USER))
+        assertTrue(body.contains(SECOND_USER))
     }
 
     @Test
@@ -99,9 +92,9 @@ class OpenAiHistoryPolicyTest {
             val messages = renderedMessages(session, budget = budget)
             assertValidToolProtocol(messages)
             assertEquals(
-                "The first user message must survive budget=$budget",
-                FIRST_USER,
-                messages.first { message -> message["role"] == "user" }["content"]
+                "The current user message must survive budget=$budget",
+                SECOND_USER,
+                messages.last { message -> message["role"] == "user" }["content"]
             )
             assertEquals(
                 "The newest tool result must survive budget=$budget in full",

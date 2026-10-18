@@ -1,6 +1,6 @@
 # SDK architecture
 
-This document describes the implemented v0.5.3 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
+This document describes the implemented v0.6.0 boundaries. The longer [alignment plan](MIRROR_ANDROID_CORE_ALIGNMENT_PLAN.md) contains rationale, detailed data models, and acceptance criteria.
 
 ## Dependency direction
 
@@ -162,6 +162,16 @@ Responsibilities:
 - optional visual observation, sensor, STT, recording, and TTS surfaces.
 
 Adapters expose availability instead of pretending missing permission is empty data.
+
+## Capability composition
+
+`AgentCapability` packages tools, context providers, named context sources and
+optional activation metadata. `withCapabilities` combines these into the same
+request, validates collisions and keeps host policy intact. It contains no
+intent classifier, task recipe or second execution loop. The Phone adapter and
+independent Maven consumer use this path. Provider wire-history selection is
+shared and pins the current turn; stable event mapping is separate from SDK
+lifecycle management.
 
 ## Primary flows
 

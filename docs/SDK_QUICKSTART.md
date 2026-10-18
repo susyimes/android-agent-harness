@@ -1,6 +1,6 @@
 # SDK quickstart
 
-Android Agent Harness v0.5.3 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
+Android Agent Harness v0.6.0 is split into platform-neutral JVM artifacts and optional Android AARs. A host can start with `agent-sdk` and add only the context, state, scheduling, feedback, data, Phone Use, Web4Agent, or voice capabilities it needs.
 
 The central rule is simple: there is one run kernel. User chat and scheduled work both enter `AgentSdk`; adapters never advance a second provider/tool loop.
 
@@ -9,7 +9,7 @@ The JVM artifacts require JDK 17. Every Android AAR and the sample use
 
 ## 1. Publish or resolve the artifacts
 
-The repository uses group `dev.androidagent.harness` and version `0.5.3`.
+The repository uses group `dev.androidagent.harness` and version `0.6.0`.
 
 ```sh
 ./gradlew publishSdk
@@ -21,7 +21,7 @@ a release. From a clean commit, publish to a new explicit path with:
 
 ```sh
 ./gradlew publishSdkRelease -PSDK_RELEASE_PUBLISH=true \
-  -PSDK_REPOSITORY_DIR=/absolute/new/0.5.3-commit/repository
+  -PSDK_REPOSITORY_DIR=/absolute/new/0.6.0-commit/repository
 ```
 
 Verify `publisher-sidecar.sha256`, `publisher-sidecar.json`, and
@@ -32,16 +32,16 @@ and metadata file remains independently SHA-256-bound.
 
 ```groovy
 repositories {
-    maven { url = uri("/absolute/verified/0.5.3-commit/repository") }
+    maven { url = uri("/absolute/verified/0.6.0-commit/repository") }
     google()
     mavenCentral()
 }
 
 dependencies {
-    implementation "dev.androidagent.harness:agent-sdk:0.5.3"
-    implementation "dev.androidagent.harness:context-engine:0.5.3"
-    implementation "dev.androidagent.harness:agent-state:0.5.3"
-    implementation "dev.androidagent.harness:provider-openai:0.5.3"
+    implementation "dev.androidagent.harness:agent-sdk:0.6.0"
+    implementation "dev.androidagent.harness:context-engine:0.6.0"
+    implementation "dev.androidagent.harness:agent-state:0.6.0"
+    implementation "dev.androidagent.harness:provider-openai:0.6.0"
 }
 ```
 
@@ -64,6 +64,31 @@ Optional artifacts:
 | `web4agent-android-test-fixtures` | Android-test-only deterministic guard-to-dispatch race verification |
 
 The Android AAR manifests stay minimal. The host declares only the services and permissions it actually enables.
+
+## Compose capabilities without another runtime
+
+Group a host's tools and context once, then add them to an ordinary request:
+
+```kotlin
+val notes = AgentCapability(
+    id = "notes",
+    tools = noteTools,
+    contextSources = noteContextSources
+)
+val request = AgentRunRequest(
+    sessionId = "conversation",
+    userInput = userInput,
+    providerFactory = providerFactory
+).withCapabilities(listOf(notes))
+val handle = sdk.run(request)
+```
+
+Composition performs no inference or side effects. The model sees the admitted
+catalog on its first step and chooses how to use it. Optional `loopActivation`
+extends the short loop only after an actual model tool call, within the existing
+run budget. The host must configure a larger budget explicitly when needed.
+Composition never expands a restricted `toolProfile` or replaces approvals.
+Duplicate names fail during composition rather than halfway through inference.
 
 ## 2. Run one bounded turn
 
@@ -353,7 +378,7 @@ closed when the configured surface does not implement
 Add the optional AAR:
 
 ```groovy
-implementation "dev.androidagent.harness:web4agent-android:0.5.3"
+implementation "dev.androidagent.harness:web4agent-android:0.6.0"
 ```
 
 Build one process-local runtime and register its complete tool bundle:
@@ -467,9 +492,9 @@ fixture only on a test configuration; Gradle module metadata selects the
 
 ```groovy
 dependencies {
-    implementation "dev.androidagent.harness:web4agent-android:0.5.3"
+    implementation "dev.androidagent.harness:web4agent-android:0.6.0"
     androidTestImplementation testFixtures(
-        "dev.androidagent.harness:web4agent-android:0.5.3"
+        "dev.androidagent.harness:web4agent-android:0.6.0"
     )
 }
 ```

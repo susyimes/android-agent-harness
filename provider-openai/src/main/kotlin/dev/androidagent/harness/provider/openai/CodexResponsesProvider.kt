@@ -256,34 +256,8 @@ class CodexResponsesProvider(
         )
     }
 
-    private fun applyHistoryPolicy(messages: List<AgentMessage>): List<AgentMessage> {
-        val budget = config.historyCharBudget ?: return messages
-        val firstUserIndex = messages.indexOfFirst { message -> message.role == AgentRole.USER }
-        val lastToolIndex = messages.indexOfLast { message -> message.role == AgentRole.TOOL }
-        val pinned = setOf(firstUserIndex, lastToolIndex).filter { index -> index >= 0 }.toSet()
-        val kept = arrayOfNulls<AgentMessage>(messages.size)
-        var used = 0
-        pinned.forEach { index ->
-            kept[index] = messages[index]
-            used += messages[index].content.length
-        }
-        var exhausted = false
-        for (index in messages.indices.reversed()) {
-            if (index in pinned) continue
-            val message = messages[index]
-            if (!exhausted && used + message.content.length <= budget) {
-                kept[index] = message
-                used += message.content.length
-            } else {
-                exhausted = true
-                if (message.role == AgentRole.TOOL) {
-                    kept[index] = message.copy(content = OpenAiCompatibleProvider.OMITTED_TOOL_RESULT)
-                    used += OpenAiCompatibleProvider.OMITTED_TOOL_RESULT.length
-                }
-            }
-        }
-        return kept.filterNotNull()
-    }
+    private fun applyHistoryPolicy(messages: List<AgentMessage>): List<AgentMessage> =
+        sessionHistoryWindow(messages, config.historyCharBudget)
 
     private fun parseResponse(raw: String): AgentProviderResponse {
         val root = parseObject(raw, "Codex response root")

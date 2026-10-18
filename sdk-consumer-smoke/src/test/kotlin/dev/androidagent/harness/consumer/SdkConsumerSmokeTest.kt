@@ -19,6 +19,8 @@ import dev.androidagent.harness.scheduling.InMemoryScheduleRepository
 import dev.androidagent.harness.sdk.FileAgentSessionStore
 import dev.androidagent.harness.sdk.AgentRunOutcome
 import dev.androidagent.harness.sdk.AgentRunRequest
+import dev.androidagent.harness.sdk.AgentCapability
+import dev.androidagent.harness.sdk.withCapabilities
 import dev.androidagent.harness.sdk.AgentSdk
 import dev.androidagent.harness.sdk.AgentTraceReplayEvaluator
 import dev.androidagent.harness.sdk.house.AgentHouseContextProvider
@@ -71,10 +73,12 @@ class SdkConsumerSmokeTest {
                 AgentRunRequest(
                     sessionId = "external-host",
                     userInput = "hello",
-                    providerFactory = AgentProviderFactory.fixed(provider),
-                    contextProviders = listOf(AgentHouseContextProvider(house)),
-                    tools = houseWriteTools
-                )
+                    providerFactory = AgentProviderFactory.fixed(provider)
+                ).withCapabilities(listOf(AgentCapability(
+                    id = "house",
+                    tools = houseWriteTools,
+                    contextProviders = listOf(AgentHouseContextProvider(house))
+                )))
             ).await()
 
             assertTrue(outcome is AgentRunOutcome.Success)
